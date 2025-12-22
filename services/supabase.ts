@@ -1,12 +1,16 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
+// Vite usa import.meta.env per le variabili d'ambiente
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("ERRORE: Variabili Supabase mancanti. Controlla VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.");
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Helper per gestire gli errori in modo centralizzato
 const handleError = (error: any) => {
   console.error('Supabase Error:', error.message);
   throw error;
@@ -15,8 +19,8 @@ const handleError = (error: any) => {
 export const db = {
   profiles: {
     get: async (id: string) => {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-      if (error) return null;
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+      if (error && error.code !== 'PGRST116') return null;
       return data;
     },
     upsert: async (profile: any) => {
@@ -59,12 +63,12 @@ export const db = {
   },
   appointments: {
     getAll: async () => {
-      // In produzione, un admin vedrebbe tutto, un client solo i suoi via RLS
       const { data, error } = await supabase
         .from('appointments')
         .select(`
           *,
-          services (name, price, duration)
+          services (name, price, duration),
+          profiles (full_name)
         `)
         .order('date', { ascending: true });
       if (error) handleError(error);
