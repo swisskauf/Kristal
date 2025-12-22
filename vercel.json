@@ -2,5 +2,9 @@
 {
   "version": 2,
   "cleanUrls": true,
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }
