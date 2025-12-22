@@ -6,15 +6,21 @@ import AIAssistant from './components/AIAssistant';
 import AppointmentForm from './components/AppointmentForm';
 import { supabaseMock } from './services/supabaseMock';
 import { Appointment, Service, User, TeamMember } from './types';
-import { SERVICES, TEAM } from './constants';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [team, setTeam] = useState<any[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | undefined>();
+  const [filterCategory, setFilterCategory] = useState<string>('Tutti');
+
+  // Admin Editing States
+  const [editingService, setEditingService] = useState<Partial<Service> | null>(null);
+  const [editingMember, setEditingMember] = useState<any | null>(null);
 
   useEffect(() => {
     const savedUser = supabaseMock.auth.getUser();
@@ -22,13 +28,20 @@ const App: React.FC = () => {
       setUser(savedUser);
       setActiveTab(savedUser.role === 'admin' ? 'admin_dashboard' : 'dashboard');
     }
-    setAppointments(supabaseMock.appointments.getAll());
+    refreshData();
   }, []);
+
+  const refreshData = () => {
+    setAppointments(supabaseMock.appointments.getAll());
+    setServices(supabaseMock.services.getAll());
+    setTeam(supabaseMock.team.getAll());
+  };
 
   const handleLogin = (u: User) => {
     const loggedUser = supabaseMock.auth.signIn(u);
     setUser(loggedUser);
     setActiveTab(loggedUser.role === 'admin' ? 'admin_dashboard' : 'dashboard');
+    refreshData();
   };
 
   const handleLogout = () => {
@@ -43,403 +56,373 @@ const App: React.FC = () => {
       clientId: selectedAppointment?.clientId || user.id,
       clientName: selectedAppointment?.clientName || user.fullName,
       serviceId: appData.serviceId!,
-      teamMember: appData.teamMember!,
+      teamMember: appData.teamMember as any,
       date: appData.date!,
       status: 'confirmed'
     };
     supabaseMock.appointments.upsert(newApp);
-    setAppointments(supabaseMock.appointments.getAll());
+    refreshData();
     setIsFormOpen(false);
     setSelectedAppointment(undefined);
   };
 
-  const deleteAppointment = (id: string) => {
-    if (window.confirm('Sei sicuro di voler cancellare questo appuntamento?')) {
+  const canModify = (dateStr: string) => {
+    if (user?.role === 'admin') return true;
+    const appDate = new Date(dateStr).getTime();
+    const now = new Date().getTime();
+    return (appDate - now) > (24 * 60 * 60 * 1000);
+  };
+
+  const deleteAppointment = (id: string, dateStr: string) => {
+    if (!canModify(dateStr)) {
+      alert("Siamo spiacenti, non puoi modificare o cancellare un appuntamento a meno di 24 ore dall'inizio. Contatta il salone telefonicamente.");
+      return;
+    }
+    if (window.confirm('Vuoi davvero cancellare questo appuntamento?')) {
       supabaseMock.appointments.delete(id);
-      setAppointments(supabaseMock.appointments.getAll());
+      refreshData();
     }
   };
 
-  if (!user) {
-    return <Auth onLogin={handleLogin} />;
-  }
+  // Service & Team Management Actions
+  const handleSaveService = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingService) {
+      supabaseMock.services.upsert({
+        ...editingService,
+        id: editingService.id || Math.random().toString(36).substr(2, 5)
+      } as Service);
+      setEditingService(null);
+      refreshData();
+    }
+  };
 
-  // Stats Logic
-  const salonAppointments = appointments;
+  const handleSaveMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingMember) {
+      supabaseMock.team.upsert(editingMember);
+      setEditingMember(null);
+      refreshData();
+    }
+  };
+
+  if (!user) return <Auth onLogin={handleLogin} />;
+
   const userAppointments = appointments.filter(a => a.clientId === user.id);
-  
   const revenue = appointments.reduce((acc, app) => {
-    const s = SERVICES.find(sv => sv.id === app.serviceId);
+    const s = services.find(sv => sv.id === app.serviceId);
     return acc + (s?.price || 0);
   }, 0);
 
-  const teamPerformance = TEAM.map(member => ({
+  const teamPerformance = team.map(member => ({
     name: member.name,
     bookings: appointments.filter(a => a.teamMember === member.name).length
   }));
 
-  const COLORS = ['#f59e0b', '#10b981', '#3b82f6'];
+  const filteredServices = filterCategory === 'Tutti' 
+    ? services 
+    : services.filter(s => s.category === filterCategory);
 
   return (
     <Layout user={user} onLogout={handleLogout} activeTab={activeTab} setActiveTab={setActiveTab}>
       
-      {/* SEZIONE ADMIN: DASHBOARD */}
+      {/* ADMIN: DASHBOARD GENERALE */}
       {activeTab === 'admin_dashboard' && (
         <div className="space-y-8 animate-in fade-in duration-500">
-          <header className="flex justify-between items-center">
-            <div>
-              <h2 className="text-3xl font-luxury font-bold">Panoramica Salone</h2>
-              <p className="text-gray-500">Dati e performance in tempo reale.</p>
-            </div>
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-400">
-              OGGI: {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </div>
-          </header>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Entrate Totali</p>
-              <h3 className="text-2xl font-bold">€{revenue}</h3>
-              <div className="text-emerald-500 text-xs font-bold mt-2">
-                <i className="fas fa-arrow-up mr-1"></i> +12.5%
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Prenotazioni</p>
-              <h3 className="text-2xl font-bold">{appointments.length}</h3>
-              <div className="text-gray-400 text-xs mt-2">Tutti i membri</div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Membro Top</p>
-              <h3 className="text-2xl font-bold text-amber-600">
-                {teamPerformance.sort((a,b) => b.bookings - a.bookings)[0]?.name || '-'}
-              </h3>
-              <div className="text-gray-400 text-xs mt-2">Per numero servizi</div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Nuovi Clienti</p>
-              <h3 className="text-2xl font-bold">14</h3>
-              <div className="text-amber-500 text-xs font-bold mt-2">Ultimi 30gg</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-3xl border border-gray-100">
-              <h3 className="font-bold text-lg mb-8">Performance Team</h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={teamPerformance}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'}} />
-                    <Bar dataKey="bookings" radius={[8, 8, 0, 0]} barSize={40}>
-                      {teamPerformance.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-3xl border border-gray-100">
-              <h3 className="font-bold text-lg mb-6">Ultimi Appuntamenti</h3>
-              <div className="space-y-4">
-                {appointments.slice(-5).reverse().map(app => {
-                  const service = SERVICES.find(s => s.id === app.serviceId);
-                  return (
-                    <div key={app.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-2xl transition-colors">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500 text-xs">
-                          {app.clientName.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-gray-800">{app.clientName}</p>
-                          <p className="text-[10px] text-gray-400 uppercase font-medium">{service?.name}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-bold text-amber-500">{new Date(app.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                        <p className="text-[10px] text-gray-400">{app.teamMember}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SEZIONE ADMIN: AGENDA TEAM */}
-      {activeTab === 'team_schedule' && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <header className="flex justify-between items-center">
-            <h2 className="text-3xl font-luxury font-bold">Agenda Staff</h2>
-            <div className="flex space-x-2">
-               <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-400"><i className="fas fa-chevron-left"></i></button>
-               <span className="bg-white px-4 py-2 rounded-xl border border-gray-100 text-sm font-bold self-center">Oggi</span>
-               <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-400"><i className="fas fa-chevron-right"></i></button>
-            </div>
-          </header>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TEAM.map(member => (
-              <div key={member.name} className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
-                <div className="bg-gray-900 p-4 text-white flex items-center space-x-3">
-                  <img src={member.avatar} className="w-10 h-10 rounded-full object-cover border-2 border-amber-500" />
-                  <div>
-                    <h4 className="font-bold text-sm">{member.name}</h4>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">{member.role}</p>
-                  </div>
-                </div>
-                <div className="p-4 space-y-3 min-h-[400px] bg-gray-50/50">
-                  {appointments
-                    .filter(a => a.teamMember === member.name)
-                    .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                    .map(app => {
-                      const service = SERVICES.find(s => s.id === app.serviceId);
-                      return (
-                        <div key={app.id} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-amber-500 group relative">
-                          <div className="flex justify-between items-start mb-2">
-                             <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded uppercase">
-                               {new Date(app.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                             </span>
-                             <button 
-                               onClick={() => deleteAppointment(app.id)}
-                               className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                             >
-                               <i className="fas fa-times-circle text-xs"></i>
-                             </button>
-                          </div>
-                          <p className="text-sm font-bold text-gray-800 truncate">{app.clientName}</p>
-                          <p className="text-[10px] text-gray-400">{service?.name}</p>
-                          <p className="text-[10px] text-gray-400 mt-1 italic">Durata: {service?.duration} min</p>
-                        </div>
-                      );
-                    })}
-                  {appointments.filter(a => a.teamMember === member.name).length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center pt-20 text-gray-300">
-                      <i className="fas fa-calendar-day text-3xl mb-2"></i>
-                      <p className="text-[10px] font-bold uppercase tracking-widest">Nessun impegno</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* SEZIONE CLIENTE: DASHBOARD */}
-      {activeTab === 'dashboard' && (
-        <div className="space-y-8 animate-in fade-in duration-500">
           <header>
-            <h2 className="text-3xl font-luxury font-bold text-gray-900">Bentornato, {user.fullName}</h2>
-            <p className="text-gray-500 mt-1">Cosa desideri prenotare oggi?</p>
+            <h2 className="text-3xl font-luxury font-bold">Gestione Kristal</h2>
+            <p className="text-gray-500">Performance e strumenti amministrativi.</p>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-              <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center text-xl">
-                <i className="fas fa-calendar-check"></i>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">I tuoi appuntamenti</p>
-                <h3 className="text-xl font-bold">{userAppointments.length}</h3>
-              </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Fatturato</p>
+              <h3 className="text-2xl font-bold">€{revenue}</h3>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center text-xl">
-                <i className="fas fa-crown"></i>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Punti Fedeltà</p>
-                <h3 className="text-xl font-bold">1.250</h3>
-              </div>
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Servizi Attivi</p>
+              <h3 className="text-2xl font-bold">{services.length}</h3>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-              <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center text-xl">
-                <i className="fas fa-gift"></i>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Premi disponibili</p>
-                <h3 className="text-xl font-bold">2</h3>
-              </div>
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Team</p>
+              <h3 className="text-2xl font-bold">{team.length}</h3>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Appuntamenti</p>
+              <h3 className="text-2xl font-bold">{appointments.length}</h3>
             </div>
           </div>
 
-          <div className="bg-gray-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
-            <div className="relative z-10">
-              <h3 className="text-2xl font-luxury font-bold mb-2">Esperienza VIP Kristal</h3>
-              <p className="text-gray-400 text-sm max-w-md mb-6">Prenota i nostri trattamenti esclusivi e lasciati coccolare dai migliori professionisti del settore.</p>
-              <button 
-                onClick={() => setActiveTab('services')}
-                className="bg-amber-500 text-white px-8 py-3 rounded-2xl font-bold hover:bg-amber-600 transition-all"
-              >
-                Scopri i Servizi
-              </button>
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            <h3 className="font-bold mb-6">Carico di lavoro del team</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={teamPerformance}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={12} />
+                  <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px rgba(0,0,0,0.05)'}} />
+                  <Bar dataKey="bookings" fill="#f59e0b" radius={[10, 10, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <i className="fas fa-spa absolute -right-10 -bottom-10 text-[200px] text-white/5 rotate-12"></i>
           </div>
         </div>
       )}
 
-      {/* SEZIONE CALENDARIO (CLIENTE O TUTTI PER ADMIN) */}
-      {(activeTab === 'calendar' || activeTab === 'manage_appointments') && (
+      {/* ADMIN: GESTIONE LISTINO */}
+      {activeTab === 'services' && user.role === 'admin' && (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-luxury font-bold">
-              {activeTab === 'manage_appointments' ? 'Tutte le Prenotazioni' : 'I Miei Appuntamenti'}
-            </h2>
+            <h2 className="text-2xl font-luxury font-bold">Configurazione Servizi</h2>
             <button 
-              onClick={() => {
-                setSelectedAppointment(undefined);
-                setIsFormOpen(true);
-              }}
-              className="bg-gray-900 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-black transition-all shadow-lg flex items-center"
+              onClick={() => setEditingService({ name: '', price: 0, duration: 30, category: 'Capelli', description: '' })}
+              className="bg-gray-900 text-white px-5 py-2.5 rounded-2xl text-xs font-bold hover:bg-black transition-all"
             >
-              <i className="fas fa-plus mr-2"></i>
-              Nuovo Appuntamento
+              + Nuovo Servizio
             </button>
           </div>
 
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                    <th className="px-6 py-4">Cliente</th>
-                    <th className="px-6 py-4">Servizio</th>
-                    <th className="px-6 py-4">Team</th>
-                    <th className="px-6 py-4">Data</th>
-                    <th className="px-6 py-4 text-right">Azioni</th>
+          <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400">
+                <tr>
+                  <th className="px-6 py-4">Nome</th>
+                  <th className="px-6 py-4">Categoria</th>
+                  <th className="px-6 py-4">Prezzo</th>
+                  <th className="px-6 py-4">Durata</th>
+                  <th className="px-6 py-4 text-right">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {services.map(s => (
+                  <tr key={s.id} className="text-sm hover:bg-gray-50/50">
+                    <td className="px-6 py-4 font-bold">{s.name}</td>
+                    <td className="px-6 py-4"><span className="bg-gray-100 px-2 py-1 rounded-lg text-[10px]">{s.category}</span></td>
+                    <td className="px-6 py-4">€{s.price}</td>
+                    <td className="px-6 py-4 text-gray-400">{s.duration} min</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => setEditingService(s)} className="text-amber-500 mr-3"><i className="fas fa-edit"></i></button>
+                      <button onClick={() => { if(confirm('Eliminare?')) { supabaseMock.services.delete(s.id); refreshData(); } }} className="text-red-400"><i className="fas fa-trash"></i></button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {(activeTab === 'manage_appointments' ? appointments : userAppointments).map(app => {
-                    const service = SERVICES.find(s => s.id === app.serviceId);
-                    return (
-                      <tr key={app.id} className="hover:bg-gray-50/50 transition-colors group">
-                        <td className="px-6 py-4">
-                          <span className="font-bold text-gray-800 text-sm">{app.clientName}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-gray-600">{service?.name}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 uppercase">
-                            {app.teamMember}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-xs text-gray-500 block">
-                            {new Date(app.date).toLocaleDateString()}
-                          </span>
-                          <span className="text-xs font-bold text-gray-900">
-                            {new Date(app.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end space-x-1">
-                            <button 
-                              onClick={() => {
-                                setSelectedAppointment(app);
-                                setIsFormOpen(true);
-                              }}
-                              className="p-2 text-gray-300 hover:text-amber-500 transition-colors"
-                            >
-                              <i className="fas fa-edit"></i>
-                            </button>
-                            <button 
-                              onClick={() => deleteAppointment(app.id)}
-                              className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {(activeTab === 'manage_appointments' ? appointments : userAppointments).length === 0 && (
-                <div className="p-20 text-center text-gray-400">
-                  <i className="fas fa-calendar-times text-4xl mb-4 text-gray-100"></i>
-                  <p className="text-sm">Nessuna prenotazione presente.</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
+
+          {editingService && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSaveService} className="bg-white p-8 rounded-[2.5rem] w-full max-w-md animate-in zoom-in-95">
+                <h3 className="text-xl font-bold mb-6">Gestione Servizio</h3>
+                <div className="space-y-4">
+                  <input type="text" placeholder="Nome" required value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="number" placeholder="Prezzo (€)" required value={editingService.price} onChange={e => setEditingService({...editingService, price: Number(e.target.value)})} className="p-3 bg-gray-50 rounded-xl outline-none" />
+                    <input type="number" placeholder="Durata (min)" required value={editingService.duration} onChange={e => setEditingService({...editingService, duration: Number(e.target.value)})} className="p-3 bg-gray-50 rounded-xl outline-none" />
+                  </div>
+                  <select value={editingService.category} onChange={e => setEditingService({...editingService, category: e.target.value as any})} className="w-full p-3 bg-gray-50 rounded-xl outline-none">
+                    <option>Capelli</option><option>Viso</option><option>Corpo</option><option>Unghie</option>
+                  </select>
+                  <textarea placeholder="Descrizione" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none h-24" />
+                </div>
+                <div className="flex gap-3 mt-8">
+                  <button type="button" onClick={() => setEditingService(null)} className="flex-1 py-3 text-gray-400 font-bold">Annulla</button>
+                  <button type="submit" className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-bold">Salva</button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       )}
 
-      {/* SEZIONE SERVIZI */}
-      {activeTab === 'services' && (
-        <div className="space-y-8 animate-in fade-in duration-500">
-           <header className="flex justify-between items-end">
-             <div>
-                <h2 className="text-2xl font-luxury font-bold">Listino Servizi</h2>
-                <p className="text-gray-500">I nostri trattamenti signature.</p>
-             </div>
-             {user.role === 'admin' && (
-                <button className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-600">
-                  Aggiungi Servizio
-                </button>
-             )}
+      {/* ADMIN: AGENDA MULTI-STAFF */}
+      {activeTab === 'team_schedule' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+           <header className="flex justify-between items-center">
+             <h2 className="text-2xl font-luxury font-bold">Agenda Staff</h2>
+             <button 
+               onClick={() => setEditingMember({ name: '', role: '', bio: '', avatar: 'https://picsum.photos/seed/new/200' })}
+               className="text-xs font-bold text-amber-600 bg-amber-50 px-4 py-2 rounded-xl"
+             >
+               + Aggiungi Membro
+             </button>
            </header>
-
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-             {SERVICES.map(service => (
-               <div key={service.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all">
-                 <div className="flex justify-between items-start mb-4">
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg uppercase tracking-wider">
-                      {service.category}
-                    </span>
-                    <span className="text-xl font-bold text-gray-900">€{service.price}</span>
+           
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             {team.map(member => (
+               <div key={member.name} className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm flex flex-col">
+                 <div className="bg-gray-900 p-5 text-white flex items-center justify-between">
+                   <div className="flex items-center space-x-3">
+                     <img src={member.avatar} className="w-10 h-10 rounded-full object-cover border-2 border-amber-500" />
+                     <div>
+                       <p className="font-bold text-sm">{member.name}</p>
+                       <p className="text-[10px] text-gray-400 uppercase">{member.role}</p>
+                     </div>
+                   </div>
+                   <button onClick={() => setEditingMember(member)} className="text-gray-400 hover:text-white"><i className="fas fa-cog"></i></button>
                  </div>
-                 <h3 className="font-bold text-lg text-gray-800 mb-2">{service.name}</h3>
-                 <p className="text-xs text-gray-400 flex-1 mb-6 leading-relaxed">{service.description}</p>
-                 <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
-                    <div className="flex items-center text-[10px] font-bold text-gray-400 uppercase">
-                      <i className="far fa-clock mr-1.5 text-amber-500"></i>
-                      {service.duration} min
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setSelectedAppointment({ serviceId: service.id } as Appointment);
-                        setIsFormOpen(true);
-                      }}
-                      className="bg-gray-900 text-white text-[10px] font-bold px-4 py-2 rounded-xl hover:bg-amber-500 transition-colors"
-                    >
-                      Prenota
-                    </button>
+                 <div className="p-4 flex-1 space-y-3 bg-gray-50/50 min-h-[300px]">
+                   {appointments
+                     .filter(a => a.teamMember === member.name)
+                     .map(app => (
+                       <div key={app.id} className="bg-white p-4 rounded-2xl border-l-4 border-amber-500 shadow-sm">
+                         <p className="text-[10px] font-bold text-amber-600 mb-1">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                         <p className="text-sm font-bold text-gray-800">{app.clientName}</p>
+                         <p className="text-[10px] text-gray-400">{(services.find(s => s.id === app.serviceId))?.name}</p>
+                       </div>
+                     ))}
                  </div>
                </div>
              ))}
            </div>
+
+           {editingMember && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSaveMember} className="bg-white p-8 rounded-[2.5rem] w-full max-w-md animate-in zoom-in-95">
+                <h3 className="text-xl font-bold mb-6">Profilo Membro Team</h3>
+                <div className="space-y-4">
+                  <input type="text" placeholder="Nome" required value={editingMember.name} onChange={e => setEditingMember({...editingMember, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none" />
+                  <input type="text" placeholder="Ruolo" required value={editingMember.role} onChange={e => setEditingMember({...editingMember, role: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none" />
+                  <textarea placeholder="Bio" value={editingMember.bio} onChange={e => setEditingMember({...editingMember, bio: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none h-20" />
+                </div>
+                <div className="flex gap-3 mt-8">
+                  <button type="button" onClick={() => { if(confirm('Rimuovere dal team?')) { supabaseMock.team.delete(editingMember.name); refreshData(); setEditingMember(null); } }} className="text-red-500 text-xs font-bold">Rimuovi</button>
+                  <div className="flex-1 flex gap-2">
+                    <button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-3 text-gray-400 font-bold">Esci</button>
+                    <button type="submit" className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-bold">Salva</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CLIENTE: PRENOTAZIONE MOBILE-FIRST */}
+      {activeTab === 'dashboard' && user.role === 'client' && (
+        <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+          <header>
+            <h2 className="text-4xl font-luxury font-bold leading-tight">Ciao, {user.fullName.split(' ')[0]}!<br/><span className="text-amber-500">Prenota la tua bellezza.</span></h2>
+          </header>
+
+          {/* Quick Stats Slider */}
+          <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+            <div className="min-w-[140px] bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Appuntamenti</p>
+              <p className="text-2xl font-bold">{userAppointments.length}</p>
+            </div>
+            <div className="min-w-[140px] bg-amber-500 p-4 rounded-3xl text-white shadow-lg">
+              <p className="text-[10px] font-bold text-white/70 uppercase mb-1">Punti Gold</p>
+              <p className="text-2xl font-bold">1.250</p>
+            </div>
+          </div>
+
+          {/* Service Selector - Mobile Optimized */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-xl">Scegli Trattamento</h3>
+              <select 
+                value={filterCategory} 
+                onChange={e => setFilterCategory(e.target.value)}
+                className="bg-transparent text-xs font-bold text-amber-600 outline-none"
+              >
+                {['Tutti', 'Capelli', 'Viso', 'Corpo', 'Unghie'].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {filteredServices.map(s => (
+                <button 
+                  key={s.id}
+                  onClick={() => { setSelectedAppointment({ serviceId: s.id } as Appointment); setIsFormOpen(true); }}
+                  className="bg-white p-5 rounded-[2rem] border border-gray-100 flex items-center justify-between text-left hover:scale-[1.02] transition-transform active:scale-95 shadow-sm"
+                >
+                  <div className="flex-1 pr-4">
+                    <p className="text-[10px] font-bold text-amber-500 uppercase mb-1">{s.category}</p>
+                    <h4 className="font-bold text-gray-900">{s.name}</h4>
+                    <p className="text-xs text-gray-400 line-clamp-1">{s.description}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-lg">€{s.price}</p>
+                    <p className="text-[10px] text-gray-400">{s.duration} min</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLIENTE/ADMIN: I MIEI APPUNTAMENTI */}
+      {activeTab === 'calendar' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <h2 className="text-2xl font-luxury font-bold">I Tuoi Appuntamenti</h2>
+          <div className="space-y-4">
+            {userAppointments.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(app => {
+              const s = services.find(sv => sv.id === app.serviceId);
+              const isLocked = !canModify(app.date);
+              return (
+                <div key={app.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
+                  {isLocked && <div className="absolute top-0 right-0 bg-gray-100 px-3 py-1 rounded-bl-xl text-[10px] font-bold text-gray-400 uppercase tracking-widest"><i className="fas fa-lock mr-1"></i> Bloccato</div>}
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h4 className="font-bold text-lg text-gray-900">{s?.name || 'Trattamento'}</h4>
+                      <p className="text-xs text-amber-600 font-bold uppercase">{app.teamMember}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold">{new Date(app.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</p>
+                      <p className="text-2xl font-bold text-gray-900">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 border-t border-gray-50 pt-4 mt-2">
+                    <button 
+                      onClick={() => { if(!isLocked) { setSelectedAppointment(app); setIsFormOpen(true); } else alert("Modifica bloccata (mancano meno di 24 ore)."); }}
+                      className={`flex-1 py-3 rounded-2xl text-xs font-bold transition-all ${isLocked ? 'bg-gray-50 text-gray-300' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      <i className="fas fa-edit mr-2"></i> Modifica
+                    </button>
+                    <button 
+                      onClick={() => deleteAppointment(app.id, app.date)}
+                      className={`flex-1 py-3 rounded-2xl text-xs font-bold transition-all ${isLocked ? 'bg-gray-50 text-gray-300' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}
+                    >
+                      <i className="fas fa-trash mr-2"></i> Elimina
+                    </button>
+                  </div>
+                  {isLocked && <p className="text-[10px] text-gray-400 mt-3 italic text-center">Contatta il salone per modifiche last-minute.</p>}
+                </div>
+              );
+            })}
+            {userAppointments.length === 0 && (
+              <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-gray-200">
+                <i className="fas fa-calendar-alt text-4xl text-gray-100 mb-4"></i>
+                <p className="text-gray-400">Non hai ancora appuntamenti prenotati.</p>
+                <button onClick={() => setActiveTab('dashboard')} className="mt-4 text-amber-500 font-bold text-sm">Prenota ora</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* MODALE PRENOTAZIONE */}
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white w-full max-w-xl rounded-t-[3rem] md:rounded-[3rem] shadow-2xl animate-in slide-in-from-bottom-20 duration-300 overflow-hidden">
             <div className="p-8 md:p-12">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-luxury font-bold">
-                  {selectedAppointment?.id ? 'Modifica Appuntamento' : 'Prenota Trattamento'}
+                  {selectedAppointment?.id ? 'Aggiorna Appuntamento' : 'Completa Prenotazione'}
                 </h3>
-                <button onClick={() => setIsFormOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 transition-colors">
-                  <i className="fas fa-times text-gray-400"></i>
+                <button onClick={() => setIsFormOpen(false)} className="w-12 h-12 flex items-center justify-center rounded-full bg-gray-50 text-gray-400">
+                  <i className="fas fa-times"></i>
                 </button>
               </div>
               <AppointmentForm 
                 initialData={selectedAppointment}
                 onSave={saveAppointment}
                 onCancel={() => setIsFormOpen(false)}
+                services={services}
+                team={team}
               />
             </div>
           </div>
