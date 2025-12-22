@@ -12,7 +12,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [step, setStep] = useState(1); // 1: Credential, 2: OTP
+  const [step, setStep] = useState(1);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,21 +21,30 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       return;
     }
     
-    // Simulate login
     onLogin({
       id: 'usr_' + Math.random().toString(36).substr(2, 4),
-      email: email || 'guest@example.com',
+      email: email || 'user@kristal.it',
       fullName: fullName || 'Cliente Kristal',
       phone: phone || '+39 123 456 7890',
       role: 'client'
     });
   };
 
+  const loginAsAdmin = () => {
+    onLogin({
+      id: 'admin_1',
+      email: 'admin@kristal.it',
+      fullName: 'Gestore Kristal',
+      phone: '+39 000 000 0000',
+      role: 'admin'
+    });
+  };
+
   const handleSocialLogin = (provider: string) => {
     onLogin({
       id: 'social_' + provider,
-      email: `${provider}@kristal.com`,
-      fullName: `User ${provider}`,
+      email: `${provider.toLowerCase()}@kristal.com`,
+      fullName: `${provider} User`,
       phone: '+39 999 999 9999',
       role: 'client'
     });
@@ -47,7 +56,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <div className="p-8 md:p-12">
           <div className="text-center mb-10">
             <h1 className="text-4xl font-luxury font-bold tracking-tighter text-gray-900 mb-2">KRISTAL</h1>
-            <p className="text-gray-400 text-sm">Il tuo lusso quotidiano, a portata di click.</p>
+            <p className="text-gray-400 text-sm">Luxury Salon Management</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -61,15 +70,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-400 transition-all"
-                      required
                     />
                     <input 
                       type="tel" 
-                      placeholder="Cellulare (+39 ...)"
+                      placeholder="Cellulare"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-400 transition-all"
-                      required
                     />
                   </>
                 )}
@@ -79,7 +86,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-400 transition-all"
-                  required
                 />
                 <input 
                   type="password" 
@@ -87,78 +93,65 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-400 transition-all"
-                  required
                 />
                 
                 <button 
                   type="submit"
-                  className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-black transition-all shadow-lg shadow-gray-200 mt-4"
+                  className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-black transition-all shadow-lg"
                 >
                   {isRegistering ? 'Continua' : 'Entra'}
                 </button>
               </>
             ) : (
               <div className="text-center space-y-4 animate-in slide-in-from-right-4">
-                <p className="text-sm text-gray-500">Abbiamo inviato un codice OTP a <strong>{phone}</strong></p>
+                <p className="text-sm text-gray-500">Codice OTP inviato a {phone}</p>
                 <div className="flex justify-between gap-2">
-                  {[1, 2, 3, 4, 5, 6].map(i => (
-                    <input key={i} type="text" maxLength={1} className="w-10 h-12 text-center bg-gray-100 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none" defaultValue={i*2 % 9} />
+                  {[1, 2, 3, 4].map(i => (
+                    <input key={i} type="text" maxLength={1} className="w-12 h-14 text-center bg-gray-100 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-xl font-bold" defaultValue={i+2} />
                   ))}
                 </div>
-                <button 
-                  type="submit"
-                  className="w-full py-4 bg-amber-500 text-white font-bold rounded-2xl hover:bg-amber-600 transition-all mt-6"
-                >
-                  Verifica e Registrati
+                <button type="submit" className="w-full py-4 bg-amber-500 text-white font-bold rounded-2xl hover:bg-amber-600 transition-all">
+                  Verifica
                 </button>
-                <button onClick={() => setStep(1)} className="text-xs text-gray-400 hover:underline">Indietro</button>
               </div>
             )}
           </form>
 
           {step === 1 && (
-            <div className="mt-8">
-              <div className="relative flex items-center mb-6">
+            <div className="mt-6 space-y-4">
+              <button 
+                onClick={loginAsAdmin}
+                className="w-full py-3 bg-amber-50 text-amber-600 font-bold rounded-2xl border border-amber-100 hover:bg-amber-100 transition-all flex items-center justify-center space-x-2"
+              >
+                <i className="fas fa-user-shield"></i>
+                <span>Accedi come Admin (Demo)</span>
+              </button>
+
+              <div className="relative flex items-center py-2">
                 <div className="flex-grow border-t border-gray-100"></div>
-                <span className="flex-shrink mx-4 text-xs text-gray-400 uppercase tracking-widest">oppure</span>
+                <span className="flex-shrink mx-4 text-[10px] text-gray-300 uppercase tracking-widest">Social Login</span>
                 <div className="flex-grow border-t border-gray-100"></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <button 
-                  onClick={() => handleSocialLogin('Google')}
-                  className="flex items-center justify-center space-x-2 py-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all"
-                >
+                <button onClick={() => handleSocialLogin('Google')} className="flex items-center justify-center space-x-2 py-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
                   <i className="fab fa-google text-red-500"></i>
                   <span className="text-xs font-semibold">Google</span>
                 </button>
-                <button 
-                  onClick={() => handleSocialLogin('Apple')}
-                  className="flex items-center justify-center space-x-2 py-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all"
-                >
+                <button onClick={() => handleSocialLogin('Apple')} className="flex items-center justify-center space-x-2 py-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
                   <i className="fab fa-apple text-gray-900"></i>
-                  <span className="text-xs font-semibold">Apple ID</span>
+                  <span className="text-xs font-semibold">Apple</span>
                 </button>
               </div>
 
-              <div className="mt-8 text-center">
-                <button 
-                  onClick={() => {
-                    setIsRegistering(!isRegistering);
-                    setStep(1);
-                  }}
-                  className="text-sm text-gray-500 hover:text-amber-600 font-medium transition-colors"
-                >
+              <div className="mt-6 text-center">
+                <button onClick={() => setIsRegistering(!isRegistering)} className="text-sm text-gray-500 hover:text-amber-600 transition-colors">
                   {isRegistering ? 'Hai già un account? Accedi' : 'Nuovo su Kristal? Registrati'}
                 </button>
               </div>
             </div>
           )}
         </div>
-      </div>
-
-      <div className="mt-8 text-center text-[10px] text-gray-300 uppercase tracking-[0.2em]">
-        Luxury Salon Management &copy; 2024
       </div>
     </div>
   );
