@@ -2,9 +2,19 @@
 import { GoogleGenAI } from "@google/genai";
 import { SERVICES } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Inizializzazione del client AI
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+  console.warn("ATTENZIONE: API_KEY non configurata. L'assistente AI non funzionerà correttamente.");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || "" });
 
 export async function getAIConsultation(userPrompt: string) {
+  if (!apiKey) {
+    return "L'assistente AI non è configurato. Inserisci la API_KEY nelle variabili d'ambiente di Vercel per attivarlo.";
+  }
+
   const serviceList = SERVICES.map(s => `${s.name} (${s.category}) - €${s.price}`).join(', ');
   
   const prompt = `Sei l'assistente virtuale del salone di bellezza di lusso "Kristal".
@@ -24,11 +34,13 @@ export async function getAIConsultation(userPrompt: string) {
     return response.text || "Mi dispiace, al momento non riesco a connettermi al mio sistema di bellezza. Riprova tra poco.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Si è verificato un errore nella consulenza AI.";
+    return "Si è verificato un errore nella consulenza AI. Verifica la validità della tua API_KEY.";
   }
 }
 
 export async function analyzeAvailability(appointments: any[]) {
+    if (!apiKey) return "Analisi non disponibile (chiave mancante).";
+
     const prompt = `Analizza questo set di appuntamenti per il salone Kristal e suggerisci i momenti migliori per fare una pausa o lanciare una promozione basata sui buchi in agenda. Appuntamenti: ${JSON.stringify(appointments)}`;
     
     try {
