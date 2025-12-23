@@ -10,34 +10,32 @@ export async function getAIConsultation(userPrompt: string, userProfile?: User) 
   
   let historyContext = "";
   if (userProfile && userProfile.treatment_history && userProfile.treatment_history.length > 0) {
-    historyContext = `L'ospite si chiama ${userProfile.fullName}. Il suo storico trattamenti è: ${
-      userProfile.treatment_history.map(h => `${h.date}: ${h.service} (${h.notes})`).join('; ')
+    historyContext = `L'ospite si chiama ${userProfile.fullName}. Storico: ${
+      userProfile.treatment_history.slice(-2).map(h => `${h.service}`).join(', ')
     }.`;
   }
 
-  const prompt = `Sei l'assistente virtuale del salone di bellezza di lusso "Kristal".
-  I nostri servizi disponibili sono: ${serviceList}.
-  Il team è composto da Melk (Direttore Creativo - Colore), Maurizio (Senior Stylist - Taglio) e Romina (Master Esthetician - Trattamenti Viso/Corpo).
+  const prompt = `Sei la Concierge AI di "Kristal", atelier di bellezza luxury.
+  Servizi: ${serviceList}.
+  Staff: Melk (Colore), Maurizio (Taglio), Romina (Estetica).
   
   ${historyContext}
 
-  REGOLE DI RISPOSTA:
-  1. Rispondi in modo elegante, empatico e professionale in ITALIANO.
-  2. Suggerisci il servizio più adatto basandoti sulla richiesta: "${userPrompt}".
-  3. Se hai lo storico, usalo per fare riferimenti personali (es. "Vedo che hai amato il Balayage, oggi potremmo...").
-  4. Spiega il valore del servizio (non solo il prezzo) e perché quel membro del team è la scelta ideale.
-  5. Usa sempre la valuta CHF. 
-  6. Sii sintetico, accogliente e usa un linguaggio da atelier di alta moda.
-  7. Non essere mai tecnico in modo freddo, trasmetti passione e calore.`;
+  REGOLE DI RISPOSTA (MANDATORIE):
+  1. Sii ESTREMAMENTE CONCISO: rispondi in massimo 3-4 frasi.
+  2. Usa il grassetto (**) per evidenziare SERVIZI, PREZZI e MEMBRI DEL TEAM.
+  3. Tono: Elegante, discreto, quasi sussurrato. Italiano impeccabile.
+  4. Suggerisci UN solo servizio primario basandoti su: "${userPrompt}".
+  5. Esempio: "Per la vostra esigenza suggerisco il **Balayage Luxury** (CHF 195). Sarà curato da **Melk** per garantire un risultato naturale e radioso."`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
     });
-    return response.text || "Ogni ospite è per noi un'opera d'arte. Al momento non riesco a connettermi, ma il nostro team è pronto ad accoglierti.";
+    return response.text || "La vostra bellezza merita silenzio e cura. Vi aspettiamo in atelier.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Un piccolo imprevisto nella nostra consulenza digitale. Ma ricorda: in Kristal, la tua bellezza è la nostra missione prioritaria.";
+    return "Un piccolo imprevisto nel rituale digitale. Siamo a vostra disposizione in atelier.";
   }
 }
