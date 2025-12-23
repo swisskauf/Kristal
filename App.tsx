@@ -98,8 +98,19 @@ const App: React.FC = () => {
       ]);
       
       setAppointments(appts);
-      if (svcs && svcs.length > 0) setServices(svcs);
-      if (tm && tm.length > 0) setTeam(tm);
+      
+      // Se il DB è vuoto, usiamo i default ma informiamo l'admin
+      if (svcs && svcs.length > 0) {
+        setServices(svcs);
+      } else {
+        setServices(DEFAULT_SERVICES);
+      }
+
+      if (tm && tm.length > 0) {
+        setTeam(tm);
+      } else {
+        setTeam(DEFAULT_TEAM);
+      }
 
       if (user?.role === 'admin') {
         const prfs = await db.profiles.getAll();
@@ -111,6 +122,26 @@ const App: React.FC = () => {
     }
   };
 
+  const syncDatabase = async () => {
+    setIsSyncing(true);
+    try {
+      // Sincronizza servizi
+      for (const s of DEFAULT_SERVICES) {
+        await db.services.upsert(s);
+      }
+      // Sincronizza team
+      for (const t of DEFAULT_TEAM) {
+        await db.team.upsert(t);
+      }
+      alert("Database popolato con i servizi predefiniti con successo!");
+      await refreshData();
+    } catch (err) {
+      alert("Errore durante la sincronizzazione: " + (err as any).message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -119,9 +150,28 @@ const App: React.FC = () => {
 
   const saveService = async (e: React.FormEvent) => {
     e.preventDefault();
-    await db.services.upsert(editingService);
-    setEditingService(null);
-    refreshData();
+    try {
+      await db.services.upsert(editingService);
+      setEditingService(null);
+      await refreshData();
+    } catch (err) {
+      alert("Errore salvataggio servizio.");
+    }
+  };
+
+  const toggleMemberForService = (memberName: string) => {
+    const current = editingService.assigned_team_members || [];
+    if (current.includes(memberName)) {
+      setEditingService({
+        ...editingService,
+        assigned_team_members: current.filter((m: string) => m !== memberName)
+      });
+    } else {
+      setEditingService({
+        ...editingService,
+        assigned_team_members: [...current, memberName]
+      });
+    }
   };
 
   const saveMember = async (e: React.FormEvent) => {
@@ -182,6 +232,12 @@ const App: React.FC = () => {
   const filteredServices = filterCategory === 'Tutti' ? services : services.filter(s => s.category === filterCategory);
   const categories = ['Tutti', ...Array.from(new Set(services.map(s => s.category)))];
 
+  const revenue = appointments.reduce((acc, app) => acc + (app.services?.price || 0), 0);
+  const teamPerformance = team.map(member => ({
+    name: member.name,
+    bookings: appointments.filter(a => a.team_member_name === member.name).length
+  }));
+
   return (
     <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
       
@@ -234,6 +290,57 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* ADMIN DASHBOARD */}
+      {activeTab === 'admin_dashboard' && user?.role === 'admin' && (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <header className="flex justify-between items-center">
+            <div>
+              <h2 className="text-3xl font-luxury font-bold">Pannello Kristal</h2>
+              <p className="text-gray-500">Analisi gestionale.</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={syncDatabase} 
+                disabled={isSyncing}
+                className="bg-gray-100 text-gray-600 px-6 py-3 rounded-xl font-bold text-xs hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                {isSyncing ? "Sincronizzazione..." : "Popola DB Servizi"}
+              </button>
+              <button onClick={() => setIsFormOpen(true)} className="bg-amber-500 text-white px-6 py-3 rounded-xl font-bold text-xs shadow-lg shadow-amber-200">
+                <i className="fas fa-plus mr-2"></i> Prenotazione Manuale
+              </button>
+            </div>
+          </header>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Entrate</p>
+              <h3 className="text-2xl font-bold">CHF {revenue}</h3>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Appuntamenti</p>
+              <h3 className="text-2xl font-bold">{appointments.length}</h3>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Clienti</p>
+              <h3 className="text-2xl font-bold">{profiles.length}</h3>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Servizi</p>
+              <h3 className="text-2xl font-bold">{services.length}</h3>
+            </div>
+          </div>
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={teamPerformance}>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} />
+                <Tooltip />
+                <Bar dataKey="bookings" fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* ADMIN: TEAM SCHEDULE */}
       {activeTab === 'team_schedule' && user?.role === 'admin' && (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -280,28 +387,181 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ADMIN: LISTA CLIENTI */}
-      {activeTab === 'calendar' && user?.role === 'admin' && (
-        <div className="mt-12 space-y-8">
-          <h3 className="text-2xl font-luxury font-bold">Clienti Registrati</h3>
-          <div className="grid gap-4">
-            {profiles.map(p => (
-              <div key={p.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-12 h-12 rounded-full object-cover" />
-                  <div>
-                    <h5 className="font-bold">{p.full_name}</h5>
-                    <p className="text-xs text-gray-400">{p.phone}</p>
+      {/* ADMIN: GESTIONE SERVIZI */}
+      {activeTab === 'services' && user?.role === 'admin' && (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="flex justify-between items-center">
+            <h2 className="text-3xl font-luxury font-bold">Listino Servizi</h2>
+            <button 
+              onClick={() => setEditingService({ name: '', price: 0, duration: 30, category: 'Capelli', description: '', assigned_team_members: [] })}
+              className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-xs"
+            >
+              Nuovo Servizio
+            </button>
+          </div>
+
+          <div className="grid gap-3">
+            {services.map(s => (
+              <div key={s.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex-1">
+                  <h4 className="font-bold text-lg">{s.name}</h4>
+                  <div className="flex gap-2 items-center mt-1">
+                    <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold uppercase">{s.category}</span>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">CHF {s.price} • {s.duration} min</span>
+                  </div>
+                  <div className="flex gap-1 mt-2">
+                    {s.assigned_team_members && s.assigned_team_members.length > 0 ? (
+                      s.assigned_team_members.map(tmName => (
+                        <span key={tmName} className="text-[8px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-bold uppercase">{tmName}</span>
+                      ))
+                    ) : (
+                      <span className="text-[8px] bg-green-50 text-green-500 px-1.5 py-0.5 rounded-md font-bold uppercase">Tutto il Team</span>
+                    )}
                   </div>
                 </div>
-                <button onClick={() => setEditingProfile(p)} className="p-3 bg-gray-50 rounded-xl text-gray-400 hover:text-amber-500"><i className="fas fa-user-edit"></i></button>
+                <div className="flex gap-1">
+                  <button onClick={() => setEditingService(s)} className="p-3 text-amber-600 hover:bg-amber-50 rounded-full transition-colors"><i className="fas fa-edit"></i></button>
+                  <button onClick={async () => { if(confirm('Eliminare?')) { await db.services.delete(s.id); refreshData(); }}} className="p-3 text-red-400 hover:bg-red-50 rounded-full transition-colors"><i className="fas fa-trash"></i></button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* MODALE MODIFICA STAFF / ORARI */}
+      {/* ADMIN: CALENDARIO / CLIENTI */}
+      {activeTab === 'calendar' && user?.role === 'admin' && (
+        <div className="space-y-12">
+          <section className="space-y-6">
+            <h2 className="text-3xl font-luxury font-bold">Prossimi Appuntamenti</h2>
+            <div className="grid gap-4">
+              {appointments.map(app => (
+                <div key={app.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex gap-4 items-center">
+                    <div className="bg-amber-50 p-4 rounded-2xl text-center min-w-[70px]">
+                      <p className="text-[10px] font-bold text-amber-600 uppercase">{new Date(app.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
+                      <p className="text-xl font-bold text-gray-900">{new Date(app.date).getDate()}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">{app.services?.name}</h4>
+                      <p className="text-xs text-gray-400 font-bold uppercase">Con {app.team_member_name} per {app.profiles?.full_name}</p>
+                      <p className="text-xs text-amber-600 font-bold mt-1 uppercase tracking-widest">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setSelectedAppointment(app); setIsFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:text-amber-500 transition-all flex items-center justify-center"><i className="fas fa-edit text-xs"></i></button>
+                    <button onClick={async () => { if(confirm('Eliminare?')) { await db.appointments.delete(app.id); refreshData(); }}} className="w-10 h-10 rounded-full bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"><i className="fas fa-trash text-xs"></i></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-6">
+            <h3 className="text-2xl font-luxury font-bold">Database Clienti</h3>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {profiles.map(p => (
+                <div key={p.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-12 h-12 rounded-full object-cover" />
+                    <div>
+                      <h5 className="font-bold">{p.full_name}</h5>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">{p.phone || 'Nessun telefono'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setEditingProfile(p)} className="p-3 bg-gray-50 rounded-xl text-gray-400 hover:text-amber-500"><i className="fas fa-user-edit"></i></button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* CLIENT CALENDAR */}
+      {activeTab === 'calendar' && user?.role === 'client' && (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <h2 className="text-3xl font-luxury font-bold">I miei appuntamenti</h2>
+          <div className="grid gap-4">
+            {appointments.filter(a => a.client_id === user.id).map(app => (
+              <div key={app.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{app.services?.name || 'Trattamento'}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Professionista: {app.team_member_name}</p>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{new Date(app.date).toLocaleDateString()}</p>
+                    <p className="text-2xl font-bold tracking-tighter text-gray-900">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                  </div>
+                  <button onClick={async () => { if(confirm('Vuoi cancellare questa prenotazione?')) { await db.appointments.delete(app.id); refreshData(); }}} className="w-12 h-12 rounded-2xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center">
+                    <i className="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODALE MODIFICA SERVIZIO */}
+      {editingService && (
+        <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 overflow-y-auto max-h-[90vh]">
+            <h3 className="text-2xl font-luxury font-bold mb-6">Gestione Servizio</h3>
+            <form onSubmit={saveService} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Nome Servizio</label><input placeholder="Es. Taglio Luxury" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} required /></div>
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Prezzo (CHF)</label><input type="number" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingService.price} onChange={e => setEditingService({...editingService, price: Number(e.target.value)})} required /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Durata (Min)</label><input type="number" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: Number(e.target.value)})} required /></div>
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Categoria</label><select className="w-full p-4 bg-gray-50 rounded-2xl font-bold" value={editingService.category} onChange={e => setEditingService({...editingService, category: e.target.value})}><option>Donna</option><option>Uomo</option><option>Colore</option><option>Trattamenti</option><option>Estetica</option></select></div>
+              </div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Descrizione</label><textarea className="w-full p-4 bg-gray-50 rounded-2xl h-24" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} /></div>
+              
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-3 block">Chi può farlo?</label>
+                <div className="flex flex-wrap gap-2">
+                  {team.map(m => (
+                    <button 
+                      key={m.name} 
+                      type="button" 
+                      onClick={() => toggleMemberForService(m.name)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                        (editingService.assigned_team_members || []).includes(m.name)
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-white text-gray-500 border-gray-100 hover:border-amber-200'
+                      }`}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingService({...editingService, assigned_team_members: []})}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                      (!editingService.assigned_team_members || editingService.assigned_team_members.length === 0)
+                        ? 'bg-green-500 text-white border-green-500'
+                        : 'bg-white text-gray-500 border-gray-100'
+                    }`}
+                  >
+                    Tutti
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-6">
+                <button type="button" onClick={() => setEditingService(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px]">Annulla</button>
+                <button type="submit" className="flex-1 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px]">Salva Servizio</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Altre modali restano invariate (editingMember, editingProfile, isFormOpen) */}
       {editingMember && (
         <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[3rem] p-10">
@@ -323,7 +583,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODALE MODIFICA PROFILO CLIENTE */}
       {editingProfile && (
         <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[3rem] p-10">
@@ -341,13 +600,12 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODALE PRENOTAZIONE */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[95vh]">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-2xl font-luxury font-bold">Nuova Prenotazione</h3>
-              <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:text-gray-900"><i className="fas fa-times text-xl"></i></button>
+              <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:text-gray-900 transition-colors"><i className="fas fa-times text-xl"></i></button>
             </div>
             <AppointmentForm 
               services={services} team={team} existingAppointments={appointments}
