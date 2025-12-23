@@ -25,7 +25,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
   const adminNav = [
     { id: 'admin_dashboard', label: 'Statistiche', icon: 'fa-chart-pie' },
-    { id: 'team_schedule', label: 'Agenda Team', icon: 'fa-user-clock' },
+    { id: 'team_schedule', label: 'Staff & Orari', icon: 'fa-user-clock' },
+    { id: 'clients', label: 'Clienti', icon: 'fa-address-book' },
     { id: 'services', label: 'Servizi', icon: 'fa-list-ul' },
     { id: 'calendar', label: 'Appuntamenti', icon: 'fa-tasks' },
   ];
