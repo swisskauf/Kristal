@@ -21,16 +21,22 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await handleSessionUser(session.user);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await handleSessionUser(session.user);
+        }
+      } catch (e) {
+        console.error("Auth init error:", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth event:", event);
       if (session?.user) {
         await handleSessionUser(session.user);
       } else {
@@ -46,12 +52,12 @@ const App: React.FC = () => {
     try {
       let profile = await db.profiles.get(supabaseUser.id);
       
-      // Se il profilo non esiste (accade se il trigger DB non è configurato), lo creiamo ora
+      // Fallback: se il profilo non esiste ancora nel DB, lo creiamo forzatamente
       if (!profile) {
-        const metadata = supabaseUser.user_metadata;
+        const metadata = supabaseUser.user_metadata || {};
         profile = await db.profiles.upsert({
           id: supabaseUser.id,
-          full_name: metadata.full_name || 'Nuovo Cliente',
+          full_name: metadata.full_name || metadata.name || 'Nuovo Cliente',
           phone: metadata.phone || '',
           role: metadata.role || 'client'
         });
@@ -66,6 +72,14 @@ const App: React.FC = () => {
       });
     } catch (err) {
       console.error("Errore gestione profilo:", err);
+      // Fallback estremo per non bloccare l'utente
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email!,
+        fullName: supabaseUser.user_metadata?.full_name || 'Utente',
+        phone: '',
+        role: 'client'
+      });
     }
   };
 
@@ -98,19 +112,23 @@ const App: React.FC = () => {
 
   const saveAppointment = async (appData: Partial<Appointment>) => {
     if (!user) return;
-    const appointmentToSave = {
-      id: selectedAppointment?.id,
-      client_id: user.id,
-      service_id: appData.serviceId,
-      team_member_name: appData.teamMember,
-      date: appData.date,
-      status: 'confirmed'
-    };
-    
-    await db.appointments.upsert(appointmentToSave);
-    await refreshData();
-    setIsFormOpen(false);
-    setSelectedAppointment(undefined);
+    try {
+      const appointmentToSave = {
+        id: selectedAppointment?.id,
+        client_id: user.id,
+        service_id: appData.serviceId,
+        team_member_name: appData.teamMember,
+        date: appData.date,
+        status: 'confirmed'
+      };
+      
+      await db.appointments.upsert(appointmentToSave);
+      await refreshData();
+      setIsFormOpen(false);
+      setSelectedAppointment(undefined);
+    } catch (e) {
+      alert("Errore durante il salvataggio dell'appuntamento.");
+    }
   };
 
   const canModify = (dateStr: string) => {
@@ -126,8 +144,12 @@ const App: React.FC = () => {
       return;
     }
     if (window.confirm('Vuoi davvero cancellare questo appuntamento?')) {
-      await db.appointments.delete(id);
-      await refreshData();
+      try {
+        await db.appointments.delete(id);
+        await refreshData();
+      } catch (e) {
+        alert("Errore durante la cancellazione.");
+      }
     }
   };
 
@@ -214,23 +236,27 @@ const App: React.FC = () => {
                 {['Tutti', 'Capelli', 'Viso', 'Corpo', 'Unghie'].map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
-            {filteredServices.map(s => (
-              <button 
-                key={s.id}
-                onClick={() => { setSelectedAppointment({ service_id: s.id }); setIsFormOpen(true); }}
-                className="bg-white p-6 rounded-[2.5rem] border border-gray-100 flex items-center justify-between text-left hover:shadow-xl hover:translate-x-1 transition-all shadow-sm group"
-              >
-                <div className="flex-1 pr-4">
-                  <p className="text-[9px] font-bold text-amber-500 uppercase mb-1 tracking-widest">{s.category}</p>
-                  <h4 className="font-bold text-gray-900 text-lg group-hover:text-amber-500 transition-colors">{s.name}</h4>
-                  <p className="text-xs text-gray-400 line-clamp-1 mt-1">{s.description}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-xl text-gray-900">€{s.price}</p>
-                  <p className="text-[10px] text-gray-300 font-bold">{s.duration} min</p>
-                </div>
-              </button>
-            ))}
+            {filteredServices.length === 0 ? (
+              <p className="text-center py-10 text-gray-400">Nessun servizio disponibile al momento.</p>
+            ) : (
+              filteredServices.map(s => (
+                <button 
+                  key={s.id}
+                  onClick={() => { setSelectedAppointment({ service_id: s.id }); setIsFormOpen(true); }}
+                  className="bg-white p-6 rounded-[2.5rem] border border-gray-100 flex items-center justify-between text-left hover:shadow-xl hover:translate-x-1 transition-all shadow-sm group"
+                >
+                  <div className="flex-1 pr-4">
+                    <p className="text-[9px] font-bold text-amber-500 uppercase mb-1 tracking-widest">{s.category}</p>
+                    <h4 className="font-bold text-gray-900 text-lg group-hover:text-amber-500 transition-colors">{s.name}</h4>
+                    <p className="text-xs text-gray-400 line-clamp-1 mt-1">{s.description}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-xl text-gray-900">€{s.price}</p>
+                    <p className="text-[10px] text-gray-300 font-bold">{s.duration} min</p>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
