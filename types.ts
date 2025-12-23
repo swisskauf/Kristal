@@ -1,6 +1,12 @@
 
 export type TeamMemberName = string;
 
+export interface TreatmentRecord {
+  date: string;
+  service: string;
+  notes: string;
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -8,7 +14,7 @@ export interface Service {
   duration: number; // in minutes
   category: string;
   description: string;
-  assigned_team_members?: TeamMemberName[]; // Elenco nomi dei membri che possono farlo
+  assigned_team_members?: TeamMemberName[];
 }
 
 export interface Appointment {
@@ -25,9 +31,9 @@ export interface TeamMember {
   role: string;
   bio?: string;
   avatar?: string;
-  unavailable_dates?: string[]; // Array di date ISO (YYYY-MM-DD)
-  start_hour?: number; // e.g. 8
-  end_hour?: number; // e.g. 18
+  unavailable_dates?: string[];
+  start_hour?: number;
+  end_hour?: number;
 }
 
 export interface User {
@@ -37,6 +43,12 @@ export interface User {
   fullName: string;
   role: 'client' | 'admin';
   avatar?: string;
+  treatment_history?: TreatmentRecord[]; // Scheda tecnica riservata
+}
+
+export interface AppSettings {
+  instagram_enabled: boolean;
+  instagram_username?: string;
 }
 
 export interface ChatMessage {
