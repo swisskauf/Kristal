@@ -2,7 +2,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { SERVICES } from "../constants";
 
-// Fix: Initializing GoogleGenAI following the strictly required pattern using process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function getAIConsultation(userPrompt: string) {
@@ -10,40 +9,21 @@ export async function getAIConsultation(userPrompt: string) {
   
   const prompt = `Sei l'assistente virtuale del salone di bellezza di lusso "Kristal".
   I nostri servizi disponibili sono: ${serviceList}.
-  Il team è composto da Melk (Capelli/Colore), Maurizio (Capelli/Taglio) e Romina (Estetica/Viso/Corpo).
+  Il team è composto da Melk (Specialista Colore), Maurizio (Stylist Uomo) e Romina (Master Esthetician).
   
-  Rispondi in modo elegante e professionale in ITALIANO.
+  Rispondi in modo elegante, empatico e professionale in ITALIANO.
   Suggerisci il servizio più adatto in base alla richiesta del cliente: "${userPrompt}".
-  Spiega perché quel servizio è consigliato e quale membro del team dovrebbe occuparsene.
-  Usa sempre la valuta CHF per i riferimenti ai prezzi.
-  Sii sintetico ma accogliente.`;
+  Spiega perché quel servizio è consigliato e quale membro del team è il più indicato.
+  Usa sempre la valuta CHF. Sii sintetico, accogliente e usa un linguaggio da atelier di alta moda.`;
 
   try {
-    // Fix: Using generateContent with model and contents properties as required by the latest SDK.
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
+      contents: [{ parts: [{ text: prompt }] }],
     });
-    // Fix: Correctly accessing the .text property from GenerateContentResponse.
-    return response.text || "Mi dispiace, al momento non riesco a connettermi al mio sistema di bellezza. Riprova tra poco.";
+    return response.text || "La tua bellezza merita la massima attenzione. In questo momento non riesco a connettermi, ma ti aspettiamo in salone.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Si è verificato un errore nella consulenza AI.";
+    return "Si è verificato un piccolo imprevisto nella consulenza AI. Il nostro team è comunque a tua disposizione.";
   }
-}
-
-export async function analyzeAvailability(appointments: any[]) {
-    const prompt = `Analizza questo set di appuntamenti per il salone Kristal e suggerisci i momenti migliori per fare una pausa o lanciare una promozione basata sui buchi in agenda. Appuntamenti: ${JSON.stringify(appointments)}`;
-    
-    try {
-        // Fix: Using the correct generateContent structure and model name for text tasks.
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-        });
-        // Fix: Correctly accessing the .text property from GenerateContentResponse.
-        return response.text;
-    } catch (error) {
-        return "Analisi non disponibile.";
-    }
 }
