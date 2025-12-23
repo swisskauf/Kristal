@@ -10,7 +10,8 @@ export const SERVICES: Service[] = [
   { id: '6', name: 'Balayage d\'Autore', price: 150, duration: 180, category: 'Capelli', description: 'Schiariture naturali effetto baciato dal sole.' }
 ];
 
-export const TEAM: { name: TeamMember; role: string; bio: string; avatar: string }[] = [
+// Fix: Typing the TEAM array as TeamMember[] to match the object structure and avoid the 'string' to 'TeamMember' assignment error on the name property.
+export const TEAM: TeamMember[] = [
   { 
     name: 'Melk', 
     role: 'Creative Director', 
