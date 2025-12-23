@@ -8,6 +8,7 @@ import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, TreatmentRecord, AppSettings } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { fetchInstagramPhotos, InstagramPost } from './services/instagramService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +23,7 @@ const App: React.FC = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
   const [filterCategory, setFilterCategory] = useState<string>('Tutti');
   const [settings, setSettings] = useState<AppSettings>({ instagram_enabled: true });
+  const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>([]);
 
   const [editingService, setEditingService] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
@@ -29,6 +31,7 @@ const App: React.FC = () => {
   const [viewingHistory, setViewingHistory] = useState<User | null>(null);
   const [newOffDate, setNewOffDate] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [instaTokenInput, setInstaTokenInput] = useState('');
 
   // Per la scheda tecnica
   const [newTreatment, setNewTreatment] = useState<TreatmentRecord>({ date: new Date().toISOString().split('T')[0], service: '', notes: '' });
@@ -107,6 +110,8 @@ const App: React.FC = () => {
       
       setAppointments(appts);
       setSettings(appSettings);
+      setInstaTokenInput(appSettings.instagram_access_token || '');
+      
       if (svcs && svcs.length > 0) setServices(svcs);
       if (tm && tm.length > 0) setTeam(tm);
 
@@ -114,6 +119,12 @@ const App: React.FC = () => {
         const prfs = await db.profiles.getAll();
         setProfiles(prfs);
         if (activeTab === 'dashboard') setActiveTab('admin_dashboard');
+      }
+
+      // Sincronizzazione automatica foto Instagram se abilitato e token presente
+      if (appSettings.instagram_enabled && appSettings.instagram_access_token) {
+        const posts = await fetchInstagramPhotos(appSettings.instagram_access_token);
+        setInstagramPosts(posts);
       }
     } catch (err) {
       console.error("Errore caricamento dati:", err);
@@ -160,10 +171,22 @@ const App: React.FC = () => {
     refreshData();
   };
 
+  const updateInstagramSettings = async () => {
+    const newSettings = { ...settings, instagram_access_token: instaTokenInput };
+    await db.settings.update(newSettings);
+    setSettings(newSettings);
+    alert('Impostazioni Instagram salvate!');
+    refreshData();
+  };
+
   const toggleInstagram = async () => {
     const newSettings = { ...settings, instagram_enabled: !settings.instagram_enabled };
     await db.settings.update(newSettings);
     setSettings(newSettings);
+    if (newSettings.instagram_enabled && newSettings.instagram_access_token) {
+       const posts = await fetchInstagramPhotos(newSettings.instagram_access_token);
+       setInstagramPosts(posts);
+    }
   };
 
   const addOffDate = async (memberName: string) => {
@@ -264,21 +287,51 @@ const App: React.FC = () => {
             <section className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-2xl font-luxury font-bold">Il nostro Portfolio</h3>
-                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Seguici su Instagram @KristalSalon</p>
+                  <h3 className="text-2xl font-luxury font-bold">I nostri Capolavori</h3>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Sincronizzato con Instagram @salonekristal</p>
                 </div>
-                <a href="#" className="text-xs font-bold text-amber-600 hover:underline">VEDI TUTTI</a>
+                <a href="https://www.instagram.com/salonekristal/?hl=it" target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-amber-600 hover:underline flex items-center gap-2">
+                  <i className="fab fa-instagram"></i> SEGUICI
+                </a>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {instagramMocks.map((img, i) => (
-                  <div key={i} className="aspect-square rounded-2xl overflow-hidden group relative cursor-pointer">
-                    <img src={img} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <i className="fab fa-instagram text-white text-2xl"></i>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {instagramPosts.length > 0 ? (
+                  instagramPosts.map((post) => (
+                    <a 
+                      key={post.id} 
+                      href={post.permalink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="aspect-square rounded-2xl overflow-hidden group relative shadow-md"
+                    >
+                      <img 
+                        src={post.media_type === 'VIDEO' ? post.thumbnail_url : post.media_url} 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                        alt="Instagram Kristal"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <i className="fab fa-instagram text-white text-3xl"></i>
+                      </div>
+                    </a>
+                  ))
+                ) : (
+                  // Fallback Mocks se non c'è il token o errore
+                  instagramMocks.map((img, i) => (
+                    <div key={i} className="aspect-square rounded-2xl overflow-hidden group relative shadow-md">
+                      <img src={img} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                         <i className="fab fa-instagram text-white/50 text-xl"></i>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
+              {!settings.instagram_access_token && user?.role === 'admin' && (
+                <p className="text-[10px] text-amber-600 bg-amber-50 p-3 rounded-xl font-bold uppercase">
+                  <i className="fas fa-info-circle mr-2"></i> Admin: Inserisci un Access Token nel pannello statistiche per sincronizzare i post reali.
+                </p>
+              )}
             </section>
           )}
 
@@ -315,12 +368,12 @@ const App: React.FC = () => {
           <header className="flex justify-between items-center">
             <div>
               <h2 className="text-3xl font-luxury font-bold">Pannello Kristal</h2>
-              <p className="text-gray-500 text-sm">Gestionale & Impostazioni.</p>
+              <p className="text-gray-500 text-sm">Gestionale & Integrazioni Social.</p>
             </div>
             <div className="flex gap-2">
               <button 
                 onClick={toggleInstagram} 
-                className={`px-6 py-3 rounded-xl font-bold text-xs transition-all ${settings.instagram_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                className={`px-6 py-3 rounded-xl font-bold text-xs transition-all ${settings.instagram_enabled ? 'bg-green-100 text-green-700 shadow-md' : 'bg-gray-100 text-gray-400'}`}
               >
                 <i className={`fab fa-instagram mr-2`}></i> {settings.instagram_enabled ? 'Gallery Attiva' : 'Gallery Off'}
               </button>
@@ -329,7 +382,31 @@ const App: React.FC = () => {
               </button>
             </div>
           </header>
-          {/* Stats Grid ... */}
+
+          {/* Configurazione Instagram */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sincronizzazione Instagram</h4>
+            <p className="text-xs text-gray-500 leading-relaxed">Inserisci il <strong>Instagram Basic Display Access Token</strong> per mostrare automaticamente i post del salone nella pagina principale.</p>
+            <div className="flex flex-col md:flex-row gap-3">
+              <input 
+                type="password"
+                placeholder="Inserisci Instagram Access Token..."
+                className="flex-1 p-4 bg-gray-50 rounded-2xl text-xs font-mono outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+                value={instaTokenInput}
+                onChange={(e) => setInstaTokenInput(e.target.value)}
+              />
+              <button 
+                onClick={updateInstagramSettings}
+                className="bg-black text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+              >
+                Salva Token
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400">
+              <i className="fas fa-lightbulb mr-1"></i> Suggerimento: Puoi ottenere il token tramite Meta for Developers (Basic Display API).
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Appuntamenti</p>
@@ -338,6 +415,14 @@ const App: React.FC = () => {
               <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Clienti</p>
                 <h3 className="text-2xl font-bold">{profiles.length}</h3>
+              </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Servizi</p>
+                <h3 className="text-2xl font-bold">{services.length}</h3>
+              </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Staff Attivo</p>
+                <h3 className="text-2xl font-bold">{team.length}</h3>
               </div>
           </div>
         </div>
@@ -401,7 +486,7 @@ const App: React.FC = () => {
           <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <img src={viewingHistory.avatar || `https://ui-avatars.com/api/?name=${viewingHistory.fullName}`} className="w-14 h-14 rounded-full border-2 border-amber-500" />
+                <img src={viewingHistory.avatar || `https://ui-avatars.com/api/?name=${viewingHistory.fullName}`} className="w-14 h-14 rounded-full border-2 border-amber-500 shadow-md" />
                 <div>
                   <h3 className="text-2xl font-luxury font-bold">Scheda Tecnica</h3>
                   <p className="text-gray-400 text-xs font-bold uppercase">{viewingHistory.fullName}</p>
@@ -444,8 +529,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Altre modali esistenti (TEAM, SERVIZI, PROFILO, PRENOTAZIONE) ... */}
-      {/* (Mantengo i componenti per l'interfaccia utente completa) */}
+      {/* Altre modali esistenti (TEAM, SERVIZI, PROFILO, PRENOTAZIONE) */}
       
       {activeTab === 'team_schedule' && user?.role === 'admin' && (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -522,7 +606,7 @@ const App: React.FC = () => {
 
       {editingMember && (
         <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-[3rem] p-10"><h3 className="text-2xl font-luxury font-bold mb-6">Staff: {editingMember.name || 'Nuovo'}</h3>
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl"><h3 className="text-2xl font-luxury font-bold mb-6">Staff: {editingMember.name || 'Nuovo'}</h3>
             <form onSubmit={saveMember} className="space-y-4">
               <input placeholder="Nome" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingMember.name} onChange={e => setEditingMember({...editingMember, name: e.target.value})} required />
               <input placeholder="Ruolo" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingMember.role} onChange={e => setEditingMember({...editingMember, role: e.target.value})} required />
@@ -539,7 +623,7 @@ const App: React.FC = () => {
 
       {editingProfile && (
         <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-[3rem] p-10"><h3 className="text-2xl font-luxury font-bold mb-6">Profilo Utente</h3>
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl"><h3 className="text-2xl font-luxury font-bold mb-6">Profilo Utente</h3>
             <form onSubmit={saveProfile} className="space-y-4">
               <input placeholder="Nome Completo" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingProfile.full_name} onChange={e => setEditingProfile({...editingProfile, full_name: e.target.value})} required />
               <input placeholder="Telefono" className="w-full p-4 bg-gray-50 rounded-2xl" value={editingProfile.phone} onChange={e => setEditingProfile({...editingProfile, phone: e.target.value})} />
