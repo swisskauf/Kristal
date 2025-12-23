@@ -1,13 +1,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Vite espone le variabili VITE_ tramite import.meta.env
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("ATTENZIONE: Variabili Supabase mancanti. Verifica VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY in Vercel.");
-}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -17,6 +12,18 @@ const handleError = (error: any) => {
 };
 
 export const db = {
+  settings: {
+    get: async () => {
+      const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
+      if (error && error.code !== 'PGRST116') return { instagram_enabled: true };
+      return data || { instagram_enabled: true };
+    },
+    update: async (settings: any) => {
+      const { data, error } = await supabase.from('settings').upsert({ id: 'global', ...settings }).select().single();
+      if (error) throw handleError(error);
+      return data;
+    }
+  },
   profiles: {
     getAll: async () => {
       const { data, error } = await supabase.from('profiles').select('*').order('full_name');
