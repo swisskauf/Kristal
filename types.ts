@@ -19,11 +19,13 @@ export interface Service {
 
 export interface Appointment {
   id: string;
-  clientId: string;
-  serviceId: string;
-  teamMember: TeamMemberName;
+  client_id: string;
+  service_id: string;
+  team_member_name: TeamMemberName;
   date: string; // ISO string
   status: 'confirmed' | 'pending' | 'cancelled';
+  services?: { name: string; price: number; duration: number };
+  profiles?: { full_name: string; phone: string };
 }
 
 export interface TeamMember {
@@ -43,7 +45,7 @@ export interface User {
   fullName: string;
   role: 'client' | 'admin';
   avatar?: string;
-  treatment_history?: TreatmentRecord[]; // Scheda tecnica riservata
+  treatment_history?: TreatmentRecord[];
 }
 
 export interface AppSettings {
