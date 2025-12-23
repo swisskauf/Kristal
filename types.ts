@@ -1,23 +1,32 @@
 
-export type TeamMember = 'Melk' | 'Romina' | 'Maurizio';
+export type TeamMemberName = string;
 
 export interface Service {
   id: string;
   name: string;
   price: number;
   duration: number; // in minutes
-  category: 'Capelli' | 'Viso' | 'Corpo' | 'Unghie';
+  category: string;
   description: string;
 }
 
 export interface Appointment {
   id: string;
   clientId: string;
-  clientName: string;
   serviceId: string;
-  teamMember: TeamMember;
+  teamMember: TeamMemberName;
   date: string; // ISO string
   status: 'confirmed' | 'pending' | 'cancelled';
+}
+
+export interface TeamMember {
+  name: string;
+  role: string;
+  bio?: string;
+  avatar?: string;
+  unavailable_dates?: string[]; // Array di date ISO (YYYY-MM-DD)
+  start_hour?: number; // e.g. 8
+  end_hour?: number; // e.g. 18
 }
 
 export interface User {
