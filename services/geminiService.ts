@@ -2,19 +2,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { SERVICES } from "../constants";
 
-// Inizializzazione del client AI
-const apiKey = process.env.API_KEY;
-if (!apiKey) {
-  console.warn("ATTENZIONE: API_KEY non configurata. L'assistente AI non funzionerà correttamente.");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || "" });
+// Fix: Initializing GoogleGenAI following the strictly required pattern using process.env.API_KEY.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function getAIConsultation(userPrompt: string) {
-  if (!apiKey) {
-    return "L'assistente AI non è configurato. Inserisci la API_KEY nelle variabili d'ambiente di Vercel per attivarlo.";
-  }
-
   const serviceList = SERVICES.map(s => `${s.name} (${s.category}) - €${s.price}`).join(', ');
   
   const prompt = `Sei l'assistente virtuale del salone di bellezza di lusso "Kristal".
@@ -27,27 +18,29 @@ export async function getAIConsultation(userPrompt: string) {
   Sii sintetico ma accogliente.`;
 
   try {
+    // Fix: Using generateContent with model and contents properties as required by the latest SDK.
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
+    // Fix: Correctly accessing the .text property from GenerateContentResponse.
     return response.text || "Mi dispiace, al momento non riesco a connettermi al mio sistema di bellezza. Riprova tra poco.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Si è verificato un errore nella consulenza AI. Verifica la validità della tua API_KEY.";
+    return "Si è verificato un errore nella consulenza AI.";
   }
 }
 
 export async function analyzeAvailability(appointments: any[]) {
-    if (!apiKey) return "Analisi non disponibile (chiave mancante).";
-
     const prompt = `Analizza questo set di appuntamenti per il salone Kristal e suggerisci i momenti migliori per fare una pausa o lanciare una promozione basata sui buchi in agenda. Appuntamenti: ${JSON.stringify(appointments)}`;
     
     try {
+        // Fix: Using the correct generateContent structure and model name for text tasks.
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
         });
+        // Fix: Correctly accessing the .text property from GenerateContentResponse.
         return response.text;
     } catch (error) {
         return "Analisi non disponibile.";
