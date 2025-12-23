@@ -34,22 +34,17 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     initialData?.date ? new Date(initialData.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : ''
   );
 
-  // Inizializza serviceId e teamMemberName se non presenti (es. nuova prenotazione)
   useEffect(() => {
     if (!serviceId && services.length > 0) setServiceId(services[0].id);
     if (!teamMemberName && team.length > 0) setTeamMemberName(team[0].name);
   }, [services, team, serviceId, teamMemberName]);
 
   const selectedService = useMemo(() => services.find(s => s.id === serviceId), [services, serviceId]);
-  
-  // Filtra il team in base al servizio selezionato
   const filteredTeam = useMemo(() => {
-    if (!selectedService) return team;
-    if (!selectedService.assigned_team_members || selectedService.assigned_team_members.length === 0) return team;
+    if (!selectedService || !selectedService.assigned_team_members?.length) return team;
     return team.filter(t => selectedService.assigned_team_members?.includes(t.name));
   }, [team, selectedService]);
 
-  // Se il membro selezionato non è più nel team filtrato, resettalo
   useEffect(() => {
     if (filteredTeam.length > 0 && !filteredTeam.some(t => t.name === teamMemberName)) {
       setTeamMemberName(filteredTeam[0].name);
@@ -82,12 +77,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         const isOccupied = existingAppointments.some(app => {
           if (app.id === initialData?.id) return false;
           const appDate = new Date(app.date).toISOString();
-          return app.team_member_name === teamMemberName && appDate.startsWith(`${selectedDate}T${timeStr}`);
+          return app.team_member_name === teamMemberName && appDate.includes(`${selectedDate}T${timeStr}`);
         });
 
-        if (!isOccupied) {
-          slots.push(timeStr);
-        }
+        if (!isOccupied) slots.push(timeStr);
       }
     }
     return slots;
@@ -100,13 +93,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!teamMemberName) { alert("Seleziona un professionista."); return; }
     if (!selectedTime) { alert("Seleziona un orario."); return; }
 
-    const finalDate = new Date(`${selectedDate}T${selectedTime}:00`);
-    // Fix: Using snake_case property names to match the Appointment interface.
+    const finalDate = `${selectedDate}T${selectedTime}:00Z`;
     onSave({
       client_id: isAdmin ? clientId : undefined,
       service_id: serviceId,
       team_member_name: teamMemberName,
-      date: finalDate.toISOString(),
+      date: finalDate,
       status: 'confirmed'
     });
   };
@@ -116,16 +108,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       <div className="space-y-4">
         {isAdmin && (
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Assegna a Cliente</label>
-            <select 
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold"
-            >
-              <option value="">Seleziona un cliente...</option>
-              {profiles.map(p => (
-                <option key={p.id} value={p.id}>{p.full_name}</option>
-              ))}
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Cliente</label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold">
+              <option value="">Seleziona...</option>
+              {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
             </select>
           </div>
         )}
@@ -133,48 +119,27 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Trattamento</label>
-            <select 
-              value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
-              className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold"
-            >
-              {services.map(s => (
-                <option key={s.id} value={s.id}>{s.name} (CHF {s.price})</option>
-              ))}
+            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold">
+              {services.map(s => <option key={s.id} value={s.id}>{s.name} (CHF {s.price})</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Professionista</label>
-            <select 
-              value={teamMemberName}
-              onChange={(e) => { setTeamMemberName(e.target.value); setSelectedTime(''); }}
-              className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold"
-            >
-              {filteredTeam.map(t => (
-                <option key={t.name} value={t.name}>{t.name}</option>
-              ))}
+            <select value={teamMemberName} onChange={(e) => { setTeamMemberName(e.target.value); setSelectedTime(''); }} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold">
+              {filteredTeam.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
             </select>
           </div>
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Seleziona Giorno (Prossime 2 settimane)</label>
+          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Data</label>
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
             {next14Days.map(day => {
               const d = new Date(day);
               const isSelected = selectedDate === day;
               const isOff = selectedMember?.unavailable_dates?.includes(day);
               return (
-                <button
-                  key={day}
-                  type="button"
-                  disabled={isOff}
-                  onClick={() => { setSelectedDate(day); setSelectedTime(''); }}
-                  className={`flex-shrink-0 w-16 h-20 rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${
-                    isSelected ? 'border-amber-500 bg-amber-50' : isOff ? 'border-gray-100 bg-gray-50 opacity-30 cursor-not-allowed' : 'border-gray-50 bg-gray-50 hover:border-amber-200'
-                  }`}
-                >
+                <button key={day} type="button" disabled={isOff} onClick={() => { setSelectedDate(day); setSelectedTime(''); }} className={`flex-shrink-0 w-16 h-20 rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${isSelected ? 'border-amber-500 bg-amber-50' : isOff ? 'border-gray-100 bg-gray-50 opacity-30' : 'border-gray-50 bg-gray-50'}`}>
                   <span className="text-[10px] font-bold text-gray-400 uppercase">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
                   <span className="text-xl font-bold text-gray-900">{d.getDate()}</span>
                   <span className="text-[8px] font-bold text-gray-400 uppercase">{d.toLocaleDateString('it-IT', { month: 'short' })}</span>
@@ -186,33 +151,20 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
         <div>
           <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Orari Disponibili</label>
-          {availableSlots.length > 0 ? (
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-              {availableSlots.map(slot => (
-                <button
-                  key={slot}
-                  type="button"
-                  onClick={() => setSelectedTime(slot)}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all border-2 ${
-                    selectedTime === slot ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200' : 'bg-white border-gray-50 text-gray-600 hover:border-amber-200'
-                  }`}
-                >
-                  {slot}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="p-8 bg-gray-50 rounded-2xl text-center">
-              <p className="text-xs font-bold text-gray-400 uppercase">Nessuna disponibilità</p>
-            </div>
-          )}
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+            {availableSlots.length > 0 ? availableSlots.map(slot => (
+              <button key={slot} type="button" onClick={() => setSelectedTime(slot)} className={`py-3 rounded-xl text-xs font-bold transition-all border-2 ${selectedTime === slot ? 'bg-amber-500 text-white border-amber-500' : 'bg-white border-gray-50 text-gray-600'}`}>
+                {slot}
+              </button>
+            )) : <div className="col-span-full py-4 text-center text-gray-300 text-[10px] font-bold uppercase">Nessuno slot disponibile</div>}
+          </div>
         </div>
       </div>
 
       <div className="flex space-x-3 pt-6">
-        <button type="button" onClick={onCancel} className="flex-1 py-4 text-gray-400 font-bold hover:bg-gray-50 rounded-2xl transition-all uppercase text-[10px] tracking-widest">Annulla</button>
-        <button type="submit" className="flex-1 py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-black shadow-xl transition-all uppercase text-[10px] tracking-widest">
-          {initialData?.id ? 'Aggiorna' : 'Conferma Prenotazione'}
+        <button type="button" onClick={onCancel} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px]">Annulla</button>
+        <button type="submit" className="flex-1 py-4 bg-gray-900 text-white font-bold rounded-2xl shadow-xl uppercase text-[10px]">
+          {initialData?.id ? 'Aggiorna' : 'Conferma'}
         </button>
       </div>
     </form>
