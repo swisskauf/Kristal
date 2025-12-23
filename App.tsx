@@ -266,7 +266,7 @@ const App: React.FC = () => {
                     <p className="text-xs text-gray-400 line-clamp-1 mr-4">{s.description}</p>
                   </div>
                   <div className="text-right">
-                     <p className="font-bold text-xl text-gray-900">€{s.price}</p>
+                     <p className="font-bold text-xl text-gray-900">CHF {s.price}</p>
                      <p className="text-[10px] text-gray-300 font-bold uppercase">{s.duration} min</p>
                   </div>
                 </button>
@@ -291,7 +291,7 @@ const App: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
               <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Entrate</p>
-              <h3 className="text-2xl font-bold">€{revenue}</h3>
+              <h3 className="text-2xl font-bold">CHF {revenue}</h3>
             </div>
             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
               <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Appuntamenti</p>
@@ -407,7 +407,7 @@ const App: React.FC = () => {
             <form onSubmit={saveService} className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-100 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <input placeholder="Nome" className="p-4 rounded-xl border-none text-sm" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} required />
-                <input type="number" placeholder="Prezzo (€)" className="p-4 rounded-xl border-none text-sm" value={editingService.price} onChange={e => setEditingService({...editingService, price: Number(e.target.value)})} required />
+                <input type="number" placeholder="Prezzo (CHF)" className="p-4 rounded-xl border-none text-sm" value={editingService.price} onChange={e => setEditingService({...editingService, price: Number(e.target.value)})} required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <input type="number" placeholder="Durata (min)" className="p-4 rounded-xl border-none text-sm" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: Number(e.target.value)})} required />
@@ -428,7 +428,7 @@ const App: React.FC = () => {
               <div key={s.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex justify-between items-center shadow-sm">
                 <div>
                   <h4 className="font-bold">{s.name}</h4>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">{s.category} • €{s.price}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">{s.category} • CHF {s.price}</p>
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => setEditingService(s)} className="p-3 text-amber-600 hover:bg-amber-50 rounded-full"><i className="fas fa-edit"></i></button>
