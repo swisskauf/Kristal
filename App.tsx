@@ -536,7 +536,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <AIAssistant />
+      <AIAssistant user={user} />
     </Layout>
   );
 };
