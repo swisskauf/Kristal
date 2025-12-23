@@ -6,7 +6,7 @@ import { SERVICES } from "../constants";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function getAIConsultation(userPrompt: string) {
-  const serviceList = SERVICES.map(s => `${s.name} (${s.category}) - €${s.price}`).join(', ');
+  const serviceList = SERVICES.map(s => `${s.name} (${s.category}) - CHF ${s.price}`).join(', ');
   
   const prompt = `Sei l'assistente virtuale del salone di bellezza di lusso "Kristal".
   I nostri servizi disponibili sono: ${serviceList}.
@@ -15,6 +15,7 @@ export async function getAIConsultation(userPrompt: string) {
   Rispondi in modo elegante e professionale in ITALIANO.
   Suggerisci il servizio più adatto in base alla richiesta del cliente: "${userPrompt}".
   Spiega perché quel servizio è consigliato e quale membro del team dovrebbe occuparsene.
+  Usa sempre la valuta CHF per i riferimenti ai prezzi.
   Sii sintetico ma accogliente.`;
 
   try {
