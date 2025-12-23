@@ -18,6 +18,11 @@ const handleError = (error: any) => {
 
 export const db = {
   profiles: {
+    getAll: async () => {
+      const { data, error } = await supabase.from('profiles').select('*').order('full_name');
+      if (error) throw handleError(error);
+      return data || [];
+    },
     get: async (id: string) => {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
       if (error) return null;
@@ -68,7 +73,7 @@ export const db = {
         .select(`
           *,
           services (name, price, duration),
-          profiles (full_name)
+          profiles (full_name, phone)
         `)
         .order('date', { ascending: true });
       if (error) throw handleError(error);
