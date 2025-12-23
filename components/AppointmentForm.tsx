@@ -31,7 +31,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (initialData?.service_id) setServiceId(initialData.service_id);
     if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
     if (initialData?.client_id) setClientId(initialData.client_id);
-  }, [initialData]);
+  }, [initialData, services]);
 
   const selectedMember = team.find(t => t.name === teamMemberName);
 
@@ -66,19 +66,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     });
   };
 
-  if (services.length === 0) {
-    return (
-      <div className="text-center py-10">
-        <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-          <i className="fas fa-exclamation-circle text-2xl"></i>
-        </div>
-        <h4 className="font-bold text-gray-900 mb-2">Configurazione Richiesta</h4>
-        <p className="text-sm text-gray-500 mb-6">Prima di prenotare, aggiungi almeno un servizio dal pannello di gestione.</p>
-        <button onClick={onCancel} className="text-xs font-bold uppercase tracking-widest text-gray-400">Chiudi</button>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
@@ -107,7 +94,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           >
             <option value="" disabled>Scegli un servizio...</option>
             {services.map(s => (
-              <option key={s.id} value={s.id}>{s.name} - €{s.price}</option>
+              <option key={s.id} value={s.id}>{s.name} - CHF {s.price}</option>
             ))}
           </select>
         </div>
