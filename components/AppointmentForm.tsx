@@ -24,8 +24,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   profiles = [] 
 }) => {
   const [clientId, setClientId] = useState(initialData?.client_id || '');
-  const [serviceId, setServiceId] = useState(initialData?.service_id || services[0]?.id || '');
-  const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || team[0]?.name || '');
+  const [serviceId, setServiceId] = useState(initialData?.service_id || '');
+  const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || '');
   
   const [selectedDate, setSelectedDate] = useState<string>(
     initialData?.date ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0]
@@ -34,10 +34,30 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     initialData?.date ? new Date(initialData.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : ''
   );
 
-  const selectedMember = useMemo(() => team.find(t => t.name === teamMemberName), [team, teamMemberName]);
-  const selectedService = useMemo(() => services.find(s => s.id === serviceId), [services, serviceId]);
+  // Inizializza serviceId e teamMemberName se non presenti (es. nuova prenotazione)
+  useEffect(() => {
+    if (!serviceId && services.length > 0) setServiceId(services[0].id);
+    if (!teamMemberName && team.length > 0) setTeamMemberName(team[0].name);
+  }, [services, team, serviceId, teamMemberName]);
 
-  // Genera i prossimi 14 giorni
+  const selectedService = useMemo(() => services.find(s => s.id === serviceId), [services, serviceId]);
+  
+  // Filtra il team in base al servizio selezionato
+  const filteredTeam = useMemo(() => {
+    if (!selectedService) return team;
+    if (!selectedService.assigned_team_members || selectedService.assigned_team_members.length === 0) return team;
+    return team.filter(t => selectedService.assigned_team_members?.includes(t.name));
+  }, [team, selectedService]);
+
+  // Se il membro selezionato non è più nel team filtrato, resettalo
+  useEffect(() => {
+    if (filteredTeam.length > 0 && !filteredTeam.some(t => t.name === teamMemberName)) {
+      setTeamMemberName(filteredTeam[0].name);
+    }
+  }, [filteredTeam, teamMemberName]);
+
+  const selectedMember = useMemo(() => team.find(t => t.name === teamMemberName), [team, teamMemberName]);
+
   const next14Days = useMemo(() => {
     const days = [];
     for (let i = 0; i < 14; i++) {
@@ -48,11 +68,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     return days;
   }, []);
 
-  // Genera gli slot orari disponibili per il giorno selezionato
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate) return [];
-    
-    // Controlla se il giorno è "off"
     if (selectedMember.unavailable_dates?.includes(selectedDate)) return [];
 
     const start = selectedMember.start_hour ?? 8;
@@ -62,11 +79,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     for (let h = start; h < end; h++) {
       for (let m of ['00', '30']) {
         const timeStr = `${h.toString().padStart(2, '0')}:${m}`;
-        const fullDateStr = `${selectedDate}T${timeStr}:00`;
-        
-        // Controlla se lo slot è già occupato
         const isOccupied = existingAppointments.some(app => {
-          if (app.id === initialData?.id) return false; // Ignora se stesso in modifica
+          if (app.id === initialData?.id) return false;
           const appDate = new Date(app.date).toISOString();
           return app.team_member_name === teamMemberName && appDate.startsWith(`${selectedDate}T${timeStr}`);
         });
@@ -136,14 +150,13 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               onChange={(e) => { setTeamMemberName(e.target.value); setSelectedTime(''); }}
               className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold"
             >
-              {team.map(t => (
+              {filteredTeam.map(t => (
                 <option key={t.name} value={t.name}>{t.name}</option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Selettore Giorno (2 settimane) */}
         <div>
           <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Seleziona Giorno (Prossime 2 settimane)</label>
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -170,7 +183,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
         </div>
 
-        {/* Selettore Orario */}
         <div>
           <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Orari Disponibili</label>
           {availableSlots.length > 0 ? (
@@ -190,7 +202,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
             </div>
           ) : (
             <div className="p-8 bg-gray-50 rounded-2xl text-center">
-              <p className="text-xs font-bold text-gray-400 uppercase">Nessuna disponibilità per questo giorno</p>
+              <p className="text-xs font-bold text-gray-400 uppercase">Nessuna disponibilità</p>
             </div>
           )}
         </div>
