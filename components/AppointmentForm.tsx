@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { Appointment, Service } from '../types';
+import { Appointment, Service, TeamMember } from '../types';
 
 interface AppointmentFormProps {
   onSave: (app: Partial<Appointment>) => void;
   onCancel: () => void;
   initialData?: any;
   services: Service[];
-  team: any[];
+  team: TeamMember[];
   isAdmin?: boolean;
   profiles?: any[];
 }
@@ -23,15 +23,17 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 }) => {
   const [clientId, setClientId] = useState(initialData?.client_id || '');
   const [serviceId, setServiceId] = useState(initialData?.service_id || services[0]?.id || '');
-  const [teamMember, setTeamMember] = useState(initialData?.team_member_name || team[0]?.name || '');
+  const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || team[0]?.name || '');
   const [date, setDate] = useState(initialData?.date ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(initialData?.date ? new Date(initialData.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : '10:00');
 
   useEffect(() => {
     if (initialData?.service_id) setServiceId(initialData.service_id);
-    if (initialData?.team_member_name) setTeamMember(initialData.team_member_name);
+    if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
     if (initialData?.client_id) setClientId(initialData.client_id);
   }, [initialData]);
+
+  const selectedMember = team.find(t => t.name === teamMemberName);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,16 +45,22 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       alert("Seleziona un servizio.");
       return;
     }
-    if (!teamMember) {
+    if (!teamMemberName) {
       alert("Seleziona un professionista.");
+      return;
+    }
+
+    // Verifica non disponibilità
+    if (selectedMember?.unavailable_dates?.includes(date)) {
+      alert(`${teamMemberName} non è disponibile nella data selezionata.`);
       return;
     }
     
     const selectedDate = new Date(`${date}T${time}:00`);
     onSave({
-      clientId: isAdmin ? clientId : undefined, // App.tsx gestirà l'override se necessario
+      clientId: isAdmin ? clientId : undefined,
       serviceId,
-      teamMember,
+      teamMember: teamMemberName as any,
       date: selectedDate.toISOString(),
       status: 'confirmed'
     });
@@ -82,7 +90,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               onChange={(e) => setClientId(e.target.value)}
               className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all font-semibold"
             >
-              <option value="">Seleziona un cliente dal database...</option>
+              <option value="">Seleziona un cliente...</option>
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.full_name} ({p.phone || 'No tel'})</option>
               ))}
@@ -105,16 +113,16 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Professionista Assegnato</label>
+          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Professionista</label>
           <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
             {team.length > 0 ? (
               team.map(t => (
                 <button
                   key={t.name}
                   type="button"
-                  onClick={() => setTeamMember(t.name)}
+                  onClick={() => setTeamMemberName(t.name)}
                   className={`flex-shrink-0 p-4 rounded-2xl border-2 transition-all flex flex-col items-center min-w-[110px] ${
-                    teamMember === t.name ? 'border-amber-500 bg-amber-50' : 'border-gray-50 bg-gray-50 grayscale hover:grayscale-0'
+                    teamMemberName === t.name ? 'border-amber-500 bg-amber-50' : 'border-gray-50 bg-gray-50 grayscale hover:grayscale-0'
                   }`}
                 >
                   <img src={t.avatar || `https://ui-avatars.com/api/?name=${t.name}&background=fef3c7&color=d97706`} className="w-10 h-10 rounded-full mb-2 object-cover border-2 border-white shadow-sm" />
@@ -123,7 +131,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               ))
             ) : (
               <div className="p-4 bg-gray-50 rounded-2xl w-full text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Aggiungi membri al team per continuare
+                Nessun collaboratore disponibile
               </div>
             )}
           </div>
@@ -135,9 +143,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
             <input 
               type="date"
               value={date}
+              min={new Date().toISOString().split('T')[0]}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 focus:ring-amber-500 transition-all text-sm font-bold"
+              className={`w-full p-4 rounded-2xl bg-gray-50 border-none outline-none focus:ring-2 transition-all text-sm font-bold ${
+                selectedMember?.unavailable_dates?.includes(date) ? 'ring-2 ring-red-400 text-red-500' : 'focus:ring-amber-500'
+              }`}
             />
+            {selectedMember?.unavailable_dates?.includes(date) && (
+              <p className="text-[9px] text-red-500 font-bold mt-1 uppercase">Non disponibile oggi</p>
+            )}
           </div>
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Orario</label>
@@ -163,7 +177,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           type="submit"
           className="flex-1 py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-black shadow-xl transition-all uppercase text-[10px] tracking-widest"
         >
-          {initialData?.id ? 'Aggiorna' : 'Crea Prenotazione'}
+          {initialData?.id ? 'Aggiorna' : 'Conferma'}
         </button>
       </div>
     </form>
