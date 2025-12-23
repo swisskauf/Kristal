@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
 
@@ -15,6 +15,19 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+
+  useEffect(() => {
+    // Controlla se torniamo da un redirect con errore nell'URL
+    const hash = window.location.hash;
+    if (hash.includes('error_description')) {
+      const params = new URLSearchParams(hash.replace('#', '?'));
+      const description = params.get('error_description');
+      if (description) {
+        setErrorMsg(decodeURIComponent(description).replace(/\+/g, ' '));
+      }
+    }
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,32 +40,24 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           email,
           password,
           options: {
-            data: { full_name: fullName, phone, role: 'client' }
+            data: { full_name: fullName, phone, role: 'client' },
+            emailRedirectTo: window.location.origin,
           }
         });
         if (error) throw error;
-        if (data.user) {
-          // Creiamo il profilo esplicito dopo il signup
-          await supabase.from('profiles').insert({
-            id: data.user.id,
-            full_name: fullName,
-            phone: phone,
-            role: 'client'
-          });
-          alert('Registrazione completata! Controlla la tua email per confermare l\'account.');
+        
+        if (data.user && data.session === null) {
+          // Email confirmation is required
+          setEmailSent(true);
+        } else if (data.user && data.session) {
+          // Signed in immediately (if confirm email is off)
+          handleProfileLogin(data.user);
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
-          const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-          onLogin({
-            id: data.user.id,
-            email: data.user.email!,
-            fullName: profile?.full_name || 'Utente',
-            phone: profile?.phone || '',
-            role: profile?.role || 'client'
-          });
+          handleProfileLogin(data.user);
         }
       }
     } catch (err: any) {
@@ -60,6 +65,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProfileLogin = async (supabaseUser: any) => {
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', supabaseUser.id).single();
+    onLogin({
+      id: supabaseUser.id,
+      email: supabaseUser.email!,
+      fullName: profile?.full_name || 'Utente',
+      phone: profile?.phone || '',
+      role: profile?.role || 'client'
+    });
   };
 
   const signInWithGoogle = async () => {
@@ -74,12 +90,35 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       if (error) throw error;
     } catch (err: any) {
       if (err.message.includes("not enabled")) {
-        setErrorMsg("Il login con Google non è ancora stato attivato nel pannello Supabase. Usa email e password.");
+        setErrorMsg("Configura il Google Client ID nella dashboard di Supabase.");
       } else {
         setErrorMsg(err.message);
       }
     }
   };
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95 duration-500">
+          <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <i className="fas fa-paper-plane text-2xl"></i>
+          </div>
+          <h2 className="text-2xl font-luxury font-bold mb-4">Controlla la tua Email</h2>
+          <p className="text-gray-500 text-sm leading-relaxed mb-8">
+            Abbiamo inviato un link di conferma a <strong>{email}</strong>.<br/>
+            Clicca sul link per attivare il tuo account Kristal.
+          </p>
+          <button 
+            onClick={() => setEmailSent(false)} 
+            className="text-xs font-bold text-amber-600 uppercase tracking-widest hover:underline"
+          >
+            Torna al login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] flex flex-col items-center justify-center p-4">
@@ -91,7 +130,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           {errorMsg && (
-            <div className="mb-6 p-4 bg-red-50 text-red-500 text-[11px] font-bold rounded-2xl animate-shake leading-relaxed">
+            <div className="mb-6 p-4 bg-red-50 text-red-600 text-[11px] font-bold rounded-2xl animate-shake leading-relaxed">
               <i className="fas fa-exclamation-circle mr-2"></i> {errorMsg}
             </div>
           )}
@@ -161,7 +200,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           <div className="mt-8 text-center">
-            <button onClick={() => setIsRegistering(!isRegistering)} className="text-xs font-bold text-gray-400 hover:text-amber-500 transition-colors uppercase tracking-widest">
+            <button onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }} className="text-xs font-bold text-gray-400 hover:text-amber-500 transition-colors uppercase tracking-widest">
               {isRegistering ? 'Hai già un account? Accedi' : 'Nuovo qui? Registrati'}
             </button>
           </div>
