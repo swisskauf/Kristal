@@ -45,7 +45,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
-          // Recuperiamo il ruolo dal profilo
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
           onLogin({
             id: data.user.id,
@@ -64,7 +63,22 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    setErrorMsg('');
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err.message.includes("not enabled")) {
+        setErrorMsg("Il login con Google non è ancora stato attivato nel pannello Supabase. Usa email e password.");
+      } else {
+        setErrorMsg(err.message);
+      }
+    }
   };
 
   return (
@@ -77,7 +91,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           {errorMsg && (
-            <div className="mb-6 p-4 bg-red-50 text-red-500 text-xs font-bold rounded-2xl animate-shake">
+            <div className="mb-6 p-4 bg-red-50 text-red-500 text-[11px] font-bold rounded-2xl animate-shake leading-relaxed">
               <i className="fas fa-exclamation-circle mr-2"></i> {errorMsg}
             </div>
           )}
@@ -136,8 +150,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4">
-            <button onClick={signInWithGoogle} className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
-              <i className="fab fa-google text-red-500"></i>
+            <button onClick={signInWithGoogle} className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all group">
+              <i className="fab fa-google text-red-500 group-hover:scale-110 transition-transform"></i>
               <span className="text-xs font-bold">Google</span>
             </button>
             <button className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all opacity-50 cursor-not-allowed">
