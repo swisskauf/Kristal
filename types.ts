@@ -49,6 +49,7 @@ export interface User {
 export interface AppSettings {
   instagram_enabled: boolean;
   instagram_username?: string;
+  instagram_access_token?: string;
 }
 
 export interface ChatMessage {
