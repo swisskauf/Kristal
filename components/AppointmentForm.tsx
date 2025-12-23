@@ -101,10 +101,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!selectedTime) { alert("Seleziona un orario."); return; }
 
     const finalDate = new Date(`${selectedDate}T${selectedTime}:00`);
+    // Fix: Using snake_case property names to match the Appointment interface.
     onSave({
-      clientId: isAdmin ? clientId : undefined,
-      serviceId,
-      teamMember: teamMemberName,
+      client_id: isAdmin ? clientId : undefined,
+      service_id: serviceId,
+      team_member_name: teamMemberName,
       date: finalDate.toISOString(),
       status: 'confirmed'
     });
