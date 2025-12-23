@@ -8,6 +8,7 @@ export interface Service {
   duration: number; // in minutes
   category: string;
   description: string;
+  assigned_team_members?: TeamMemberName[]; // Elenco nomi dei membri che possono farlo
 }
 
 export interface Appointment {
