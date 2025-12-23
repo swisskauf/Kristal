@@ -4,8 +4,9 @@ import Layout from './components/Layout';
 import Auth from './components/Auth';
 import AIAssistant from './components/AIAssistant';
 import AppointmentForm from './components/AppointmentForm';
+import ServiceForm from './components/ServiceForm';
 import { supabase, db } from './services/supabase';
-import { Service, User, TeamMember, TreatmentRecord, AppSettings, Appointment } from './types';
+import { Service, User, TeamMember, TreatmentRecord, Appointment } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
 const App: React.FC = () => {
@@ -18,16 +19,16 @@ const App: React.FC = () => {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
+  const [selectedService, setSelectedService] = useState<Service | undefined>();
   const [filterCategory, setFilterCategory] = useState<string>('Tutti');
   const [clientSearch, setClientSearch] = useState('');
 
   const [editingMember, setEditingMember] = useState<any>(null);
   const [viewingHistory, setViewingHistory] = useState<User | null>(null);
   const [editingTreatmentIndex, setEditingTreatmentIndex] = useState<number | null>(null);
-  const [newOffDate, setNewOffDate] = useState('');
 
-  // Fix: added missing 'isAdmin' definition
   const isAdmin = user?.role === 'admin';
 
   const [newTreatment, setNewTreatment] = useState<TreatmentRecord>({ 
@@ -148,7 +149,28 @@ const App: React.FC = () => {
     }
   };
 
-  // Fix: implemented 'addOrUpdateTreatment' to handle treatment record history saving
+  const handleSaveService = async (svcData: Partial<Service>) => {
+    try {
+      await db.services.upsert(svcData);
+      await refreshData();
+      setIsServiceFormOpen(false);
+      setSelectedService(undefined);
+    } catch (e) {
+      console.error("Service save error:", e);
+      alert("Impossibile salvare il servizio. Verificate la connessione.");
+    }
+  };
+
+  const handleDeleteService = async (id: string) => {
+    if (!confirm("Rimuovere definitivamente questo Ritual dal catalogo?")) return;
+    try {
+      await db.services.delete(id);
+      await refreshData();
+    } catch (e) {
+      console.error("Service delete error:", e);
+    }
+  };
+
   const addOrUpdateTreatment = async () => {
     if (!viewingHistory || !newTreatment.service) return;
 
@@ -246,7 +268,6 @@ const App: React.FC = () => {
             )}
           </header>
 
-          {/* Sezione Prossimo Appuntamento (Solo Clienti Loggati) */}
           {nextClientAppointment && (
             <section className="bg-amber-50 p-10 rounded-[4rem] border border-amber-100 animate-in zoom-in-95 duration-700">
               <div className="flex flex-col md:flex-row items-center justify-between gap-8">
@@ -324,7 +345,49 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Altre sezioni (Team, Clienti, Calendar) mantengono la struttura definita precedentemente */}
+      {/* GESTIONE SERVIZI (TAB NUOVA PER ADMIN) */}
+      {activeTab === 'services_management' && isAdmin && (
+        <div className="space-y-12 animate-in fade-in duration-500 pb-20">
+          <header className="flex items-center justify-between">
+            <h2 className="text-5xl font-luxury font-bold text-gray-900">Catalogo Ritual</h2>
+            <button 
+              onClick={() => { setSelectedService(undefined); setIsServiceFormOpen(true); }}
+              className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all"
+            >
+              Nuovo Servizio
+            </button>
+          </header>
+
+          <div className="grid gap-4">
+            {services.map(s => (
+              <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between group hover:border-amber-200 transition-all shadow-sm">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest px-2 py-1 bg-amber-50 rounded-lg">{s.category}</span>
+                    <h4 className="font-bold text-xl text-gray-900">{s.name}</h4>
+                  </div>
+                  <p className="text-xs text-gray-400 font-light italic">{s.description}</p>
+                </div>
+                <div className="flex items-center gap-10">
+                  <div className="text-right">
+                    <p className="font-luxury font-bold text-xl text-gray-900">CHF {s.price}</p>
+                    <p className="text-[8px] text-gray-300 font-bold uppercase">{s.duration} MIN</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setSelectedService(s); setIsServiceFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-amber-600 transition-colors">
+                      <i className="fas fa-edit text-xs"></i>
+                    </button>
+                    <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors">
+                      <i className="fas fa-trash text-xs"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'team_schedule' && isAdmin && (
         <div className="space-y-12 animate-in fade-in duration-500 pb-20">
            <h2 className="text-5xl font-luxury font-bold">Il Team</h2>
@@ -391,6 +454,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL PRENOTAZIONE */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
@@ -405,6 +469,21 @@ const App: React.FC = () => {
               existingAppointments={appointments}
               isAdmin={isAdmin}
               profiles={profiles}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SERVIZIO (NUOVA) */}
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
+          <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
+            <button onClick={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black"><i className="fas fa-times text-xl"></i></button>
+            <h3 className="text-3xl font-luxury font-bold mb-10 text-center">{selectedService ? 'Modifica Ritual' : 'Crea Nuovo Ritual'}</h3>
+            <ServiceForm 
+              onSave={handleSaveService} 
+              onCancel={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} 
+              initialData={selectedService}
             />
           </div>
         </div>
