@@ -36,7 +36,6 @@ const App: React.FC = () => {
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event);
       if (session?.user) {
         await handleSessionUser(session.user);
       } else {
@@ -52,7 +51,6 @@ const App: React.FC = () => {
     try {
       let profile = await db.profiles.get(supabaseUser.id);
       
-      // Fallback: se il profilo non esiste ancora nel DB, lo creiamo forzatamente
       if (!profile) {
         const metadata = supabaseUser.user_metadata || {};
         profile = await db.profiles.upsert({
@@ -72,7 +70,6 @@ const App: React.FC = () => {
       });
     } catch (err) {
       console.error("Errore gestione profilo:", err);
-      // Fallback estremo per non bloccare l'utente
       setUser({
         id: supabaseUser.id,
         email: supabaseUser.email!,
@@ -86,7 +83,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
       refreshData();
-      setActiveTab(user.role === 'admin' ? 'admin_dashboard' : 'dashboard');
+      // Redirigi admin alla dashboard admin, client alla dashboard client
+      if (activeTab === 'dashboard' && user.role === 'admin') setActiveTab('admin_dashboard');
     }
   }, [user]);
 
@@ -153,6 +151,11 @@ const App: React.FC = () => {
     }
   };
 
+  const openNewBooking = () => {
+    setSelectedAppointment(undefined);
+    setIsFormOpen(true);
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -178,9 +181,11 @@ const App: React.FC = () => {
       
       {activeTab === 'admin_dashboard' && (
         <div className="space-y-8 animate-in fade-in duration-500">
-          <header>
-            <h2 className="text-3xl font-luxury font-bold">Amministrazione Kristal</h2>
-            <p className="text-gray-500">Analisi in tempo reale.</p>
+          <header className="flex justify-between items-center">
+            <div>
+              <h2 className="text-3xl font-luxury font-bold">Amministrazione Kristal</h2>
+              <p className="text-gray-500">Analisi in tempo reale.</p>
+            </div>
           </header>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -205,15 +210,19 @@ const App: React.FC = () => {
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
             <h3 className="font-bold mb-6">Attività Staff</h3>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={teamPerformance}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={12} />
-                  <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none'}} />
-                  <Bar dataKey="bookings" fill="#f59e0b" radius={[10, 10, 0, 0]} barSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
+              {teamPerformance.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={teamPerformance}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} />
+                    <YAxis axisLine={false} tickLine={false} fontSize={12} />
+                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none'}} />
+                    <Bar dataKey="bookings" fill="#f59e0b" radius={[10, 10, 0, 0]} barSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-300 italic">Nessun dato del team disponibile</div>
+              )}
             </div>
           </div>
         </div>
@@ -221,8 +230,18 @@ const App: React.FC = () => {
 
       {activeTab === 'dashboard' && user.role === 'client' && (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-          <header>
-            <h2 className="text-4xl font-luxury font-bold leading-tight text-gray-900">Ciao, {user.fullName.split(' ')[0]}!<br/><span className="text-amber-500">Prenota la tua bellezza.</span></h2>
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <h2 className="text-4xl font-luxury font-bold leading-tight text-gray-900">Ciao, {user.fullName.split(' ')[0]}!<br/><span className="text-amber-500">Prenota la tua bellezza.</span></h2>
+              <p className="text-gray-400 mt-2">Scegli un trattamento o prenota direttamente.</p>
+            </div>
+            <button 
+              onClick={openNewBooking}
+              className="bg-gray-900 text-white px-8 py-5 rounded-2xl font-bold flex items-center justify-center space-x-3 hover:bg-black hover:scale-105 transition-all shadow-2xl shadow-gray-200 group"
+            >
+              <i className="fas fa-calendar-plus group-hover:rotate-12 transition-transform"></i>
+              <span>Prenota Ora</span>
+            </button>
           </header>
 
           <div className="grid grid-cols-1 gap-4 mt-8">
@@ -231,13 +250,18 @@ const App: React.FC = () => {
               <select 
                 value={filterCategory} 
                 onChange={e => setFilterCategory(e.target.value)}
-                className="bg-gray-100 px-4 py-2 rounded-xl text-[10px] font-bold text-gray-600 outline-none uppercase tracking-widest"
+                className="bg-gray-100 px-4 py-2 rounded-xl text-[10px] font-bold text-gray-600 outline-none uppercase tracking-widest border-none"
               >
-                {['Tutti', 'Capelli', 'Viso', 'Corpo', 'Unghie'].map(c => <option key={c}>{c}</option>)}
+                {['Tutti', 'Capelli', 'Viso', 'Corpo', 'Unghie'].map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            
             {filteredServices.length === 0 ? (
-              <p className="text-center py-10 text-gray-400">Nessun servizio disponibile al momento.</p>
+              <div className="bg-gray-50 rounded-[3rem] p-16 text-center border border-dashed border-gray-200">
+                <i className="fas fa-spa text-3xl text-gray-200 mb-4 block"></i>
+                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun servizio nel catalogo online</p>
+                <button onClick={openNewBooking} className="mt-4 text-amber-600 font-bold text-xs underline">Prova a prenotare manualmente</button>
+              </div>
             ) : (
               filteredServices.map(s => (
                 <button 
@@ -263,10 +287,16 @@ const App: React.FC = () => {
 
       {activeTab === 'calendar' && (
         <div className="space-y-6 animate-in fade-in duration-500">
-          <h2 className="text-3xl font-luxury font-bold">I miei appuntamenti</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-3xl font-luxury font-bold">I miei appuntamenti</h2>
+            <button onClick={openNewBooking} className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-100">
+              <i className="fas fa-plus"></i>
+            </button>
+          </div>
           {userAppointments.length === 0 ? (
             <div className="bg-gray-50 rounded-[3rem] p-12 text-center border border-dashed border-gray-200">
-              <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Nessuna prenotazione attiva</p>
+              <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessuna prenotazione attiva</p>
+              <button onClick={openNewBooking} className="mt-4 bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-xs">Prenota il primo trattamento</button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -277,24 +307,24 @@ const App: React.FC = () => {
                   <div key={app.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm relative group">
                     <div className="flex justify-between items-start mb-6">
                       <div>
-                        <h4 className="font-bold text-xl text-gray-900">{s?.name || 'Servizio'}</h4>
+                        <h4 className="font-bold text-xl text-gray-900">{s?.name || 'Trattamento'}</h4>
                         <p className="text-xs text-amber-500 font-bold uppercase tracking-[0.2em] mt-1">{app.team_member_name}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-gray-400">{new Date(app.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long' })}</p>
+                        <p className="font-bold text-gray-400 text-xs">{new Date(app.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long' })}</p>
                         <p className="text-3xl font-bold text-gray-900 tracking-tighter">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                       </div>
                     </div>
                     <div className="flex gap-4">
                       <button 
                         onClick={() => { if(!isLocked) { setSelectedAppointment(app); setIsFormOpen(true); } else alert("Le modifiche sono bloccate entro le 24h."); }}
-                        className={`flex-1 py-4 rounded-[1.5rem] text-xs font-bold transition-all ${isLocked ? 'bg-gray-50 text-gray-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-900 hover:text-white'}`}
+                        className={`flex-1 py-4 rounded-[1.5rem] text-xs font-bold transition-all ${isLocked ? 'bg-gray-50 text-gray-200 cursor-not-allowed' : 'bg-gray-100 text-gray-700 hover:bg-gray-900 hover:text-white'}`}
                       >
                         Modifica
                       </button>
                       <button 
                         onClick={() => deleteAppointment(app.id, app.date)}
-                        className={`flex-1 py-4 rounded-[1.5rem] text-xs font-bold transition-all ${isLocked ? 'bg-gray-50 text-gray-200' : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'}`}
+                        className={`flex-1 py-4 rounded-[1.5rem] text-xs font-bold transition-all ${isLocked ? 'bg-gray-50 text-gray-200 cursor-not-allowed' : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'}`}
                       >
                         Cancella
                       </button>
@@ -309,7 +339,7 @@ const App: React.FC = () => {
 
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[200] flex items-end md:items-center justify-center">
-          <div className="bg-white w-full max-w-xl rounded-t-[4rem] md:rounded-[4rem] shadow-2xl animate-in slide-in-from-bottom-20 duration-500 p-10 md:p-14">
+          <div className="bg-white w-full max-w-xl rounded-t-[4rem] md:rounded-[4rem] shadow-2xl animate-in slide-in-from-bottom-20 duration-500 p-10 md:p-14 overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-10">
               <h3 className="text-3xl font-luxury font-bold">Prenota Slot</h3>
               <button onClick={() => setIsFormOpen(false)} className="w-12 h-12 flex items-center justify-center rounded-full bg-gray-100 text-gray-400">
