@@ -15,10 +15,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [showConfigHint, setShowConfigHint] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
-    // Controlla se torniamo da un redirect con errore nell'URL
     const hash = window.location.hash;
     if (hash.includes('error_description')) {
       const params = new URLSearchParams(hash.replace('#', '?'));
@@ -33,6 +33,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+    setShowConfigHint(false);
 
     try {
       if (isRegistering) {
@@ -47,10 +48,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         if (error) throw error;
         
         if (data.user && data.session === null) {
-          // Email confirmation is required
           setEmailSent(true);
         } else if (data.user && data.session) {
-          // Signed in immediately (if confirm email is off)
           handleProfileLogin(data.user);
         }
       } else {
@@ -61,7 +60,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         }
       }
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || 'Errore durante l\'autenticazione');
     } finally {
       setLoading(false);
     }
@@ -80,19 +79,26 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const signInWithGoogle = async () => {
     setErrorMsg('');
+    setShowConfigHint(false);
     try {
       const { error } = await supabase.auth.signInWithOAuth({ 
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'concentration'
+          }
         }
       });
       if (error) throw error;
     } catch (err: any) {
-      if (err.message.includes("not enabled")) {
-        setErrorMsg("Configura il Google Client ID nella dashboard di Supabase.");
+      // Cattura l'errore specifico del provider non abilitato
+      if (err.message?.includes("not enabled") || err.status === 400) {
+        setErrorMsg("Configurazione Google non completata.");
+        setShowConfigHint(true);
       } else {
-        setErrorMsg(err.message);
+        setErrorMsg(err.message || "Impossibile connettersi a Google");
       }
     }
   };
@@ -109,10 +115,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             Abbiamo inviato un link di conferma a <strong>{email}</strong>.<br/>
             Clicca sul link per attivare il tuo account Kristal.
           </p>
-          <button 
-            onClick={() => setEmailSent(false)} 
-            className="text-xs font-bold text-amber-600 uppercase tracking-widest hover:underline"
-          >
+          <button onClick={() => setEmailSent(false)} className="text-xs font-bold text-amber-600 uppercase tracking-widest hover:underline">
             Torna al login
           </button>
         </div>
@@ -130,8 +133,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           {errorMsg && (
-            <div className="mb-6 p-4 bg-red-50 text-red-600 text-[11px] font-bold rounded-2xl animate-shake leading-relaxed">
-              <i className="fas fa-exclamation-circle mr-2"></i> {errorMsg}
+            <div className={`mb-6 p-4 rounded-2xl animate-shake leading-relaxed text-[11px] font-bold ${showConfigHint ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-red-50 text-red-600'}`}>
+              <i className="fas fa-exclamation-triangle mr-2"></i> {errorMsg}
+              {showConfigHint && (
+                <div className="mt-2 pt-2 border-t border-amber-200/50 font-normal">
+                  <p className="mb-2">Per risolvere questo errore:</p>
+                  <ol className="list-decimal ml-4 space-y-1">
+                    <li>Vai sulla dashboard di <strong>Supabase</strong></li>
+                    <li><strong>Authentication</strong> → <strong>Providers</strong> → <strong>Google</strong></li>
+                    <li>Attiva (Enable) e inserisci <strong>Client ID</strong> e <strong>Secret</strong> (da Google Cloud Console)</li>
+                  </ol>
+                </div>
+              )}
             </div>
           )}
 
@@ -189,18 +202,22 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4">
-            <button onClick={signInWithGoogle} className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all group">
+            <button 
+              type="button"
+              onClick={signInWithGoogle} 
+              className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all group"
+            >
               <i className="fab fa-google text-red-500 group-hover:scale-110 transition-transform"></i>
               <span className="text-xs font-bold">Google</span>
             </button>
-            <button className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all opacity-50 cursor-not-allowed">
+            <button type="button" className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all opacity-50 cursor-not-allowed">
               <i className="fab fa-apple text-gray-900"></i>
               <span className="text-xs font-bold">Apple</span>
             </button>
           </div>
 
           <div className="mt-8 text-center">
-            <button onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }} className="text-xs font-bold text-gray-400 hover:text-amber-500 transition-colors uppercase tracking-widest">
+            <button onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); setShowConfigHint(false); }} className="text-xs font-bold text-gray-400 hover:text-amber-500 transition-colors uppercase tracking-widest">
               {isRegistering ? 'Hai già un account? Accedi' : 'Nuovo qui? Registrati'}
             </button>
           </div>
