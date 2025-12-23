@@ -6,6 +6,7 @@ import AIAssistant from './components/AIAssistant';
 import AppointmentForm from './components/AppointmentForm';
 import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember } from './types';
+import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const App: React.FC = () => {
@@ -13,8 +14,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
+  const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   const [editingService, setEditingService] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newOffDate, setNewOffDate] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -91,9 +93,22 @@ const App: React.FC = () => {
         db.services.getAll(),
         db.team.getAll()
       ]);
+      
       setAppointments(appts);
-      setServices(svcs);
-      setTeam(tm);
+      
+      // Fallback ai servizi predefiniti se il DB è vuoto
+      if (svcs && svcs.length > 0) {
+        setServices(svcs);
+      } else {
+        setServices(DEFAULT_SERVICES);
+      }
+
+      // Fallback al team predefinito se il DB è vuoto
+      if (tm && tm.length > 0) {
+        setTeam(tm);
+      } else {
+        setTeam(DEFAULT_TEAM);
+      }
 
       if (user?.role === 'admin') {
         const prfs = await db.profiles.getAll();
@@ -102,6 +117,28 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error("Errore caricamento dati:", err);
+      // In caso di errore di rete o DB, restiamo con i default
+      setServices(DEFAULT_SERVICES);
+      setTeam(DEFAULT_TEAM);
+    }
+  };
+
+  const syncWithDefaults = async () => {
+    if (!confirm("Sincronizzare il database con il listino predefinito? I servizi esistenti verranno mantenuti, quelli mancanti aggiunti.")) return;
+    setIsSyncing(true);
+    try {
+      for (const s of DEFAULT_SERVICES) {
+        await db.services.upsert(s);
+      }
+      for (const t of DEFAULT_TEAM) {
+        await db.team.upsert(t);
+      }
+      alert("Database sincronizzato con successo!");
+      await refreshData();
+    } catch (e) {
+      alert("Errore durante la sincronizzazione.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -198,6 +235,8 @@ const App: React.FC = () => {
     ? services 
     : services.filter(s => s.category === filterCategory);
 
+  const categories = ['Tutti', ...Array.from(new Set(services.map(s => s.category)))];
+
   return (
     <Layout 
       user={user} 
@@ -234,7 +273,7 @@ const App: React.FC = () => {
           </header>
 
           <div className="flex items-center space-x-2 overflow-x-auto pb-4 scrollbar-hide">
-            {['Tutti', 'Capelli', 'Viso', 'Corpo', 'Unghie'].map(c => (
+            {categories.map(c => (
               <button 
                 key={c}
                 onClick={() => setFilterCategory(c)}
@@ -251,7 +290,7 @@ const App: React.FC = () => {
             {filteredServices.length === 0 ? (
               <div className="bg-gray-50 rounded-[3rem] p-16 text-center border border-dashed border-gray-200">
                 <i className="fas fa-spa text-3xl text-gray-200 mb-4 block"></i>
-                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun servizio disponibile</p>
+                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun servizio disponibile in questa categoria</p>
               </div>
             ) : (
               filteredServices.map(s => (
@@ -284,10 +323,20 @@ const App: React.FC = () => {
               <h2 className="text-3xl font-luxury font-bold">Pannello Kristal</h2>
               <p className="text-gray-500">Analisi gestionale.</p>
             </div>
-            <button onClick={() => handleBookingClick()} className="bg-amber-500 text-white px-6 py-3 rounded-xl font-bold text-xs shadow-lg shadow-amber-200">
-              <i className="fas fa-plus mr-2"></i> Prenotazione Manuale
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={syncWithDefaults} 
+                disabled={isSyncing}
+                className="bg-gray-100 text-gray-600 px-6 py-3 rounded-xl font-bold text-xs hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                {isSyncing ? "Sincronizzazione..." : "Sincronizza Listino"}
+              </button>
+              <button onClick={() => handleBookingClick()} className="bg-amber-500 text-white px-6 py-3 rounded-xl font-bold text-xs shadow-lg shadow-amber-200">
+                <i className="fas fa-plus mr-2"></i> Prenotazione Manuale
+              </button>
+            </div>
           </header>
+          {/* ... (rest of admin_dashboard UI remains same) ... */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
               <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Entrate</p>
@@ -318,6 +367,8 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* ... (rest of the component tabs like team_schedule, services, calendar, form remain similar but with services state populated) ... */}
+      
       {/* ADMIN: GESTIONE TEAM (AGENDA & DISPONIBILITA) */}
       {activeTab === 'team_schedule' && user?.role === 'admin' && (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -332,7 +383,7 @@ const App: React.FC = () => {
           </div>
 
           {editingMember && (
-            <form onSubmit={saveMember} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 space-y-4">
+            <form onSubmit={saveMember} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 shadow-xl space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <input placeholder="Nome" className="p-4 rounded-xl border-none text-sm font-bold" value={editingMember.name} onChange={e => setEditingMember({...editingMember, name: e.target.value})} required />
                 <input placeholder="Ruolo" className="p-4 rounded-xl border-none text-sm" value={editingMember.role} onChange={e => setEditingMember({...editingMember, role: e.target.value})} required />
@@ -350,7 +401,7 @@ const App: React.FC = () => {
               <div key={m.name} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-16 h-16 rounded-full border-2 border-amber-50" />
+                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-16 h-16 rounded-full border-2 border-amber-50 object-cover" />
                     <div>
                       <h4 className="font-bold text-xl">{m.name}</h4>
                       <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">{m.role}</p>
@@ -374,6 +425,7 @@ const App: React.FC = () => {
                     <input 
                       type="date" 
                       className="flex-1 bg-gray-50 border-none rounded-xl p-3 text-[10px] font-bold"
+                      value={newOffDate}
                       onChange={(e) => setNewOffDate(e.target.value)}
                     />
                     <button 
@@ -404,7 +456,7 @@ const App: React.FC = () => {
           </div>
 
           {editingService && (
-            <form onSubmit={saveService} className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-100 space-y-4">
+            <form onSubmit={saveService} className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-100 shadow-xl space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <input placeholder="Nome" className="p-4 rounded-xl border-none text-sm" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} required />
                 <input type="number" placeholder="Prezzo (CHF)" className="p-4 rounded-xl border-none text-sm" value={editingService.price} onChange={e => setEditingService({...editingService, price: Number(e.target.value)})} required />
@@ -412,7 +464,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <input type="number" placeholder="Durata (min)" className="p-4 rounded-xl border-none text-sm" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: Number(e.target.value)})} required />
                 <select className="p-4 rounded-xl border-none text-sm font-bold" value={editingService.category} onChange={e => setEditingService({...editingService, category: e.target.value})}>
-                  <option>Capelli</option><option>Viso</option><option>Corpo</option><option>Unghie</option>
+                  <option>Donna</option><option>Uomo</option><option>Colore</option><option>Trattamenti</option><option>Estetica</option>
                 </select>
               </div>
               <textarea placeholder="Descrizione..." className="w-full p-4 rounded-xl border-none text-sm" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
