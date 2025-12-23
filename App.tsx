@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
 import AIAssistant from './components/AIAssistant';
@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('Tutti');
   const [settings, setSettings] = useState<AppSettings>({ instagram_enabled: true });
   const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
 
   const [editingService, setEditingService] = useState<any>(null);
   const [editingMember, setEditingMember] = useState<any>(null);
@@ -31,11 +32,13 @@ const App: React.FC = () => {
   const [viewingHistory, setViewingHistory] = useState<User | null>(null);
   const [editingTreatmentIndex, setEditingTreatmentIndex] = useState<number | null>(null);
   const [newOffDate, setNewOffDate] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
   const [instaTokenInput, setInstaTokenInput] = useState('');
 
-  // Per la scheda tecnica
-  const [newTreatment, setNewTreatment] = useState<TreatmentRecord>({ date: new Date().toISOString().split('T')[0], service: '', notes: '' });
+  const [newTreatment, setNewTreatment] = useState<TreatmentRecord>({ 
+    date: new Date().toISOString().split('T')[0], 
+    service: '', 
+    notes: '' 
+  });
 
   useEffect(() => {
     const initAuth = async () => {
@@ -82,7 +85,7 @@ const App: React.FC = () => {
         });
       }
 
-      setUser({
+      const mappedUser: User = {
         id: supabaseUser.id,
         email: supabaseUser.email!,
         fullName: profile?.full_name || 'Utente',
@@ -90,9 +93,13 @@ const App: React.FC = () => {
         role: profile?.role || 'client',
         avatar: profile?.avatar || '',
         treatment_history: profile?.treatment_history || []
-      });
+      };
+
+      setUser(mappedUser);
+      return mappedUser;
     } catch (err) {
       console.error("Errore profilo:", err);
+      return null;
     }
   };
 
@@ -119,7 +126,6 @@ const App: React.FC = () => {
       if (user?.role === 'admin') {
         const prfs = await db.profiles.getAll();
         setProfiles(prfs);
-        if (activeTab === 'dashboard') setActiveTab('admin_dashboard');
       }
 
       if (appSettings.instagram_enabled && appSettings.instagram_access_token) {
@@ -181,7 +187,7 @@ const App: React.FC = () => {
   };
 
   const deleteTreatment = async (index: number) => {
-    if (!viewingHistory || !confirm('Eliminare questo record?')) return;
+    if (!viewingHistory || !confirm('Eliminare questo record tecnico?')) return;
     const updatedHistory = viewingHistory.treatment_history?.filter((_, i) => i !== index) || [];
     const updatedProfile = { ...viewingHistory, treatment_history: updatedHistory };
     await db.profiles.upsert(updatedProfile);
@@ -209,7 +215,7 @@ const App: React.FC = () => {
     if (!member) return;
     const currentDates = member.unavailable_dates || [];
     if (!currentDates.includes(newOffDate)) {
-      await db.team.upsert({ ...member, unavailable_dates: [...currentDates, newOffDate] });
+      await db.team.upsert({ ...member, unavailable_dates: [...currentDates, newOffDate].sort() });
       setNewOffDate('');
       refreshData();
     }
@@ -231,9 +237,18 @@ const App: React.FC = () => {
       setIsFormOpen(false);
       setSelectedAppointment(undefined);
     } catch (e) {
-      alert("Errore salvataggio.");
+      alert("Errore salvataggio appuntamento.");
     }
   };
+
+  const filteredProfiles = useMemo(() => {
+    if (!clientSearch) return profiles;
+    return profiles.filter(p => 
+      p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()) || 
+      p.phone?.includes(clientSearch) ||
+      p.email?.toLowerCase().includes(clientSearch.toLowerCase())
+    );
+  }, [profiles, clientSearch]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
@@ -342,12 +357,65 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* ADMIN STATS */}
+      {activeTab === 'admin_dashboard' && user?.role === 'admin' && (
+        <div className="space-y-8 animate-in fade-in duration-500">
+           <header className="flex justify-between items-center">
+            <div>
+              <h2 className="text-3xl font-luxury font-bold">Pannello Kristal</h2>
+              <p className="text-gray-500 text-sm">Gestionale & Integrazioni Social.</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={toggleInstagram} 
+                className={`px-6 py-3 rounded-xl font-bold text-xs transition-all ${settings.instagram_enabled ? 'bg-green-100 text-green-700 shadow-md' : 'bg-gray-100 text-gray-400'}`}
+              >
+                <i className={`fab fa-instagram mr-2`}></i> {settings.instagram_enabled ? 'Gallery Attiva' : 'Gallery Off'}
+              </button>
+            </div>
+          </header>
+
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sincronizzazione Instagram</h4>
+            <div className="flex flex-col md:flex-row gap-3">
+              <input 
+                type="password"
+                placeholder="Inserisci Instagram Access Token..."
+                className="flex-1 p-4 bg-gray-50 rounded-2xl text-xs font-mono outline-none"
+                value={instaTokenInput}
+                onChange={(e) => setInstaTokenInput(e.target.value)}
+              />
+              <button onClick={updateInstagramSettings} className="bg-black text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest">Salva Token</button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Appuntamenti</p>
+                <h3 className="text-2xl font-bold">{appointments.length}</h3>
+              </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Clienti</p>
+                <h3 className="text-2xl font-bold">{profiles.length}</h3>
+              </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Servizi</p>
+                <h3 className="text-2xl font-bold">{services.length}</h3>
+              </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Staff</p>
+                <h3 className="text-2xl font-bold">{team.length}</h3>
+              </div>
+          </div>
+        </div>
+      )}
+
       {/* ADMIN: TEAM & ORARI */}
       {activeTab === 'team_schedule' && user?.role === 'admin' && (
         <div className="space-y-8 animate-in fade-in duration-500">
            <div className="flex justify-between items-center">
-            <h2 className="text-3xl font-luxury font-bold">Staff & Orari</h2>
-            <button onClick={() => setEditingMember({ name: '', role: '', start_hour: 8, end_hour: 18, unavailable_dates: [] })} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest shadow-xl">Nuovo Professionista</button>
+            <h2 className="text-3xl font-luxury font-bold">Staff & Calendario</h2>
+            <button onClick={() => setEditingMember({ name: '', role: '', start_hour: 8, end_hour: 18, unavailable_dates: [] })} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest shadow-xl">Aggiungi Staff</button>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
             {team.map(m => (
@@ -363,33 +431,43 @@ const App: React.FC = () => {
                       <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">{m.role}</p>
                     </div>
                   </div>
-                  <button onClick={async () => { if(confirm('Rimuovere?')) { await db.team.delete(m.name); refreshData(); }}} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fas fa-trash"></i></button>
+                  <button onClick={async () => { if(confirm('Rimuovere collaboratore?')) { await db.team.delete(m.name); refreshData(); }}} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fas fa-trash"></i></button>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl">
-                  <div>
+                  <div className="text-center">
                     <p className="text-[10px] font-bold text-gray-400 uppercase">Apertura</p>
-                    <p className="font-bold">{m.start_hour}:00</p>
+                    <p className="font-bold text-lg">{m.start_hour}:00</p>
                   </div>
-                  <div>
+                  <div className="text-center">
                     <p className="text-[10px] font-bold text-gray-400 uppercase">Chiusura</p>
-                    <p className="font-bold">{m.end_hour}:00</p>
+                    <p className="font-bold text-lg">{m.end_hour}:00</p>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
-                  <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Vacanza / Giorni Chiusi</h5>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {m.unavailable_dates?.map(date => (
-                      <span key={date} className="bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-2">
-                        {new Date(date).toLocaleDateString()} 
-                        <button onClick={async () => { const upd = { ...m, unavailable_dates: m.unavailable_dates?.filter(d => d !== date) }; await db.team.upsert(upd); refreshData(); }}><i className="fas fa-times"></i></button>
-                      </span>
-                    ))}
+                  <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Assenze & Vacanze</h5>
+                  <div className="max-h-32 overflow-y-auto mb-4 space-y-1">
+                    {(!m.unavailable_dates || m.unavailable_dates.length === 0) ? (
+                      <p className="text-[10px] text-gray-300 italic">Nessun periodo di vacanza impostato.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {m.unavailable_dates.map(date => (
+                          <span key={date} className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-2">
+                            {new Date(date).toLocaleDateString()} 
+                            <button onClick={async () => { 
+                              const upd = { ...m, unavailable_dates: m.unavailable_dates?.filter(d => d !== date) }; 
+                              await db.team.upsert(upd); 
+                              refreshData(); 
+                            }}><i className="fas fa-times"></i></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
-                    <input type="date" className="flex-1 bg-gray-50 border-none rounded-xl p-3 text-[10px] font-bold outline-none focus:ring-1 focus:ring-amber-400" onChange={(e) => setNewOffDate(e.target.value)} value={newOffDate} />
-                    <button onClick={() => addOffDate(m.name)} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-colors">Aggiungi</button>
+                    <input type="date" className="flex-1 bg-gray-50 border-none rounded-xl p-3 text-xs font-bold outline-none" onChange={(e) => setNewOffDate(e.target.value)} value={newOffDate} />
+                    <button onClick={() => addOffDate(m.name)} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-colors">Blocca Data</button>
                   </div>
                 </div>
               </div>
@@ -401,88 +479,119 @@ const App: React.FC = () => {
       {/* ADMIN: LISTA CLIENTI */}
       {activeTab === 'clients' && user?.role === 'admin' && (
         <div className="space-y-8 animate-in fade-in duration-500">
-          <h2 className="text-3xl font-luxury font-bold">Anagrafica Clienti</h2>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-3xl font-luxury font-bold">Archivio Clienti</h2>
+            <div className="relative">
+              <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-300"></i>
+              <input 
+                type="text" 
+                placeholder="Cerca per nome o telefono..." 
+                className="pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl text-sm w-full md:w-80 outline-none focus:ring-2 focus:ring-amber-400 transition-all"
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
+              />
+            </div>
+          </div>
+          
           <div className="grid gap-4">
-            {profiles.map(p => (
-              <div key={p.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between hover:shadow-lg transition-all">
+            {filteredProfiles.length > 0 ? filteredProfiles.map(p => (
+              <div key={p.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 flex items-center justify-between hover:shadow-lg transition-all group">
                 <div className="flex items-center gap-4">
                   <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-14 h-14 rounded-full object-cover border border-gray-50 shadow-sm" />
                   <div>
-                    <h5 className="font-bold text-lg">{p.full_name}</h5>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{p.phone || 'Email: ' + p.email}</p>
+                    <h5 className="font-bold text-lg group-hover:text-amber-600 transition-colors">{p.full_name}</h5>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{p.phone || 'Nessun numero'} • {p.email}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setViewingHistory(p)} className="px-6 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Scheda Tecnica</button>
-                  <button onClick={() => setEditingProfile(p)} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-amber-500 transition-all"><i className="fas fa-user-edit"></i></button>
+                  <button onClick={() => setViewingHistory(p)} className="px-6 py-3 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 hover:text-white transition-all">Scheda Tecnica</button>
+                  <button onClick={() => setEditingProfile(p)} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-gray-900 transition-all"><i className="fas fa-user-edit"></i></button>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="p-20 bg-gray-50 rounded-[3rem] text-center">
+                <i className="fas fa-users text-gray-200 text-5xl mb-4"></i>
+                <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Nessun cliente trovato</p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* SCHEDA TECNICA MODALE (CON MODIFICA) */}
+      {/* SCHEDA TECNICA MODALE */}
       {viewingHistory && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] space-y-8">
+          <div className="bg-white w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <img src={viewingHistory.avatar || `https://ui-avatars.com/api/?name=${viewingHistory.fullName}`} className="w-14 h-14 rounded-full border-2 border-amber-500 shadow-md" />
+                <img src={viewingHistory.avatar || `https://ui-avatars.com/api/?name=${viewingHistory.fullName}`} className="w-16 h-16 rounded-full border-2 border-amber-500 shadow-md" />
                 <div>
-                  <h3 className="text-2xl font-luxury font-bold">Scheda Tecnica Clienti</h3>
-                  <p className="text-gray-400 text-xs font-bold uppercase">{viewingHistory.fullName}</p>
+                  <h3 className="text-2xl font-luxury font-bold">Scheda Tecnica Kristal</h3>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">{viewingHistory.fullName}</p>
                 </div>
               </div>
-              <button onClick={() => { setViewingHistory(null); setEditingTreatmentIndex(null); }} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:text-gray-900 transition-all flex items-center justify-center"><i className="fas fa-times"></i></button>
+              <button onClick={() => { setViewingHistory(null); setEditingTreatmentIndex(null); }} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:text-gray-900 flex items-center justify-center transition-all"><i className="fas fa-times"></i></button>
             </div>
 
-            <div className="space-y-6">
-              <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100">
-                <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-4">
-                  {editingTreatmentIndex !== null ? 'Modifica Record' : 'Aggiungi Nuovo Trattamento / Note Tecniche'}
-                </h4>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="date" className="p-4 rounded-xl bg-white border-none text-xs font-bold outline-none" value={newTreatment.date} onChange={e => setNewTreatment({...newTreatment, date: e.target.value})} />
-                    <input placeholder="Servizio / Colore (Es. 9.12 + 6%)" className="p-4 rounded-xl bg-white border-none text-xs font-bold outline-none" value={newTreatment.service} onChange={e => setNewTreatment({...newTreatment, service: e.target.value})} />
-                  </div>
-                  <textarea placeholder="Note dettagliate, tempi di posa, miscele..." className="w-full p-4 rounded-xl bg-white border-none text-xs h-24 outline-none" value={newTreatment.notes} onChange={e => setNewTreatment({...newTreatment, notes: e.target.value})} />
-                  <div className="flex gap-2">
-                    <button onClick={addOrUpdateTreatment} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-bold uppercase text-[10px] shadow-lg shadow-amber-200 transition-all hover:scale-[1.02]">
-                      {editingTreatmentIndex !== null ? 'Aggiorna Record' : 'Registra Trattamento'}
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="md:col-span-1 space-y-6">
+                <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100">
+                  <h4 className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-4">
+                    {editingTreatmentIndex !== null ? 'Modifica Record' : 'Nuovo Trattamento'}
+                  </h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Data</label>
+                      <input type="date" className="w-full p-3 rounded-xl bg-white text-xs font-bold outline-none" value={newTreatment.date} onChange={e => setNewTreatment({...newTreatment, date: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Servizio / Formula Colore</label>
+                      <input placeholder="Es. Balayage + Toner 10.21" className="w-full p-3 rounded-xl bg-white text-xs font-bold outline-none" value={newTreatment.service} onChange={e => setNewTreatment({...newTreatment, service: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Note Tecniche</label>
+                      <textarea placeholder="Dettagli mix, ossigeno, tempi..." className="w-full p-3 rounded-xl bg-white text-xs h-24 outline-none" value={newTreatment.notes} onChange={e => setNewTreatment({...newTreatment, notes: e.target.value})} />
+                    </div>
+                    <button onClick={addOrUpdateTreatment} className="w-full py-4 bg-amber-500 text-white rounded-xl font-bold uppercase text-[10px] shadow-lg shadow-amber-100">
+                      {editingTreatmentIndex !== null ? 'Aggiorna' : 'Salva Trattamento'}
                     </button>
                     {editingTreatmentIndex !== null && (
-                      <button onClick={() => { setEditingTreatmentIndex(null); setNewTreatment({ date: new Date().toISOString().split('T')[0], service: '', notes: '' }); }} className="px-6 py-4 bg-gray-200 text-gray-500 rounded-xl font-bold uppercase text-[10px]">Annulla</button>
+                      <button onClick={() => { setEditingTreatmentIndex(null); setNewTreatment({ date: new Date().toISOString().split('T')[0], service: '', notes: '' }); }} className="w-full py-2 text-gray-400 font-bold uppercase text-[9px]">Annulla Modifica</button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Cronologia Completa</h4>
-                {(!viewingHistory.treatment_history || viewingHistory.treatment_history.length === 0) ? (
-                  <p className="text-sm text-gray-300 italic text-center py-10">Nessun record tecnico disponibile.</p>
-                ) : (
-                  [...(viewingHistory.treatment_history || [])].reverse().map((record, i) => {
-                    const originalIndex = viewingHistory.treatment_history!.length - 1 - i;
-                    return (
-                      <div key={originalIndex} className="bg-white p-6 border-l-4 border-amber-500 shadow-sm rounded-r-3xl group relative transition-all hover:shadow-md">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <span className="text-[10px] font-bold text-amber-600 block mb-1">{new Date(record.date).toLocaleDateString()}</span>
-                            <h5 className="font-bold text-gray-900 text-lg">{record.service}</h5>
+              <div className="md:col-span-2 space-y-4">
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Storico Trattamenti</h4>
+                <div className="space-y-4">
+                  {(!viewingHistory.treatment_history || viewingHistory.treatment_history.length === 0) ? (
+                    <div className="py-20 text-center bg-gray-50 rounded-[2rem]">
+                      <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Nessuna cronologia disponibile</p>
+                    </div>
+                  ) : (
+                    [...(viewingHistory.treatment_history || [])].reverse().map((record, i) => {
+                      const originalIndex = viewingHistory.treatment_history!.length - 1 - i;
+                      return (
+                        <div key={originalIndex} className="bg-white p-6 border border-gray-100 shadow-sm rounded-[2rem] group relative hover:border-amber-200 transition-all">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-[10px] font-bold text-amber-500 block mb-1">{new Date(record.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                              <h5 className="font-bold text-gray-900 text-lg">{record.service}</h5>
+                            </div>
+                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                              <button onClick={() => { setEditingTreatmentIndex(originalIndex); setNewTreatment(record); }} className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white"><i className="fas fa-edit text-[10px]"></i></button>
+                              <button onClick={() => deleteTreatment(originalIndex)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-600 hover:text-white"><i className="fas fa-trash text-[10px]"></i></button>
+                            </div>
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditingTreatmentIndex(originalIndex); setNewTreatment(record); }} className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white"><i className="fas fa-edit text-[10px]"></i></button>
-                            <button onClick={() => deleteTreatment(originalIndex)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-600 hover:text-white"><i className="fas fa-trash text-[10px]"></i></button>
+                          <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
+                             <p className="text-xs text-gray-600 leading-relaxed italic">"{record.notes}"</p>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-500 leading-relaxed bg-gray-50 p-4 rounded-xl mt-3">{record.notes}</p>
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -495,36 +604,45 @@ const App: React.FC = () => {
           <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl">
             <h3 className="text-2xl font-luxury font-bold mb-6">Configurazione Staff</h3>
             <form onSubmit={saveMember} className="space-y-4">
-              <input placeholder="Nome" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-1 focus:ring-amber-400 transition-all" value={editingMember.name} onChange={e => setEditingMember({...editingMember, name: e.target.value})} required />
-              <input placeholder="Ruolo" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-1 focus:ring-amber-400 transition-all" value={editingMember.role} onChange={e => setEditingMember({...editingMember, role: e.target.value})} required />
-              <input placeholder="URL Foto Avatar" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-1 focus:ring-amber-400 transition-all" value={editingMember.avatar} onChange={e => setEditingMember({...editingMember, avatar: e.target.value})} />
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Nome Professionista</label>
+                <input placeholder="Nome" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingMember.name} onChange={e => setEditingMember({...editingMember, name: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Ruolo / Specializzazione</label>
+                <input placeholder="Es. Creative Director" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingMember.role} onChange={e => setEditingMember({...editingMember, role: e.target.value})} required />
+              </div>
               
               <div className="grid grid-cols-2 gap-4 pt-4">
                 <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Inizio Turno (Ora)</label>
-                  <input type="number" min="0" max="23" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingMember.start_hour} onChange={e => setEditingMember({...editingMember, start_hour: Number(e.target.value)})} />
+                  <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Inizio Turno</label>
+                  <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold" value={editingMember.start_hour} onChange={e => setEditingMember({...editingMember, start_hour: Number(e.target.value)})}>
+                    {[7,8,9,10,11,12].map(h => <option key={h} value={h}>{h}:00</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Fine Turno (Ora)</label>
-                  <input type="number" min="0" max="23" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingMember.end_hour} onChange={e => setEditingMember({...editingMember, end_hour: Number(e.target.value)})} />
+                  <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Fine Turno</label>
+                  <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold" value={editingMember.end_hour} onChange={e => setEditingMember({...editingMember, end_hour: Number(e.target.value)})}>
+                    {[16,17,18,19,20,21,22].map(h => <option key={h} value={h}>{h}:00</option>)}
+                  </select>
                 </div>
               </div>
 
               <div className="flex gap-4 pt-6">
-                <button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50 rounded-2xl transition-all">Annulla</button>
-                <button type="submit" className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl">Salva Staff</button>
+                <button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Annulla</button>
+                <button type="submit" className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Salva Staff</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Altre sezioni restano invariate */}
+      {/* Altre sezioni Admin restano invariate */}
       {activeTab === 'calendar' && user?.role === 'admin' && (
         <div className="space-y-8 animate-in fade-in duration-500">
-           <h2 className="text-3xl font-luxury font-bold">Appuntamenti</h2>
+           <h2 className="text-3xl font-luxury font-bold">Appuntamenti Confermati</h2>
             <div className="grid gap-4">
-              {appointments.map(app => (
+              {appointments.length > 0 ? appointments.map(app => (
                 <div key={app.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex gap-4 items-center">
                     <div className="bg-amber-50 p-4 rounded-2xl text-center min-w-[70px]">
@@ -533,17 +651,21 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <h4 className="font-bold text-gray-900">{app.services?.name}</h4>
-                      <p className="text-xs text-gray-400 font-bold uppercase">Con {app.team_member_name} per {app.profiles?.full_name}</p>
+                      <p className="text-xs text-gray-400 font-bold uppercase">Staff: {app.team_member_name} | Cliente: {app.profiles?.full_name}</p>
                       <p className="text-xs text-amber-600 font-bold mt-1 uppercase tracking-widest">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setViewingHistory(profiles.find(p => p.id === app.client_id))} className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center"><i className="fas fa-file-medical text-xs"></i></button>
+                    <button onClick={() => setViewingHistory(profiles.find(p => p.id === app.client_id))} className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"><i className="fas fa-file-medical text-xs"></i></button>
                     <button onClick={() => { setSelectedAppointment(app); setIsFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center"><i className="fas fa-edit text-xs"></i></button>
-                    <button onClick={async () => { if(confirm('Eliminare?')) { await db.appointments.delete(app.id); refreshData(); }}} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex items-center justify-center"><i className="fas fa-trash text-xs"></i></button>
+                    <button onClick={async () => { if(confirm('Cancellare questo appuntamento?')) { await db.appointments.delete(app.id); refreshData(); }}} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex items-center justify-center"><i className="fas fa-trash text-xs"></i></button>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-gray-200">
+                  <p className="text-gray-300 font-bold uppercase text-xs tracking-widest">Nessun appuntamento in agenda</p>
+                </div>
+              )}
             </div>
         </div>
       )}
@@ -555,7 +677,7 @@ const App: React.FC = () => {
             {services.map(s => (
               <div key={s.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex justify-between items-center shadow-sm">
                 <div className="flex-1"><h4 className="font-bold text-lg">{s.name}</h4><div className="flex gap-2 mt-1"><span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold uppercase">{s.category}</span><span className="text-[10px] text-gray-400 font-bold uppercase">CHF {s.price} • {s.duration} min</span></div></div>
-                <div className="flex gap-1"><button onClick={() => setEditingService(s)} className="p-3 text-amber-600 hover:bg-amber-50 rounded-full"><i className="fas fa-edit"></i></button><button onClick={async () => { if(confirm('Eliminare?')) { await db.services.delete(s.id); refreshData(); }}} className="p-3 text-red-400 hover:bg-red-50 rounded-full"><i className="fas fa-trash"></i></button></div>
+                <div className="flex gap-1"><button onClick={() => setEditingService(s)} className="p-3 text-amber-600 hover:bg-amber-50 rounded-full"><i className="fas fa-edit"></i></button><button onClick={async () => { if(confirm('Eliminare servizio?')) { await db.services.delete(s.id); refreshData(); }}} className="p-3 text-red-400 hover:bg-red-50 rounded-full"><i className="fas fa-trash"></i></button></div>
               </div>
             ))}
           </div>
@@ -565,8 +687,26 @@ const App: React.FC = () => {
       {/* MODALE PRENOTAZIONE */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[95vh]"><h3 className="text-2xl font-luxury font-bold mb-8">Prenotazione</h3>
+          <div className="bg-white w-full max-w-3xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[95vh]"><h3 className="text-2xl font-luxury font-bold mb-8">Prenotazione Appuntamento</h3>
             <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={saveAppointment} onCancel={() => setIsFormOpen(false)} initialData={selectedAppointment} isAdmin={user?.role === 'admin'} profiles={profiles} />
+          </div>
+        </div>
+      )}
+
+      {/* MODALE EDIT PROFILO */}
+      {editingProfile && (
+        <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl">
+            <h3 className="text-2xl font-luxury font-bold mb-6">Profilo Cliente</h3>
+            <form onSubmit={saveProfile} className="space-y-4">
+              <input placeholder="Nome Completo" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingProfile.full_name} onChange={e => setEditingProfile({...editingProfile, full_name: e.target.value})} required />
+              <input placeholder="Telefono" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingProfile.phone} onChange={e => setEditingProfile({...editingProfile, phone: e.target.value})} />
+              <input placeholder="URL Foto Profilo" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={editingProfile.avatar} onChange={e => setEditingProfile({...editingProfile, avatar: e.target.value})} />
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setEditingProfile(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px]">Annulla</button>
+                <button type="submit" className="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold uppercase text-[10px] shadow-lg shadow-amber-200">Salva Profilo</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
