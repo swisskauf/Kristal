@@ -25,6 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
   const adminNav = [
     { id: 'admin_dashboard', label: 'Visione', icon: 'fa-eye' },
+    { id: 'services_management', label: 'Servizi', icon: 'fa-concierge-bell' },
     { id: 'team_schedule', label: 'Il Team', icon: 'fa-users' },
     { id: 'clients', label: 'I Nostri Ospiti', icon: 'fa-heart' },
     { id: 'calendar', label: 'Agenda Atelier', icon: 'fa-calendar-check' },
