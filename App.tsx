@@ -33,7 +33,6 @@ const App: React.FC = () => {
   const [clientSearch, setClientSearch] = useState('');
   const [newSheet, setNewSheet] = useState({ category: 'Colore', content: '' });
 
-  // Stato per la gestione rapida delle richieste dall'agenda
   const [quickRequestData, setQuickRequestData] = useState<{ date: string, memberName: string } | null>(null);
 
   const isAdmin = user?.role === 'admin';
@@ -176,24 +175,10 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  const handleUpdateRole = async (profileId: string, newRole: any) => {
-    const p = profiles.find(p => p.id === profileId);
-    if (!p) return;
-    try {
-      await db.profiles.upsert({ ...p, role: newRole });
-      await refreshData();
-      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: newRole });
-      alert("Profilo aggiornato con successo.");
-    } catch (e: any) {
-      alert("Errore aggiornamento ruolo: " + e.message);
-    }
-  };
-
   const handleToggleVacation = async (memberName: string, date: string) => {
     const member = team.find(m => m.name === memberName);
     if (!member) return;
 
-    // Logica per collaboratori: Apri il nuovo modal di scelta
     if (isCollaborator) {
       if (member.profile_id === user?.id) {
         setQuickRequestData({ date, memberName });
@@ -203,7 +188,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Logica per Admin: Apertura rapida o Toggle immediato
     if (isAdmin) {
       let updatedDates = [...(member.unavailable_dates || [])];
       if (updatedDates.includes(date)) {
@@ -220,42 +204,47 @@ const App: React.FC = () => {
     }
   };
 
-  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', type?: AbsenceType, notes?: string) => {
+  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: { type: AbsenceType, notes?: string, isFullDay: boolean, startTime?: string, endTime?: string }) => {
     if (!quickRequestData) return;
     const { date, memberName } = quickRequestData;
 
     try {
-      if (action === 'create' && type) {
+      if (action === 'create' && data) {
         await db.requests.create({
           member_name: memberName,
-          type: type,
+          type: data.type,
           start_date: date,
           end_date: date,
+          start_time: data.isFullDay ? null : data.startTime,
+          end_time: data.isFullDay ? null : data.endTime,
+          is_full_day: data.isFullDay,
           status: 'pending',
-          notes: notes || 'Richiesta rapida da Agenda.'
+          notes: data.notes || 'Richiesta rapida da Agenda.'
         });
-        alert("Richiesta inviata.");
+        alert("Richiesta inviata con successo.");
       } else if (action === 'cancel') {
-        // Trova la richiesta pendente per quel giorno e artista e eliminala (o settala a rejected)
         const reqToCancel = requests.find(r => r.member_name === memberName && r.start_date === date && r.status === 'pending');
         if (reqToCancel) {
-          await db.requests.update(reqToCancel.id, { status: 'rejected', admin_notes: 'Annullata dall\'utente.' });
-          alert("Richiesta annullata correttamente.");
+          // Utilizziamo un update per marcare come rejected o eliminare se il DB lo permette
+          // In questo caso, settiamo a rejected e l'agenda la filtrerà via
+          await db.requests.update(reqToCancel.id, { status: 'rejected', admin_notes: 'Annullata dall\'artista.' });
+          alert("Richiesta annullata. Lo slot è ora nuovamente libero.");
         }
-      } else if (action === 'revoke') {
+      } else if (action === 'revoke' && data) {
         await db.requests.create({
           member_name: memberName,
           type: 'availability_change',
           start_date: date,
           end_date: date,
+          is_full_day: true,
           status: 'pending',
-          notes: `Richiesta di REVOCA per congedo già approvato. Note: ${notes || 'Nessuna'}`
+          notes: `Richiesta di REVOCA per congedo confermato. Motivazione: ${data.notes || 'Nessuna'}`
         });
         alert("Richiesta di revoca inviata alla direzione.");
       }
-      refreshData();
+      await refreshData();
     } catch (e) {
-      alert("Errore durante l'operazione.");
+      alert("Si è verificato un errore durante l'operazione.");
     } finally {
       setQuickRequestData(null);
     }
@@ -274,18 +263,26 @@ const App: React.FC = () => {
             id: req.id,
             startDate: req.start_date,
             endDate: req.end_date,
+            startTime: req.start_time,
+            endTime: req.end_time,
+            isFullDay: req.is_full_day,
             type: req.type,
             notes: req.notes
           };
           const absences = [...(member.absences_json || []), entry];
           const dates = [...(member.unavailable_dates || [])];
-          let curr = new Date(req.start_date);
-          const end = new Date(req.end_date);
-          while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
-            if (!dates.includes(dateStr)) dates.push(dateStr);
-            curr.setDate(curr.getDate() + 1);
+          
+          // Se è un giorno intero, blocca l'intera data
+          if (req.is_full_day) {
+            let curr = new Date(req.start_date);
+            const end = new Date(req.end_date);
+            while (curr <= end) {
+              const dateStr = curr.toISOString().split('T')[0];
+              if (!dates.includes(dateStr)) dates.push(dateStr);
+              curr.setDate(curr.getDate() + 1);
+            }
           }
+          
           await db.team.upsert({ ...member, absences_json: absences, unavailable_dates: dates });
         }
       }
@@ -439,6 +436,7 @@ const App: React.FC = () => {
               appointments={appointments} 
               onToggleVacation={handleToggleVacation} 
               currentUserMemberName={currentMember?.name}
+              requests={requests}
             />
 
             {isAdmin && (
@@ -480,7 +478,7 @@ const App: React.FC = () => {
         <QuickRequestModal 
           date={quickRequestData.date} 
           memberName={quickRequestData.memberName}
-          existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date)}
+          existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending')}
           existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
           onClose={() => setQuickRequestData(null)}
           onAction={handleQuickRequestAction}
