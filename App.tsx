@@ -221,14 +221,13 @@ const App: React.FC = () => {
           status: 'pending',
           notes: data.notes || 'Richiesta rapida da Agenda.'
         });
-        alert("Richiesta inviata con successo.");
+        alert("Richiesta inviata.");
       } else if (action === 'cancel') {
         const reqToCancel = requests.find(r => r.member_name === memberName && r.start_date === date && r.status === 'pending');
         if (reqToCancel) {
-          // Utilizziamo un update per marcare come rejected o eliminare se il DB lo permette
-          // In questo caso, settiamo a rejected e l'agenda la filtrerà via
-          await db.requests.update(reqToCancel.id, { status: 'rejected', admin_notes: 'Annullata dall\'artista.' });
-          alert("Richiesta annullata. Lo slot è ora nuovamente libero.");
+          // Eliminiamo fisicamente la richiesta per pulire l'agenda immediatamente
+          await db.requests.delete(reqToCancel.id);
+          alert("Richiesta annullata. Lo slot è tornato disponibile.");
         }
       } else if (action === 'revoke' && data) {
         await db.requests.create({
@@ -238,13 +237,14 @@ const App: React.FC = () => {
           end_date: date,
           is_full_day: true,
           status: 'pending',
-          notes: `Richiesta di REVOCA per congedo confermato. Motivazione: ${data.notes || 'Nessuna'}`
+          notes: `Richiesta di REVOCA per congedo confermato il ${date}. Motivazione: ${data.notes || 'Non specificata'}`
         });
-        alert("Richiesta di revoca inviata alla direzione.");
+        alert("Richiesta di revoca inviata.");
       }
       await refreshData();
-    } catch (e) {
-      alert("Si è verificato un errore durante l'operazione.");
+    } catch (e: any) {
+      console.error("QuickRequest Error:", e);
+      alert("Errore: " + (e.message || "Operazione fallita. Riprovare."));
     } finally {
       setQuickRequestData(null);
     }
@@ -272,7 +272,6 @@ const App: React.FC = () => {
           const absences = [...(member.absences_json || []), entry];
           const dates = [...(member.unavailable_dates || [])];
           
-          // Se è un giorno intero, blocca l'intera data
           if (req.is_full_day) {
             let curr = new Date(req.start_date);
             const end = new Date(req.end_date);
