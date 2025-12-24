@@ -6,17 +6,16 @@ interface TeamPlanningProps {
   team: TeamMember[];
   appointments: Appointment[];
   onToggleVacation: (memberName: string, date: string) => void;
+  currentUserMemberName?: string;
 }
 
-const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggleVacation }) => {
+const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggleVacation, currentUserMemberName }) => {
   const [selectedMembers, setSelectedMembers] = useState<string[]>(team.map(m => m.name));
   const [viewDate, setViewDate] = useState(new Date());
 
   const weekDays = useMemo(() => {
     const days = [];
     const startOfWeek = new Date(viewDate);
-    // Correzione lunedì: getDay() restituisce 0 per domenica. 
-    // In Italia la settimana inizia lunedì.
     const day = startOfWeek.getDay();
     const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
     startOfWeek.setDate(diff);
@@ -67,7 +66,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
               }`}
             >
               <div className={`w-1.5 h-1.5 rounded-full ${selectedMembers.includes(m.name) ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
-              {m.name}
+              {m.name === currentUserMemberName ? 'Io' : m.name}
             </button>
           ))}
         </div>
@@ -80,10 +79,12 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
               <tr className="border-b border-gray-50">
                 <th className="p-6 text-left text-[9px] font-bold text-gray-300 uppercase tracking-widest min-w-[120px]">Data</th>
                 {team.filter(m => selectedMembers.includes(m.name)).map(m => (
-                  <th key={m.name} className="p-6 text-center min-w-[160px]">
+                  <th key={m.name} className={`p-6 text-center min-w-[160px] ${m.name === currentUserMemberName ? 'bg-amber-50/30' : ''}`}>
                     <div className="flex flex-col items-center gap-2">
                       <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-8 h-8 rounded-full shadow-md object-cover" alt={m.name} />
-                      <span className="text-[10px] font-bold uppercase tracking-widest">{m.name}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${m.name === currentUserMemberName ? 'text-amber-600' : ''}`}>
+                        {m.name} {m.name === currentUserMemberName && '(Tu)'}
+                      </span>
                     </div>
                   </th>
                 ))}
@@ -102,23 +103,24 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                     {team.filter(m => selectedMembers.includes(m.name)).map(m => {
                       const isOff = m.unavailable_dates?.includes(date);
                       const dayAppts = appointments.filter(a => a.team_member_name === m.name && a.date.includes(date));
+                      const isMe = m.name === currentUserMemberName;
                       
                       return (
-                        <td key={m.name} className="p-4">
+                        <td key={m.name} className={`p-4 ${isMe ? 'bg-amber-50/10' : ''}`}>
                           <button 
                             onClick={() => onToggleVacation(m.name, date)}
                             className={`w-full p-4 rounded-2xl border transition-all text-left relative group min-h-[60px] ${
                               isOff 
                                 ? 'bg-gray-900 border-gray-900 text-gray-500' 
                                 : dayAppts.length > 0 
-                                  ? 'bg-white border-amber-100' 
+                                  ? 'bg-white border-amber-100 shadow-sm' 
                                   : 'bg-white border-gray-50 hover:border-amber-500 border-dashed'
-                            }`}
+                            } ${isMe && !isOff && dayAppts.length === 0 ? 'hover:bg-amber-50' : ''}`}
                           >
                             {isOff ? (
                               <div className="flex items-center gap-2">
                                 <i className="fas fa-plane text-[8px]"></i>
-                                <span className="text-[8px] font-bold uppercase tracking-widest">Ferie</span>
+                                <span className="text-[8px] font-bold uppercase tracking-widest">Congedo</span>
                               </div>
                             ) : dayAppts.length > 0 ? (
                               <div>
@@ -130,7 +132,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                             ) : (
                               <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="text-[7px] font-bold text-gray-400 uppercase tracking-widest">Disponibile</span>
-                                <span className="text-[7px] text-amber-600 uppercase">Segna Assenza</span>
+                                <span className="text-[7px] text-amber-600 uppercase font-bold">
+                                  {isMe ? 'Richiedi Congedo' : 'Vedi Orari'}
+                                </span>
                               </div>
                             )}
                           </button>
@@ -143,6 +147,12 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex items-center gap-4 px-8 py-4 bg-gray-50 rounded-2xl">
+        <i className="fas fa-info-circle text-amber-600 text-xs"></i>
+        <p className="text-[10px] text-gray-400 leading-tight">
+          <strong>Artisti:</strong> Cliccate su una vostra cella vuota per richiedere un congedo. Per i colleghi potete visualizzare solo gli impegni già confermati.
+        </p>
       </div>
     </div>
   );
