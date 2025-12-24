@@ -29,7 +29,15 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
-      const { data, error } = await supabase.from('profiles').upsert(profile).select().single();
+      const payload = {
+        ...profile,
+        full_name: profile.full_name || profile.fullName,
+        technical_sheets: profile.technical_sheets || []
+      };
+      // Rimuoviamo campi che non sono nel DB
+      delete payload.fullName;
+
+      const { data, error } = await supabase.from('profiles').upsert(payload).select().single();
       if (error) throw handleError(error);
       return data;
     }
@@ -64,6 +72,8 @@ export const db = {
         bio: member.bio,
         start_hour: member.start_hour ?? 8,
         end_hour: member.end_hour ?? 19,
+        work_start_time: member.work_start_time || '08:30',
+        work_end_time: member.work_end_time || '18:30',
         unavailable_dates: member.unavailable_dates ?? [],
         total_vacation_days: member.total_vacation_days ?? 25,
         absences_json: member.absences_json ?? []
