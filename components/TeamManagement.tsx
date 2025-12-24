@@ -60,10 +60,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const addAbsence = () => {
     if (!newAbsence.start || !newAbsence.end) return;
     
+    // Fix: Add missing isFullDay property required by AbsenceEntry interface
     const entry: AbsenceEntry = {
       id: Math.random().toString(36).substr(2, 9),
       startDate: newAbsence.start,
       endDate: newAbsence.end,
+      isFullDay: true,
       type: newAbsence.type,
       notes: newAbsence.notes
     };
