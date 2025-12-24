@@ -171,6 +171,18 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
+  const handleUpdateUserRole = async (profileId: string, newRole: 'client' | 'admin' | 'collaborator') => {
+    try {
+      const profile = profiles.find(p => p.id === profileId);
+      if (!profile) return;
+      await db.profiles.upsert({ ...profile, role: newRole });
+      alert(`Ruolo aggiornato con successo a ${newRole.toUpperCase()}`);
+      await refreshData();
+    } catch (e: any) {
+      alert("Errore aggiornamento ruolo: " + e.message);
+    }
+  };
+
   const handleToggleVacation = async (memberName: string, date: string) => {
     const member = team.find(m => m.name === memberName);
     if (!member) return;
@@ -222,8 +234,19 @@ const App: React.FC = () => {
         const reqToCancel = requests.find(r => r.member_name === memberName && r.start_date === date && r.status === 'pending');
         if (reqToCancel) {
           await db.requests.delete(reqToCancel.id);
-          alert("Richiesta annullata.");
+          alert("Richiesta annullata con successo.");
         }
+      } else if (action === 'revoke' && data) {
+        await db.requests.create({
+          member_name: memberName,
+          type: 'availability_change',
+          start_date: date,
+          end_date: date,
+          is_full_day: true,
+          status: 'pending',
+          notes: data.notes || 'Richiesta di rientro in servizio per revoca vacanza.'
+        });
+        alert("Richiesta di revoca inviata alla direzione.");
       }
       await refreshData();
     } catch (e: any) {
@@ -252,16 +275,24 @@ const App: React.FC = () => {
             type: req.type,
             notes: req.notes
           };
-          const absences = [...(member.absences_json || []), entry];
-          const dates = [...(member.unavailable_dates || [])];
           
-          if (req.is_full_day) {
-            let curr = new Date(req.start_date);
-            const end = new Date(req.end_date);
-            while (curr <= end) {
-              const dateStr = curr.toISOString().split('T')[0];
-              if (!dates.includes(dateStr)) dates.push(dateStr);
-              curr.setDate(curr.getDate() + 1);
+          let absences = [...(member.absences_json || [])];
+          let dates = [...(member.unavailable_dates || [])];
+
+          // Se è una revoca approvata, rimuoviamo le assenze corrispondenti
+          if (req.type === 'availability_change') {
+            absences = absences.filter(a => a.startDate !== req.start_date);
+            dates = dates.filter(d => d !== req.start_date);
+          } else {
+            absences.push(entry);
+            if (req.is_full_day) {
+              let curr = new Date(req.start_date);
+              const end = new Date(req.end_date);
+              while (curr <= end) {
+                const dateStr = curr.toISOString().split('T')[0];
+                if (!dates.includes(dateStr)) dates.push(dateStr);
+                curr.setDate(curr.getDate() + 1);
+              }
             }
           }
           await db.team.upsert({ ...member, absences_json: absences, unavailable_dates: dates });
@@ -357,7 +388,17 @@ const App: React.FC = () => {
                         <p className="text-[9px] text-gray-400 uppercase tracking-widest">{p.email}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-600 uppercase">{p.role}</span>
+                    <div className="flex items-center gap-4">
+                      <select 
+                        value={p.role} 
+                        onChange={(e) => handleUpdateUserRole(p.id, e.target.value as any)}
+                        className="bg-transparent text-[10px] font-bold text-amber-600 uppercase outline-none border-b border-transparent hover:border-amber-600 transition-all py-1 px-2 cursor-pointer"
+                      >
+                        <option value="client">Ospite</option>
+                        <option value="collaborator">Artista</option>
+                        <option value="admin">Direzione</option>
+                      </select>
+                    </div>
                   </div>
                 ))}
               </div>
