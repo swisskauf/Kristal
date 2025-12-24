@@ -7,8 +7,10 @@ import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
 import TeamManagement from './components/TeamManagement';
 import TeamPlanning from './components/TeamPlanning';
+import RequestManagement from './components/RequestManagement';
+import CollaboratorDashboard from './components/CollaboratorDashboard';
 import { supabase, db } from './services/supabase';
-import { Service, User, TeamMember, Appointment, TechnicalSheet } from './types';
+import { Service, User, TeamMember, Appointment, TechnicalSheet, LeaveRequest } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
 const App: React.FC = () => {
@@ -19,6 +21,7 @@ const App: React.FC = () => {
   const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
   const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -31,6 +34,12 @@ const App: React.FC = () => {
 
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
+
+  // Link the logged-in user to their team profile via profile_id
+  const currentMember = useMemo(() => {
+    if (!user) return null;
+    return team.find(m => m.profile_id === user.id);
+  }, [user, team]);
 
   const businessStats = useMemo(() => {
     const now = new Date();
@@ -135,20 +144,20 @@ const App: React.FC = () => {
 
   const refreshData = async () => {
     try {
-      const [svcs, tm, appts] = await Promise.all([
+      const [svcs, tm, appts, reqs] = await Promise.all([
         db.services.getAll().catch(() => []),
         db.team.getAll().catch(() => []),
-        db.appointments.getAll().catch(() => [])
+        db.appointments.getAll().catch(() => []),
+        db.requests.getAll().catch(() => [])
       ]);
       
       if (svcs.length) setServices(svcs);
       if (tm.length) setTeam(tm);
       setAppointments(appts);
+      setRequests(reqs);
 
-      if (isAdmin) {
-        const profs = await db.profiles.getAll().catch(() => []);
-        setProfiles(profs);
-      }
+      const profs = await db.profiles.getAll().catch(() => []);
+      setProfiles(profs);
     } catch (e) {
       console.error("Refresh Data error", e);
     }
@@ -167,30 +176,46 @@ const App: React.FC = () => {
   const handleUpdateRole = async (profileId: string, newRole: any) => {
     const p = profiles.find(p => p.id === profileId);
     if (!p) return;
-    
-    // Assicuriamoci che il ruolo sia uno dei tre previsti dallo schema DB
-    const roleMap: Record<string, string> = {
-      'client': 'client',
-      'collaborator': 'collaborator',
-      'admin': 'admin'
-    };
-    
-    const dbRole = roleMap[newRole] || 'client';
-
     try {
-      await db.profiles.upsert({ 
-        ...p, 
-        role: dbRole 
-      });
+      await db.profiles.upsert({ ...p, role: newRole });
       await refreshData();
-      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: dbRole });
+      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: newRole });
       alert("Profilo aggiornato con successo.");
     } catch (e: any) {
       alert("Errore aggiornamento ruolo: " + e.message);
     }
   };
 
+  // Fix: Added handleAddTechnicalSheet function to save technical notes for guests
+  const handleAddTechnicalSheet = async () => {
+    if (!viewingGuest || !newSheet.content.trim()) return;
+
+    const sheet: TechnicalSheet = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      category: newSheet.category,
+      content: newSheet.content
+    };
+
+    const updatedSheets = [sheet, ...(viewingGuest.technical_sheets || [])];
+    const updatedProfile = { ...viewingGuest, technical_sheets: updatedSheets };
+
+    try {
+      await db.profiles.upsert(updatedProfile);
+      setViewingGuest(updatedProfile);
+      setNewSheet({ ...newSheet, content: '' });
+      await refreshData();
+    } catch (e) {
+      console.error("Error adding technical sheet:", e);
+      alert("Errore salvataggio scheda tecnica");
+    }
+  };
+
   const handleToggleVacation = async (memberName: string, date: string) => {
+    if (isCollaborator) {
+      alert("Gli artisti devono richiedere le ferie tramite il modulo 'Richiedi Congedo' per approvazione.");
+      return;
+    }
     const member = team.find(m => m.name === memberName);
     if (!member) return;
     let updatedDates = [...(member.unavailable_dates || [])];
@@ -207,23 +232,41 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddTechnicalSheet = async () => {
-    if (!viewingGuest || !newSheet.content) return;
-    const sheet: TechnicalSheet = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      category: newSheet.category,
-      content: newSheet.content
-    };
-    const updatedSheets = [sheet, ...(viewingGuest.technical_sheets || [])];
+  const handleRequestAction = async (requestId: string, status: 'approved' | 'rejected') => {
+    const req = requests.find(r => r.id === requestId);
+    if (!req) return;
+    
     try {
-      const updatedProfile = { ...viewingGuest, technical_sheets: updatedSheets };
-      await db.profiles.upsert(updatedProfile);
-      setViewingGuest(updatedProfile);
-      setNewSheet({ category: 'Colore', content: '' });
+      await db.requests.update(requestId, { status });
+      
+      if (status === 'approved') {
+        const member = team.find(m => m.name === req.member_name);
+        if (member) {
+          const entry = {
+            id: req.id,
+            startDate: req.start_date,
+            endDate: req.end_date,
+            type: req.type,
+            notes: req.notes
+          };
+          
+          const absences = [...(member.absences_json || []), entry];
+          const dates = [...(member.unavailable_dates || [])];
+          
+          let curr = new Date(req.start_date);
+          const end = new Date(req.end_date);
+          while (curr <= end) {
+            const dateStr = curr.toISOString().split('T')[0];
+            if (!dates.includes(dateStr)) dates.push(dateStr);
+            curr.setDate(curr.getDate() + 1);
+          }
+          
+          await db.team.upsert({ ...member, absences_json: absences, unavailable_dates: dates });
+        }
+      }
       await refreshData();
     } catch (e) {
-      alert("Errore salvataggio scheda tecnica");
+      alert("Errore durante l'azione sulla richiesta.");
     }
   };
 
@@ -240,7 +283,8 @@ const App: React.FC = () => {
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
-        {activeTab === 'dashboard' && (
+        {/* DASHBOARD CLIENTE / GUEST */}
+        {activeTab === 'dashboard' && !isCollaborator && (
           <div className="space-y-12 animate-in fade-in duration-700">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
@@ -267,6 +311,16 @@ const App: React.FC = () => {
                     </div>
                   ))}
                 </div>
+
+                {requests.filter(r => r.status === 'pending').length > 0 && (
+                  <div className="bg-amber-600 text-white p-6 rounded-[2.5rem] shadow-xl flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1">Centro Notifiche</p>
+                      <p className="text-sm font-luxury">Ci sono {requests.filter(r => r.status === 'pending').length} nuove richieste dal team in attesa di approvazione.</p>
+                    </div>
+                    <button onClick={() => setActiveTab('team_schedule')} className="px-6 py-2 bg-white text-black rounded-full text-[9px] font-bold uppercase tracking-widest">Gestisci</button>
+                  </div>
+                )}
 
                 <div className="bg-white p-8 md:p-10 rounded-[3.5rem] border border-gray-50 shadow-sm overflow-hidden">
                   <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Performance & HR Artisti</h3>
@@ -333,6 +387,37 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* DASHBOARD COLLABORATORE (ARTISTA) */}
+        {(activeTab === 'collab_dashboard' || (activeTab === 'dashboard' && isCollaborator)) && isCollaborator && (
+          <div className="animate-in fade-in duration-700">
+            {currentMember ? (
+              <CollaboratorDashboard 
+                member={currentMember} 
+                appointments={appointments} 
+                requests={requests} 
+                user={user!}
+                onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
+                onUpdateProfile={async (p) => { 
+                  // Update both profiles and team_members if needed
+                  if (p.avatar || p.full_name || p.phone || p.email) {
+                    await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p });
+                  }
+                  if (p.bio || p.avatar) {
+                    await db.team.upsert({ ...currentMember, ...p });
+                  }
+                  refreshData(); 
+                }}
+              />
+            ) : (
+              <div className="bg-white p-12 rounded-[3rem] text-center border border-dashed border-gray-100">
+                 <h2 className="text-2xl font-luxury font-bold mb-4 text-gray-900">Configurazione Account in corso...</h2>
+                 <p className="text-sm text-gray-400 leading-relaxed mb-6">Il vostro account artista non è ancora stato collegato a un profilo membro.<br/>Contattate la direzione per attivare Maurizio, Romina o Melk su questo ID.</p>
+                 <div className="p-4 bg-gray-50 rounded-2xl text-[10px] font-mono text-gray-500 overflow-hidden text-ellipsis">ID: {user?.id}</div>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'clients' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -358,17 +443,38 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
+        {/* PLANNING TEAM (ACCESSIBILE DA ADMIN E COLLABORATORI) */}
+        {(activeTab === 'team_schedule') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Il Team & Planning</h2>
-            <TeamPlanning team={team} appointments={appointments} onToggleVacation={handleToggleVacation} />
+            <div className="flex justify-between items-center">
+              <h2 className="text-4xl font-luxury font-bold">Planning & Controllo</h2>
+            </div>
+            
+            {isAdmin && (
+              <RequestManagement 
+                requests={requests} 
+                onAction={handleRequestAction} 
+              />
+            )}
+
+            <TeamPlanning 
+              team={team} 
+              appointments={appointments} 
+              onToggleVacation={handleToggleVacation} 
+            />
+
             {isAdmin && (
               <div className="grid md:grid-cols-3 gap-6">
                 {team.map(m => (
                   <div key={m.name} className="bg-white p-8 rounded-[3rem] border border-gray-50 text-center shadow-sm">
                     <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-full mx-auto mb-4 object-cover shadow-lg" />
                     <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
-                    <p className="text-[9px] text-amber-600 font-bold uppercase mb-6">{m.role}</p>
+                    <p className="text-[9px] text-amber-600 font-bold uppercase mb-2">{m.role}</p>
+                    <div className="flex justify-center gap-1 mb-6">
+                      <span className={`text-[7px] font-bold uppercase tracking-widest ${m.profile_id ? 'text-green-500' : 'text-gray-400'}`}>
+                        {m.profile_id ? 'Account Collegato' : 'Link Mancante'}
+                      </span>
+                    </div>
                     <button onClick={() => setEditingMember(m)} className="w-full py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all">Gestisci Profilo</button>
                   </div>
                 ))}
@@ -506,7 +612,7 @@ const App: React.FC = () => {
       {editingMember && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <TeamManagement member={editingMember} appointments={appointments} services={services} onSave={async (m) => { await db.team.upsert(m); refreshData(); setEditingMember(null); }} onClose={() => setEditingMember(null)} />
+            <TeamManagement member={editingMember} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); refreshData(); setEditingMember(null); }} onClose={() => setEditingMember(null)} />
           </div>
         </div>
       )}
