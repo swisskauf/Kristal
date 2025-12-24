@@ -1,6 +1,16 @@
 
 export type TeamMemberName = string;
 
+export type AbsenceType = 'vacation' | 'sick' | 'injury' | 'other';
+
+export interface AbsenceEntry {
+  id: string;
+  startDate: string;
+  endDate: string;
+  type: AbsenceType;
+  notes?: string;
+}
+
 export interface TreatmentRecord {
   date: string;
   service: string;
@@ -11,10 +21,9 @@ export interface Service {
   id: string;
   name: string;
   price: number;
-  duration: number; // in minutes
+  duration: number; 
   category: string;
   description: string;
-  assigned_team_members?: TeamMemberName[];
 }
 
 export interface Appointment {
@@ -22,7 +31,7 @@ export interface Appointment {
   client_id: string;
   service_id: string;
   team_member_name: TeamMemberName;
-  date: string; // ISO string
+  date: string;
   status: 'confirmed' | 'pending' | 'cancelled';
   services?: { name: string; price: number; duration: number };
   profiles?: { full_name: string; phone: string };
@@ -33,7 +42,9 @@ export interface TeamMember {
   role: string;
   bio?: string;
   avatar?: string;
-  unavailable_dates?: string[];
+  unavailable_dates?: string[]; // Mantenuto per compatibilità legacy
+  absences_json?: AbsenceEntry[]; // Nuovo campo strutturato
+  total_vacation_days?: number;
   start_hour?: number;
   end_hour?: number;
 }
@@ -46,12 +57,6 @@ export interface User {
   role: 'client' | 'admin';
   avatar?: string;
   treatment_history?: TreatmentRecord[];
-}
-
-export interface AppSettings {
-  instagram_enabled: boolean;
-  instagram_username?: string;
-  instagram_access_token?: string;
 }
 
 export interface ChatMessage {
