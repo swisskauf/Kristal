@@ -6,6 +6,7 @@ import AIAssistant from './components/AIAssistant';
 import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
 import TeamManagement from './components/TeamManagement';
+import TeamPlanning from './components/TeamPlanning';
 import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, TreatmentRecord, Appointment } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -179,20 +180,32 @@ const App: React.FC = () => {
       setManagingMember(updatedMember);
     } catch (e: any) {
       console.error("Team save error detail:", e);
-      
       if (e.message?.includes('column')) {
-        const sqlFix = `
--- ESEGUI QUESTO SQL NEL SQL EDITOR DI SUPABASE:
-ALTER TABLE team_members 
-ADD COLUMN IF NOT EXISTS start_hour INTEGER DEFAULT 8,
-ADD COLUMN IF NOT EXISTS end_hour INTEGER DEFAULT 19,
-ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
-        `;
-        console.warn("Mancano delle colonne nel database! Esegui questo comando in Supabase:", sqlFix);
-        alert(`Il tuo database non è aggiornato. Apri la console (F12) per il comando SQL da eseguire su Supabase.`);
+        const sqlFix = "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS start_hour INTEGER DEFAULT 8, ADD COLUMN IF NOT EXISTS end_hour INTEGER DEFAULT 19, ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';";
+        console.warn("ESEGUI QUESTO SQL IN SUPABASE:", sqlFix);
+        alert(`Il database non è aggiornato. Copia il comando SQL dalla console F12 e incollalo nell'editor di Supabase.`);
       } else {
         alert(`Errore nel salvataggio: ${e.message}`);
       }
+    }
+  };
+
+  const handleToggleVacationQuickly = async (memberName: string, date: string) => {
+    const member = team.find(m => m.name === memberName);
+    if (!member) return;
+
+    const currentDates = member.unavailable_dates || [];
+    const updatedDates = currentDates.includes(date) 
+      ? currentDates.filter(d => d !== date)
+      : [...currentDates, date].sort();
+
+    const updatedMember = { ...member, unavailable_dates: updatedDates };
+    
+    try {
+      await db.team.upsert(updatedMember);
+      await refreshData();
+    } catch (e) {
+      console.error("Quick toggle error:", e);
     }
   };
 
@@ -370,19 +383,61 @@ ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
         </div>
       )}
 
-      {/* GESTIONE SERVIZI */}
+      {/* GESTIONE TEAM CON PLANNING */}
+      {activeTab === 'team_schedule' && isAdmin && (
+        <div className="space-y-16 animate-in fade-in duration-500 pb-20">
+           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <h2 className="text-5xl font-luxury font-bold">Il Team</h2>
+              <div className="flex bg-gray-50 p-1 rounded-2xl">
+                 <button onClick={() => setManagingMember(null)} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${!managingMember ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Planning Globale</button>
+                 <button onClick={() => setManagingMember(team[0])} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${managingMember ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Gestione Singola</button>
+              </div>
+           </div>
+
+           {!managingMember ? (
+             <TeamPlanning 
+              team={team} 
+              appointments={appointments} 
+              onToggleVacation={handleToggleVacationQuickly} 
+             />
+           ) : (
+             <div className="grid md:grid-cols-3 gap-8">
+               {team.map(m => (
+                 <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-6 text-center group hover:border-amber-200 transition-all">
+                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-32 h-32 rounded-full mx-auto shadow-xl group-hover:scale-105 transition-transform" />
+                   <div>
+                     <h4 className="text-2xl font-luxury font-bold">{m.name}</h4>
+                     <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{m.role}</p>
+                   </div>
+                   <button onClick={() => setManagingMember(m)} className="w-full py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">Gestisci</button>
+                 </div>
+               ))}
+             </div>
+           )}
+        </div>
+      )}
+
+      {/* MODALE GESTIONE SINGOLA */}
+      {managingMember && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
+          <div className="w-full max-w-3xl h-[85vh] bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative flex flex-col">
+            <TeamManagement 
+              member={managingMember}
+              appointments={appointments}
+              services={services}
+              onSave={handleSaveTeamMember}
+              onClose={() => setManagingMember(null)}
+            />
+          </div>
+        </div>
+      )}
+
       {activeTab === 'services_management' && isAdmin && (
         <div className="space-y-12 animate-in fade-in duration-500 pb-20">
           <header className="flex items-center justify-between">
             <h2 className="text-5xl font-luxury font-bold text-gray-900">Catalogo Ritual</h2>
-            <button 
-              onClick={() => { setSelectedService(undefined); setIsServiceFormOpen(true); }}
-              className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all"
-            >
-              Nuovo Servizio
-            </button>
+            <button onClick={() => { setSelectedService(undefined); setIsServiceFormOpen(true); }} className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Nuovo Servizio</button>
           </header>
-
           <div className="grid gap-4">
             {services.map(s => (
               <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between group hover:border-amber-200 transition-all shadow-sm">
@@ -399,36 +454,13 @@ ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
                     <p className="text-[8px] text-gray-300 font-bold uppercase">{s.duration} MIN</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => { setSelectedService(s); setIsServiceFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-amber-600 transition-colors">
-                      <i className="fas fa-edit text-xs"></i>
-                    </button>
-                    <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors">
-                      <i className="fas fa-trash text-xs"></i>
-                    </button>
+                    <button onClick={() => { setSelectedService(s); setIsServiceFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-amber-600 transition-colors"><i className="fas fa-edit text-xs"></i></button>
+                    <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"><i className="fas fa-trash text-xs"></i></button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* GESTIONE TEAM */}
-      {activeTab === 'team_schedule' && isAdmin && (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-           <h2 className="text-5xl font-luxury font-bold">Il Team</h2>
-           <div className="grid md:grid-cols-3 gap-8">
-             {team.map(m => (
-               <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-6 text-center group hover:border-amber-200 transition-all">
-                 <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-32 h-32 rounded-full mx-auto shadow-xl group-hover:scale-105 transition-transform" />
-                 <div>
-                   <h4 className="text-2xl font-luxury font-bold">{m.name}</h4>
-                   <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{m.role}</p>
-                 </div>
-                 <button onClick={() => setManagingMember(m)} className="w-full py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">Gestisci Collaboratore</button>
-               </div>
-             ))}
-           </div>
         </div>
       )}
 
@@ -480,22 +512,12 @@ ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
         </div>
       )}
 
-      {/* MODALI */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
             <button onClick={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black"><i className="fas fa-times text-xl"></i></button>
             <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Riserva il Tuo Momento</h3>
-            <AppointmentForm 
-              onSave={saveAppointment} 
-              onCancel={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} 
-              initialData={selectedAppointment}
-              services={services}
-              team={team}
-              existingAppointments={appointments}
-              isAdmin={isAdmin}
-              profiles={profiles}
-            />
+            <AppointmentForm onSave={saveAppointment} onCancel={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} initialData={selectedAppointment} services={services} team={team} existingAppointments={appointments} isAdmin={isAdmin} profiles={profiles} />
           </div>
         </div>
       )}
@@ -505,38 +527,18 @@ ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
           <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
             <button onClick={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black"><i className="fas fa-times text-xl"></i></button>
             <h3 className="text-3xl font-luxury font-bold mb-10 text-center">{selectedService ? 'Modifica Ritual' : 'Crea Nuovo Ritual'}</h3>
-            <ServiceForm 
-              onSave={handleSaveService} 
-              onCancel={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} 
-              initialData={selectedService}
-            />
-          </div>
-        </div>
-      )}
-
-      {managingMember && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
-          <div className="w-full max-w-3xl h-[85vh] bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative flex flex-col">
-            <TeamManagement 
-              member={managingMember}
-              appointments={appointments}
-              services={services}
-              onSave={handleSaveTeamMember}
-              onClose={() => setManagingMember(null)}
-            />
+            <ServiceForm onSave={handleSaveService} onCancel={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} initialData={selectedService} />
           </div>
         </div>
       )}
 
       <AIAssistant user={user} />
 
-      {/* SCHEDA TECNICA MODAL */}
       {viewingHistory && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[700] flex items-center justify-center p-6 overflow-y-auto">
           <div className="bg-white w-full max-w-4xl rounded-[4rem] p-12 relative animate-in zoom-in-95">
             <button onClick={() => setViewingHistory(null)} className="absolute top-8 right-8 text-gray-400"><i className="fas fa-times text-xl"></i></button>
             <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Diario di Bellezza: {viewingHistory.fullName}</h3>
-            
             <div className="grid md:grid-cols-2 gap-10">
               <div className="space-y-6">
                 <input type="date" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={newTreatment.date} onChange={e => setNewTreatment({...newTreatment, date: e.target.value})} />
@@ -550,15 +552,7 @@ ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
                     <p className="text-[9px] font-bold text-amber-600 mb-1">{r.date}</p>
                     <p className="font-bold mb-2">{r.service}</p>
                     <p className="text-xs italic text-gray-500">"{r.notes}"</p>
-                    <button 
-                      onClick={() => {
-                        setNewTreatment(r);
-                        setEditingTreatmentIndex((viewingHistory.treatment_history || []).length - 1 - i);
-                      }}
-                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-[8px] font-bold uppercase text-amber-600 transition-opacity"
-                    >
-                      Modifica
-                    </button>
+                    <button onClick={() => { setNewTreatment(r); setEditingTreatmentIndex((viewingHistory.treatment_history || []).length - 1 - i); }} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-[8px] font-bold uppercase text-amber-600 transition-opacity">Modifica</button>
                   </div>
                 ))}
               </div>
