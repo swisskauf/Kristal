@@ -36,14 +36,15 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
   };
 
   const typeStyles: Record<string, { bg: string, text: string, icon: string, label: string }> = {
-    vacation: { bg: 'bg-blue-500', text: 'text-white', icon: 'fa-umbrella-beach', label: 'Ferie' },
-    sick: { bg: 'bg-red-500', text: 'text-white', icon: 'fa-briefcase-medical', label: 'Malattia' },
-    injury: { bg: 'bg-orange-500', text: 'text-white', icon: 'fa-crutch', label: 'Infortunio' },
+    vacation: { bg: 'bg-blue-600', text: 'text-white', icon: 'fa-umbrella-beach', label: 'Ferie' },
+    sick: { bg: 'bg-red-600', text: 'text-white', icon: 'fa-briefcase-medical', label: 'Malattia' },
+    injury: { bg: 'bg-orange-600', text: 'text-white', icon: 'fa-crutch', label: 'Infortunio' },
     training: { bg: 'bg-emerald-600', text: 'text-white', icon: 'fa-graduation-cap', label: 'Formazione' },
-    unpaid: { bg: 'bg-gray-400', text: 'text-white', icon: 'fa-leaf', label: 'Libero' },
-    permit: { bg: 'bg-purple-500', text: 'text-white', icon: 'fa-clock', label: 'Permesso' },
+    unpaid: { bg: 'bg-gray-500', text: 'text-white', icon: 'fa-leaf', label: 'Libero' },
+    permit: { bg: 'bg-purple-600', text: 'text-white', icon: 'fa-clock', label: 'Permesso' },
     overtime: { bg: 'bg-amber-600', text: 'text-white', icon: 'fa-history', label: 'Recupero' },
-    default: { bg: 'bg-gray-900', text: 'text-white', icon: 'fa-plane', label: 'Congedo' }
+    bereavement: { bg: 'bg-slate-900', text: 'text-white', icon: 'fa-ribbon', label: 'Lutto' },
+    default: { bg: 'bg-gray-800', text: 'text-white', icon: 'fa-plane', label: 'Assenza' }
   };
 
   return (
@@ -74,7 +75,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
               }`}
             >
               <div className={`w-1.5 h-1.5 rounded-full ${selectedMembers.includes(m.name) ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
-              {m.name}
+              {m.name === currentUserMemberName ? 'Io' : m.name}
             </button>
           ))}
         </div>
@@ -91,7 +92,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                     <div className="flex flex-col items-center gap-2">
                       <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full shadow-md object-cover border-2 border-white" alt={m.name} />
                       <span className={`text-[10px] font-bold uppercase tracking-widest ${m.name === currentUserMemberName ? 'text-amber-600' : ''}`}>
-                        {m.name === currentUserMemberName ? 'Il Mio Workspace' : m.name}
+                        {m.name === currentUserMemberName ? 'Mio Workspace' : m.name}
                       </span>
                     </div>
                   </th>
@@ -120,9 +121,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                         <td key={m.name} className={`p-3 ${isMe ? 'bg-amber-50/5' : ''}`}>
                           <button 
                             onClick={() => onToggleVacation(m.name, date)}
-                            className={`w-full min-h-[70px] p-4 rounded-2xl border transition-all text-left relative group overflow-hidden ${
+                            className={`w-full min-h-[80px] p-4 rounded-2xl border transition-all text-left relative group overflow-hidden ${
                               approvedAbsence 
-                                ? `${style.bg} border-transparent ${style.text} shadow-lg` 
+                                ? `${style.bg} border-transparent ${style.text} shadow-lg scale-[1.02]` 
                                 : pendingReq 
                                   ? 'bg-white border-amber-500 border-dashed animate-pulse text-amber-600'
                                   : dayAppts.length > 0 
@@ -133,36 +134,43 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                             {approvedAbsence ? (
                               <div className="flex flex-col justify-center h-full">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <i className={`fas ${style.icon} text-[10px]`}></i>
-                                  <span className="text-[9px] font-bold uppercase tracking-widest">{style.label}</span>
+                                  <i className={`fas ${style.icon} text-[11px]`}></i>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest">{style.label}</span>
                                 </div>
                                 {!approvedAbsence.isFullDay && (
-                                  <p className="text-[8px] opacity-80 font-bold">{approvedAbsence.startTime} - {approvedAbsence.endTime}</p>
+                                  <div className="mt-1 px-2 py-0.5 bg-black/20 rounded-md inline-block">
+                                    <p className="text-[8px] font-bold uppercase">{approvedAbsence.startTime} - {approvedAbsence.endTime}</p>
+                                  </div>
                                 )}
                               </div>
                             ) : pendingReq ? (
                               <div className="flex flex-col justify-center h-full">
                                 <div className="flex items-center gap-2 mb-1">
                                   <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping"></div>
-                                  <span className="text-[9px] font-bold uppercase tracking-widest">PENDING</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest">In Attesa</span>
                                 </div>
-                                <p className="text-[8px] text-gray-400 font-bold uppercase">{style.label}</p>
+                                <p className="text-[8px] text-gray-400 font-bold uppercase italic">{style.label}</p>
                                 {!pendingReq.is_full_day && (
-                                  <p className="text-[7px] text-gray-400 mt-0.5">{pendingReq.start_time}-{pendingReq.end_time}</p>
+                                  <p className="text-[7px] text-amber-600 font-bold mt-0.5">{pendingReq.start_time}-{pendingReq.end_time}</p>
                                 )}
                               </div>
                             ) : dayAppts.length > 0 ? (
                               <div className="flex flex-col justify-center h-full">
-                                <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest">{dayAppts.length} RITUALI</span>
-                                <div className="mt-2 h-1 w-full bg-amber-100 rounded-full overflow-hidden">
-                                  <div className="h-full bg-amber-500" style={{ width: `${Math.min(dayAppts.length * 20, 100)}%` }}></div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <i className="fas fa-calendar-check text-amber-600 text-[10px]"></i>
+                                  <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{dayAppts.length} RITUALI</span>
+                                </div>
+                                <div className="mt-2 h-1.5 w-full bg-amber-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(dayAppts.length * 20, 100)}%` }}></div>
                                 </div>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i className="fas fa-plus text-[10px] text-amber-600 mb-1"></i>
+                                <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center mb-1">
+                                  <i className="fas fa-plus text-[10px] text-amber-600"></i>
+                                </div>
                                 <span className="text-[8px] text-amber-600 uppercase font-bold tracking-widest">
-                                  {isMe ? 'MODIFICA' : 'VEDI'}
+                                  {isMe ? 'Gestisci' : 'Disponibile'}
                                 </span>
                               </div>
                             )}
@@ -177,19 +185,14 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
           </table>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-8 py-6 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-        <div className="flex items-center gap-3">
-           <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-           <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">Ferie</span>
-        </div>
-        <div className="flex items-center gap-3">
-           <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-           <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">Malattia</span>
-        </div>
-        <div className="flex items-center gap-3">
-           <div className="w-3 h-3 bg-emerald-600 rounded-full"></div>
-           <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">Formazione</span>
-        </div>
+      
+      <div className="flex flex-wrap gap-6 px-10 py-6 bg-gray-50 rounded-[2.5rem] border border-gray-100">
+        {(Object.entries(typeStyles) as [string, any][]).slice(0, 7).map(([key, style]) => (
+          <div key={key} className="flex items-center gap-3">
+             <div className={`w-3 h-3 ${style.bg} rounded-full`}></div>
+             <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">{style.label}</span>
+          </div>
+        ))}
         <div className="flex items-center gap-3">
            <div className="w-3 h-3 border-2 border-amber-500 border-dashed rounded-full"></div>
            <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">In Attesa</span>
