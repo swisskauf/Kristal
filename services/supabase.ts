@@ -9,12 +9,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const VALID_ROLES = ['client', 'admin', 'collaborator'];
 
 const handleError = (error: any) => {
-  console.error('Supabase Error:', {
-    message: error.message,
-    details: error.details,
-    hint: error.hint,
-    code: error.code
-  });
+  console.error('Supabase Error:', error);
   return error;
 };
 
@@ -35,13 +30,13 @@ export const db = {
       const payload: any = {
         id: profile.id,
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
-        role: role
+        role: role,
+        email: profile.email,
+        phone: profile.phone,
+        avatar: profile.avatar,
+        technical_sheets: profile.technical_sheets || [],
+        treatment_history: profile.treatment_history || []
       };
-      if (profile.email) payload.email = profile.email;
-      if (profile.phone) payload.phone = profile.phone;
-      if (profile.avatar) payload.avatar = profile.avatar;
-      if (profile.technical_sheets) payload.technical_sheets = profile.technical_sheets;
-      if (profile.treatment_history) payload.treatment_history = profile.treatment_history;
 
       const { data, error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select().single();
       if (error) throw handleError(error);
