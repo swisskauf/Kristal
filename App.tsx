@@ -9,8 +9,9 @@ import TeamManagement from './components/TeamManagement';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
+import QuickRequestModal from './components/QuickRequestModal';
 import { supabase, db } from './services/supabase';
-import { Service, User, TeamMember, Appointment, TechnicalSheet, LeaveRequest } from './types';
+import { Service, User, TeamMember, Appointment, TechnicalSheet, LeaveRequest, AbsenceType } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
 const App: React.FC = () => {
@@ -32,10 +33,12 @@ const App: React.FC = () => {
   const [clientSearch, setClientSearch] = useState('');
   const [newSheet, setNewSheet] = useState({ category: 'Colore', content: '' });
 
+  // Stato per la gestione rapida delle richieste dall'agenda
+  const [quickRequestData, setQuickRequestData] = useState<{ date: string, memberName: string } | null>(null);
+
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
 
-  // Sincronizzazione profilo Artista (Essenziale per Maurizio)
   const currentMember = useMemo(() => {
     if (!user) return null;
     return team.find(m => m.profile_id === user.id);
@@ -186,56 +189,21 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddTechnicalSheet = async () => {
-    if (!viewingGuest || !newSheet.content.trim()) return;
-    const sheet: TechnicalSheet = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      category: newSheet.category,
-      content: newSheet.content
-    };
-    const updatedSheets = [sheet, ...(viewingGuest.technical_sheets || [])];
-    const updatedProfile = { ...viewingGuest, technical_sheets: updatedSheets };
-    try {
-      await db.profiles.upsert(updatedProfile);
-      setViewingGuest(updatedProfile);
-      setNewSheet({ ...newSheet, content: '' });
-      await refreshData();
-    } catch (e) {
-      alert("Errore salvataggio scheda tecnica");
-    }
-  };
-
   const handleToggleVacation = async (memberName: string, date: string) => {
     const member = team.find(m => m.name === memberName);
     if (!member) return;
 
-    // Richiesta rapida per collaboratori (es. Maurizio)
+    // Logica per collaboratori: Apri il nuovo modal di scelta
     if (isCollaborator) {
       if (member.profile_id === user?.id) {
-        const readableDate = new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-        if (confirm(`Vuoi richiedere ferie per il giorno ${readableDate}?`)) {
-          try {
-            await db.requests.create({
-              member_name: memberName,
-              type: 'vacation',
-              start_date: date,
-              end_date: date,
-              status: 'pending',
-              notes: 'Richiesta rapida da Agenda.'
-            });
-            alert("Richiesta inviata.");
-            refreshData();
-          } catch (e) {
-            alert("Errore invio richiesta.");
-          }
-        }
+        setQuickRequestData({ date, memberName });
       } else {
         alert("Azione non consentita sui colleghi.");
       }
       return;
     }
 
+    // Logica per Admin: Apertura rapida o Toggle immediato
     if (isAdmin) {
       let updatedDates = [...(member.unavailable_dates || [])];
       if (updatedDates.includes(date)) {
@@ -249,6 +217,47 @@ const App: React.FC = () => {
       } catch (e) {
         alert("Errore salvataggio.");
       }
+    }
+  };
+
+  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', type?: AbsenceType, notes?: string) => {
+    if (!quickRequestData) return;
+    const { date, memberName } = quickRequestData;
+
+    try {
+      if (action === 'create' && type) {
+        await db.requests.create({
+          member_name: memberName,
+          type: type,
+          start_date: date,
+          end_date: date,
+          status: 'pending',
+          notes: notes || 'Richiesta rapida da Agenda.'
+        });
+        alert("Richiesta inviata.");
+      } else if (action === 'cancel') {
+        // Trova la richiesta pendente per quel giorno e artista e eliminala (o settala a rejected)
+        const reqToCancel = requests.find(r => r.member_name === memberName && r.start_date === date && r.status === 'pending');
+        if (reqToCancel) {
+          await db.requests.update(reqToCancel.id, { status: 'rejected', admin_notes: 'Annullata dall\'utente.' });
+          alert("Richiesta annullata correttamente.");
+        }
+      } else if (action === 'revoke') {
+        await db.requests.create({
+          member_name: memberName,
+          type: 'availability_change',
+          start_date: date,
+          end_date: date,
+          status: 'pending',
+          notes: `Richiesta di REVOCA per congedo già approvato. Note: ${notes || 'Nessuna'}`
+        });
+        alert("Richiesta di revoca inviata alla direzione.");
+      }
+      refreshData();
+    } catch (e) {
+      alert("Errore durante l'operazione.");
+    } finally {
+      setQuickRequestData(null);
     }
   };
 
@@ -299,6 +308,7 @@ const App: React.FC = () => {
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
+        {/* DASHBOARD CLIENTE / GUEST */}
         {activeTab === 'dashboard' && !isCollaborator && (
           <div className="space-y-12 animate-in fade-in duration-700">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -388,7 +398,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* COLLABORATOR DASHBOARD (Maurizio's View) */}
+        {/* COLLABORATOR DASHBOARD */}
         {(activeTab === 'collab_dashboard' || (activeTab === 'dashboard' && isCollaborator)) && isCollaborator && (
           <div className="animate-in fade-in duration-700">
             {currentMember ? (
@@ -417,7 +427,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* TEAM PLANNING & CONTROL */}
+        {/* TEAM PLANNING */}
         {(activeTab === 'team_schedule') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Planning Atelier</h2>
@@ -446,28 +456,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* SERVICE MANAGEMENT */}
-        {activeTab === 'services_management' && isAdmin && (
-          <div className="space-y-8 animate-in fade-in">
-            <div className="flex justify-between items-center">
-              <h2 className="text-4xl font-luxury font-bold">Menu Ritual</h2>
-              <button onClick={() => setIsServiceFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Nuovo Ritual</button>
-            </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              {services.map(s => (
-                <div key={s.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-50 flex justify-between items-center shadow-sm">
-                  <div>
-                    <p className="text-[9px] font-bold text-amber-600 uppercase mb-1">{s.category}</p>
-                    <h4 className="font-bold text-lg">{s.name}</h4>
-                    <p className="text-xs text-gray-400">CHF {s.price} | {s.duration} min</p>
-                  </div>
-                  <button onClick={async () => { if(confirm('Eliminare ritual?')) { await db.services.delete(s.id); refreshData(); } }} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
       </Layout>
 
       {/* MODAL SYSTEMS */}
@@ -488,12 +476,15 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {editingMember && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[800] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <TeamManagement member={editingMember} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); refreshData(); setEditingMember(null); }} onClose={() => setEditingMember(null)} />
-          </div>
-        </div>
+      {quickRequestData && (
+        <QuickRequestModal 
+          date={quickRequestData.date} 
+          memberName={quickRequestData.memberName}
+          existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date)}
+          existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
+          onClose={() => setQuickRequestData(null)}
+          onAction={handleQuickRequestAction}
+        />
       )}
 
       <AIAssistant user={user} />
