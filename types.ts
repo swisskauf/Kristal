@@ -10,7 +10,22 @@ export type AbsenceType =
   | 'training' 
   | 'bereavement' 
   | 'unpaid' 
-  | 'overtime';
+  | 'overtime'
+  | 'availability_change';
+
+export interface LeaveRequest {
+  id: string;
+  member_name: TeamMemberName;
+  type: AbsenceType;
+  start_date: string;
+  end_date: string;
+  start_time?: string;
+  end_time?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  notes?: string;
+  admin_notes?: string;
+  created_at: string;
+}
 
 export interface AbsenceEntry {
   id: string;
@@ -25,7 +40,7 @@ export interface AbsenceEntry {
 export interface TechnicalSheet {
   id: string;
   date: string;
-  category: string; // es. Colore, Taglio, Trattamento
+  category: string;
   content: string;
 }
 
@@ -52,7 +67,7 @@ export interface Appointment {
   date: string;
   status: 'confirmed' | 'pending' | 'cancelled' | 'noshow';
   services?: { name: string; price: number; duration: number };
-  profiles?: { full_name: string; phone: string };
+  profiles?: { full_name: string; phone: string; email?: string };
 }
 
 export interface TeamMember {
@@ -60,13 +75,13 @@ export interface TeamMember {
   role: string;
   bio?: string;
   avatar?: string;
-  profile_id?: string; // Collegamento all'utente auth
+  profile_id?: string; 
   unavailable_dates?: string[]; 
   absences_json?: AbsenceEntry[];
   total_vacation_days?: number;
-  work_start_time?: string; // Formato HH:mm
-  work_end_time?: string;   // Formato HH:mm
-  overtime_balance?: number; // Ore di straordinario accumulate
+  work_start_time?: string; 
+  work_end_time?: string;   
+  overtime_balance?: number; 
 }
 
 export interface User {
