@@ -29,13 +29,17 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
+      // Pulizia oggetto per garantire compatibilità DB
       const payload = {
-        ...profile,
+        id: profile.id,
+        email: profile.email,
         full_name: profile.full_name || profile.fullName,
-        technical_sheets: profile.technical_sheets || []
+        phone: profile.phone,
+        role: profile.role || 'client',
+        avatar: profile.avatar,
+        technical_sheets: profile.technical_sheets || [],
+        treatment_history: profile.treatment_history || []
       };
-      // Rimuoviamo campi che non sono nel DB
-      delete payload.fullName;
 
       const { data, error } = await supabase.from('profiles').upsert(payload).select().single();
       if (error) throw handleError(error);
@@ -70,8 +74,6 @@ export const db = {
         role: member.role,
         avatar: member.avatar,
         bio: member.bio,
-        start_hour: member.start_hour ?? 8,
-        end_hour: member.end_hour ?? 19,
         work_start_time: member.work_start_time || '08:30',
         work_end_time: member.work_end_time || '18:30',
         unavailable_dates: member.unavailable_dates ?? [],
