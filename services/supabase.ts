@@ -29,10 +29,11 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
-      // Pulizia oggetto: inviamo solo le colonne reali della tabella
+      // Pulizia oggetto per garantire compatibilità DB
+      // Se l'ID è un guest-ID generato, assicuriamoci che sia gestito o trasformato se il DB richiede UUID
       const payload = {
         id: profile.id,
-        email: profile.email,
+        email: profile.email || '',
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
         phone: profile.phone || '',
         role: profile.role || 'client',
@@ -41,7 +42,7 @@ export const db = {
         treatment_history: profile.treatment_history || []
       };
 
-      const { data, error } = await supabase.from('profiles').upsert(payload).select().single();
+      const { data, error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select().single();
       if (error) throw handleError(error);
       return data;
     }
@@ -53,7 +54,7 @@ export const db = {
       return data || [];
     },
     upsert: async (service: any) => {
-      const { data, error } = await supabase.from('services').upsert(service).select().single();
+      const { data, error } = await supabase.from('services').upsert(service, { onConflict: 'id' }).select().single();
       if (error) throw handleError(error);
       return data;
     },
@@ -69,6 +70,24 @@ export const db = {
       return data || [];
     },
     upsert: async (member: any) => {
+      // IMPORTANTE: Sincronizziamo absences_json con unavailable_dates
+      // In questo modo l'interfaccia di planning (calendario) e quella gestionale (congedi) sono unite
+      let unavailable_dates = [...(member.unavailable_dates || [])];
+      
+      if (member.absences_json && Array.isArray(member.absences_json)) {
+        const generatedDates: string[] = [];
+        member.absences_json.forEach((abs: any) => {
+          let curr = new Date(abs.startDate);
+          const end = new Date(abs.endDate);
+          while(curr <= end) {
+            generatedDates.push(curr.toISOString().split('T')[0]);
+            curr.setDate(curr.getDate() + 1);
+          }
+        });
+        // Uniamo le date rimosse/aggiunte manualmente con quelle derivanti dai periodi
+        unavailable_dates = Array.from(new Set([...unavailable_dates, ...generatedDates]));
+      }
+
       const payload = {
         name: member.name,
         role: member.role,
@@ -76,7 +95,7 @@ export const db = {
         bio: member.bio,
         work_start_time: member.work_start_time || '08:30',
         work_end_time: member.work_end_time || '18:30',
-        unavailable_dates: member.unavailable_dates ?? [],
+        unavailable_dates: unavailable_dates,
         total_vacation_days: member.total_vacation_days ?? 25,
         absences_json: member.absences_json ?? []
       };
@@ -109,9 +128,8 @@ export const db = {
       return data || [];
     },
     upsert: async (appointment: any) => {
-      // IMPORTANTE: Rimuovere oggetti nidificati prima dell'upsert
       const { services, profiles, ...cleanData } = appointment;
-      const { data, error } = await supabase.from('appointments').upsert(cleanData).select().single();
+      const { data, error } = await supabase.from('appointments').upsert(cleanData, { onConflict: 'id' }).select().single();
       if (error) throw handleError(error);
       return data;
     },
