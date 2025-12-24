@@ -2,7 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 
-// Funzione robusta per estrarre le variabili d'ambiente sia in locale che su Vercel
+// Funzione robusta per estrarre le variabili d'ambiente
 const getEnv = (key: string): string => {
   try {
     // @ts-ignore
@@ -25,11 +25,15 @@ const realClient = (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'undefined
 const useMock = !realClient;
 
 if (useMock) {
-  console.warn("Kristal: Utilizzo DATABASE SIMULATO (Mock). Imposta VITE_SUPABASE_URL su Vercel per connettere il DB reale.");
+  console.warn("Kristal: Modalità MOCK attiva. Configura le variabili VITE_SUPABASE su Vercel per usare il DB reale.");
 } else {
-  console.log("Kristal: Connesso con successo a SUPABASE (Production).");
+  console.log("Kristal: Connesso a Supabase (salonekristal.ch).");
 }
 
+/**
+ * Oggetto Supabase unificato (Reale o Mock)
+ * Garantisce che metodi come signUp, signInWithOAuth, ecc. siano sempre definiti.
+ */
 export const supabase = realClient || ({
   auth: {
     getSession: async () => {
@@ -45,25 +49,40 @@ export const supabase = realClient || ({
       let role: 'admin' | 'collaborator' | 'client' = 'client';
       let fullName = 'Ospite Kristal';
       
-      if (email === 'serop.serop@outlook.com') { role = 'admin'; fullName = 'Direzione Kristal'; }
-      if (email === 'sirop.sirop@outlook.sa') { role = 'collaborator'; fullName = 'Maurizio Stylist'; }
+      const emailLower = email.toLowerCase();
+      if (emailLower === 'serop.serop@outlook.com') { role = 'admin'; fullName = 'Direzione Kristal'; }
+      if (emailLower === 'sirop.sirop@outlook.sa') { role = 'collaborator'; fullName = 'Maurizio Stylist'; }
 
       const mockUser = { id: Math.random().toString(36).substr(2, 9), email, fullName, role };
       supabaseMock.auth.signIn(mockUser as any);
       return { data: { user: mockUser, session: {} }, error: null };
     },
+    signUp: async ({ email, password, options }: any) => {
+      // In modalità Mock, simuliamo un errore informativo invece di mandare in crash l'app
+      console.error("Registrazione non disponibile: Configura Supabase su Vercel.");
+      return { 
+        data: { user: null, session: null }, 
+        error: { message: "La registrazione richiede un database attivo. Configura Supabase su Vercel per abilitare gli account reali." } 
+      };
+    },
+    signInWithOAuth: async (options: any) => {
+      return { 
+        data: { url: null }, 
+        error: { message: "OAuth (Google/Apple) disponibile solo con database Supabase reale." } 
+      };
+    },
     signOut: async () => {
       supabaseMock.auth.signOut();
       return { error: null };
-    },
-    signInWithOAuth: async () => ({ error: new Error("OAuth non disponibile in modalità Mock") }),
-    signUp: async () => ({ data: { user: null, session: null }, error: new Error("SignUp non disponibile in modalità Mock") })
+    }
   },
   from: (table: string) => ({
     select: () => ({
       eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
       order: () => ({ data: [], error: null })
-    })
+    }),
+    upsert: async () => ({ data: null, error: { message: "Database Mock sola lettura per scrittura." } }),
+    insert: async () => ({ data: null, error: { message: "Database Mock sola lettura per scrittura." } })
   })
 } as any);
 
