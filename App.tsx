@@ -32,12 +32,10 @@ const App: React.FC = () => {
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
 
-  // Analisi Avanzata Business Intelligence (BI)
+  // Business Intelligence Engine
   const businessStats = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
-    
-    // Inizio settimana corrente (Lunedì)
     const startOfWeek = new Date(now);
     const day = startOfWeek.getDay();
     const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
@@ -45,52 +43,43 @@ const App: React.FC = () => {
     startOfWeek.setHours(0,0,0,0);
 
     const confirmed = appointments.filter(a => a.status === 'confirmed');
-
     const getRevenue = (appts: any[]) => appts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
 
-    const globalPerformance = {
-      daily: getRevenue(confirmed.filter(a => a.date.startsWith(todayStr))),
-      weekly: getRevenue(confirmed.filter(a => new Date(a.date) >= startOfWeek)),
-      monthly: getRevenue(confirmed.filter(a => {
-        const d = new Date(a.date);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      })),
-      yearly: getRevenue(confirmed.filter(a => new Date(a.date).getFullYear() === now.getFullYear()))
-    };
-
-    const teamBreakdown = team.map(m => {
-      const mAppts = confirmed.filter(a => a.team_member_name === m.name);
-      
-      // Calcolo vacanze godute (in giorni)
-      const vacationUsedDays = (m.absences_json || [])
-        .filter(abs => abs.type === 'vacation')
-        .reduce((acc, abs) => {
-          const s = new Date(abs.startDate);
-          const e = new Date(abs.endDate);
-          const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          return acc + days;
-        }, 0);
-
-      const vacationRemaining = (m.total_vacation_days || 25) - vacationUsedDays;
-
-      return {
-        name: m.name,
-        avatar: m.avatar,
-        daily: getRevenue(mAppts.filter(a => a.date.startsWith(todayStr))),
-        weekly: getRevenue(mAppts.filter(a => new Date(a.date) >= startOfWeek)),
-        monthly: getRevenue(mAppts.filter(a => {
+    return {
+      global: {
+        daily: getRevenue(confirmed.filter(a => a.date.startsWith(todayStr))),
+        weekly: getRevenue(confirmed.filter(a => new Date(a.date) >= startOfWeek)),
+        monthly: getRevenue(confirmed.filter(a => {
           const d = new Date(a.date);
           return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         })),
-        yearly: getRevenue(mAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
-        vacationRemaining,
-        totalVacation: m.total_vacation_days || 25,
-        sickDays: (m.absences_json || []).filter(a => a.type === 'sick').length,
-        injuryDays: (m.absences_json || []).filter(a => a.type === 'injury').length,
-      };
-    });
+        yearly: getRevenue(confirmed.filter(a => new Date(a.date).getFullYear() === now.getFullYear()))
+      },
+      team: team.map(m => {
+        const mAppts = confirmed.filter(a => a.team_member_name === m.name);
+        const vacationUsed = (m.absences_json || [])
+          .filter(abs => abs.type === 'vacation')
+          .reduce((acc, abs) => {
+            const s = new Date(abs.startDate);
+            const e = new Date(abs.endDate);
+            return acc + (Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1);
+          }, 0);
 
-    return { global: globalPerformance, team: teamBreakdown };
+        return {
+          name: m.name,
+          avatar: m.avatar,
+          daily: getRevenue(mAppts.filter(a => a.date.startsWith(todayStr))),
+          weekly: getRevenue(mAppts.filter(a => new Date(a.date) >= startOfWeek)),
+          monthly: getRevenue(mAppts.filter(a => {
+            const d = new Date(a.date);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          })),
+          yearly: getRevenue(mAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
+          vacationRemaining: (m.total_vacation_days || 25) - vacationUsed,
+          totalVacation: m.total_vacation_days || 25
+        };
+      })
+    };
   }, [appointments, team]);
 
   const timeGreeting = useMemo(() => {
@@ -109,11 +98,11 @@ const App: React.FC = () => {
           if (profile) {
             setUser({
               id: session.user.id,
-              email: session.user.email!,
+              email: profile.email || session.user.email!,
               fullName: profile.full_name || 'Ospite',
               phone: profile.phone || '',
               role: profile.role || 'client',
-              avatar: profile.avatar_url || profile.avatar
+              avatar: profile.avatar || profile.avatar_url
             });
           }
         }
@@ -131,11 +120,11 @@ const App: React.FC = () => {
         if (profile) {
           setUser({
             id: session.user.id,
-            email: session.user.email!,
+            email: profile.email || session.user.email!,
             fullName: profile.full_name || 'Ospite',
             phone: profile.phone || '',
             role: profile.role || 'client',
-            avatar: profile.avatar_url || profile.avatar
+            avatar: profile.avatar || profile.avatar_url
           });
         }
       } else {
@@ -147,9 +136,11 @@ const App: React.FC = () => {
 
   const refreshData = async () => {
     try {
-      const svcs = await db.services.getAll().catch(() => []);
-      const tm = await db.team.getAll().catch(() => []);
-      const appts = await db.appointments.getAll().catch(() => []);
+      const [svcs, tm, appts] = await Promise.all([
+        db.services.getAll().catch(() => []),
+        db.team.getAll().catch(() => []),
+        db.appointments.getAll().catch(() => [])
+      ]);
       
       if (svcs.length) setServices(svcs);
       if (tm.length) setTeam(tm);
@@ -178,9 +169,7 @@ const App: React.FC = () => {
     const p = profiles.find(p => p.id === profileId);
     if (!p) return;
     try {
-      const updatedProfile = { ...p, role: newRole };
-      // Inviamo solo i campi necessari per l'update del ruolo per evitare conflitti di schema su avatar_url
-      await db.profiles.upsert({ id: profileId, role: newRole, full_name: p.full_name, email: p.email });
+      await db.profiles.upsert({ ...p, role: newRole });
       await refreshData();
       if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: newRole });
     } catch (e: any) {
@@ -238,7 +227,6 @@ const App: React.FC = () => {
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
-        {/* DASHBOARD / VISIONE BUSINESS */}
         {activeTab === 'dashboard' && (
           <div className="space-y-12 animate-in fade-in duration-700">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -253,7 +241,6 @@ const App: React.FC = () => {
 
             {isAdmin && (
               <div className="space-y-10">
-                {/* GLOBAL PERFORMANCE GRID */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     { label: 'Oggi', value: businessStats.global.daily, color: 'amber' },
@@ -268,11 +255,8 @@ const App: React.FC = () => {
                   ))}
                 </div>
 
-                {/* TEAM PERFORMANCE & HR TABLE */}
                 <div className="bg-white p-8 md:p-10 rounded-[3.5rem] border border-gray-50 shadow-sm overflow-hidden">
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Analisi Performance Artisti</h3>
-                  </div>
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Performance & HR Artisti</h3>
                   <div className="overflow-x-auto scrollbar-hide">
                     <table className="w-full text-left">
                       <thead>
@@ -282,7 +266,7 @@ const App: React.FC = () => {
                           <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Sett.</th>
                           <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Mese</th>
                           <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Anno</th>
-                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-right">Vacanza (Residuo)</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-right">Ferie Residue</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -298,18 +282,10 @@ const App: React.FC = () => {
                             <td className="py-6 text-center font-luxury text-sm">CHF {m.weekly}</td>
                             <td className="py-6 text-center font-luxury font-bold text-sm text-amber-600">CHF {m.monthly}</td>
                             <td className="py-6 text-center font-luxury text-sm">CHF {m.yearly}</td>
-                            <td className="py-6 text-right">
-                              <div className="flex flex-col items-end">
-                                <span className={`text-[10px] font-bold ${m.vacationRemaining < 5 ? 'text-red-500' : 'text-green-600'}`}>
-                                  {m.vacationRemaining} / {m.totalVacation} gg
-                                </span>
-                                {(m.sickDays > 0 || m.injuryDays > 0) && (
-                                  <span className="text-[7px] text-gray-400 font-bold uppercase mt-1">
-                                    {m.sickDays > 0 ? `${m.sickDays} Malattia ` : ''}
-                                    {m.injuryDays > 0 ? `${m.injuryDays} Infortunio` : ''}
-                                  </span>
-                                )}
-                              </div>
+                            <td className="py-6 text-right font-bold text-[10px]">
+                              <span className={m.vacationRemaining < 5 ? 'text-red-500' : 'text-gray-900'}>
+                                {m.vacationRemaining} / {m.totalVacation} gg
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -320,10 +296,9 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* CUSTOMER FACING DASHBOARD */}
             <div className="grid md:grid-cols-3 gap-8">
               <div className="col-span-2 bg-white p-8 md:p-10 rounded-[3rem] border border-gray-50 shadow-sm">
-                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Ritual d'Eccellenza</h3>
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Ritual Selezionati</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {services.slice(0, 6).map(s => (
                     <button key={s.id} onClick={() => { setSelectedAppointment({ service_id: s.id }); setIsFormOpen(true); }} className="p-6 bg-gray-50 rounded-[2rem] hover:bg-amber-50 transition-all text-left group">
@@ -337,7 +312,7 @@ const App: React.FC = () => {
               <div className="bg-black text-white p-10 rounded-[3.5rem] shadow-2xl flex flex-col justify-between h-full min-h-[300px]">
                 <div>
                   <h3 className="text-xl font-luxury font-bold mb-4">L'Atelier</h3>
-                  <p className="text-[11px] leading-relaxed text-gray-400 italic">"Un rifugio di lusso dedicato alla cura del sé. Ogni servizio è un rituale sartoriale."</p>
+                  <p className="text-[11px] leading-relaxed text-gray-400 italic">"Un rifugio di lusso dedicato alla cura del sé. Ogni servizio è un rituale sartoriale unico."</p>
                 </div>
                 <button onClick={() => user ? setIsFormOpen(true) : setIsAuthOpen(true)} className="w-full py-4 bg-white text-black rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 hover:text-white transition-all shadow-xl">Riserva un Momento</button>
               </div>
@@ -345,11 +320,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Tab OSPITI (CRM) */}
         {activeTab === 'clients' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <h2 className="text-4xl font-luxury font-bold">I Nostri Ospiti</h2>
+              <h2 className="text-4xl font-luxury font-bold">Gestione Ospiti</h2>
               <div className="flex gap-4 w-full md:w-auto">
                 <input type="text" placeholder="Ricerca per nome..." className="flex-1 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-amber-500" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
               </div>
@@ -358,20 +332,20 @@ const App: React.FC = () => {
               {profiles.filter(p => (p.full_name || '').toLowerCase().includes(clientSearch.toLowerCase())).map(p => (
                 <div key={p.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-50 flex items-center justify-between hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
-                    <img src={p.avatar_url || p.avatar || `https://ui-avatars.com/api/?name=${p.full_name || 'U'}`} className="w-12 h-12 rounded-full shadow-sm" />
+                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name || 'U'}`} className="w-12 h-12 rounded-full shadow-sm" />
                     <div>
                       <h5 className="font-bold text-lg">{p.full_name || 'Ospite Kristal'}</h5>
-                      <p className="text-[10px] text-gray-400 uppercase font-bold">{p.email} | {p.phone || 'Nessun contatto'}</p>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">{p.email || 'Email verificata'} | {p.phone || 'Nessun contatto'}</p>
                     </div>
                   </div>
-                  <button onClick={() => setViewingGuest(p)} className="px-6 py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all">CRM</button>
+                  <button onClick={() => setViewingGuest(p)} className="px-6 py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all">Scheda CRM</button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Altri Tab (Planning, Servizi, etc.) */}
+        {/* ... Altri Tab (Planning, etc.) rimangono invariati ... */}
         {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Il Team & Planning</h2>
@@ -383,7 +357,7 @@ const App: React.FC = () => {
                     <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-full mx-auto mb-4 object-cover shadow-lg" />
                     <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
                     <p className="text-[9px] text-amber-600 font-bold uppercase mb-6">{m.role}</p>
-                    <button onClick={() => setEditingMember(m)} className="w-full py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all">Gestisci</button>
+                    <button onClick={() => setEditingMember(m)} className="w-full py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all">Gestisci Profilo</button>
                   </div>
                 ))}
               </div>
@@ -395,7 +369,7 @@ const App: React.FC = () => {
           <div className="space-y-8 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Gestione Ritual</h2>
-              <button onClick={() => setIsServiceFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Nuovo Ritual</button>
+              <button onClick={() => setIsServiceFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Crea Nuovo Ritual</button>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               {services.map(s => (
@@ -414,7 +388,7 @@ const App: React.FC = () => {
 
         {activeTab === 'calendar' && user && (
           <div className="space-y-12 animate-in fade-in">
-             <h2 className="text-4xl font-luxury font-bold">I Tuoi Appuntamenti</h2>
+             <h2 className="text-4xl font-luxury font-bold">Agenda Personale</h2>
              <div className="space-y-4">
                 {appointments.filter(a => a.client_id === user.id).length > 0 ? (
                   appointments.filter(a => a.client_id === user.id).map(app => (
@@ -422,14 +396,14 @@ const App: React.FC = () => {
                        <div>
                           <p className="text-[10px] font-bold text-amber-600 uppercase">{app.services?.name || 'Servizio'}</p>
                           <p className="text-xl font-luxury font-bold">{new Date(app.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Con {app.team_member_name}</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Specialista: {app.team_member_name}</p>
                        </div>
-                       <span className="px-4 py-2 bg-gray-50 rounded-full text-[8px] font-bold uppercase text-gray-400">Confermato</span>
+                       <span className="px-4 py-2 bg-gray-50 rounded-full text-[8px] font-bold uppercase text-gray-400">Status: Confermato</span>
                     </div>
                   ))
                 ) : (
                   <div className="bg-white p-12 rounded-[3rem] text-center border border-dashed">
-                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun appuntamento in programma.</p>
+                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun rituale in programma.</p>
                   </div>
                 )}
              </div>
@@ -438,7 +412,7 @@ const App: React.FC = () => {
 
       </Layout>
 
-      {/* MODALI */}
+      {/* MODAL SYSTEM */}
       {isAuthOpen && !user && (
         <div className="fixed inset-0 z-[1000] bg-white overflow-y-auto animate-in slide-in-from-bottom duration-500">
           <button onClick={() => setIsAuthOpen(false)} className="absolute top-10 right-10 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center z-10 hover:rotate-90 transition-all duration-500">
@@ -461,24 +435,24 @@ const App: React.FC = () => {
            <div className="w-full max-w-5xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative max-h-[90vh] flex flex-col">
               <button onClick={() => setViewingGuest(null)} className="absolute top-10 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-xl"></i></button>
               <div className="flex items-center gap-10 mb-12 border-b pb-10">
-                 <img src={viewingGuest.avatar_url || viewingGuest.avatar || `https://ui-avatars.com/api/?name=${viewingGuest.full_name}`} className="w-32 h-32 rounded-full shadow-xl" />
+                 <img src={viewingGuest.avatar || `https://ui-avatars.com/api/?name=${viewingGuest.full_name}`} className="w-32 h-32 rounded-full shadow-xl" />
                  <div className="flex-1">
                     <div className="flex items-center gap-4 mb-2">
                        <h3 className="text-4xl font-luxury font-bold">{viewingGuest.full_name}</h3>
-                       <select value={viewingGuest.role} onChange={(e) => handleUpdateRole(viewingGuest.id, e.target.value)} className="bg-gray-50 border-none text-[9px] font-bold uppercase px-3 py-1 rounded-lg outline-none">
-                          <option value="client">Ospite</option>
-                          <option value="collaborator">Artista</option>
-                          <option value="admin">Direzione</option>
+                       <select value={viewingGuest.role} onChange={(e) => handleUpdateRole(viewingGuest.id, e.target.value)} className="bg-gray-50 border-none text-[9px] font-bold uppercase px-3 py-1 rounded-lg outline-none cursor-pointer">
+                          <option value="client">Ruolo: Ospite</option>
+                          <option value="collaborator">Ruolo: Artista</option>
+                          <option value="admin">Ruolo: Direzione</option>
                        </select>
                     </div>
-                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">{viewingGuest.email} | {viewingGuest.phone}</p>
+                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">{viewingGuest.email} | {viewingGuest.phone || 'Contatto non disponibile'}</p>
                  </div>
               </div>
               <div className="flex-1 overflow-y-auto grid md:grid-cols-2 gap-12 pr-4 scrollbar-hide">
                  <div className="space-y-8">
                     <h4 className="text-xl font-luxury font-bold border-l-4 border-amber-600 pl-4">Schede Tecniche</h4>
-                    <textarea placeholder="Inserisci formula colore, riflessante o note..." className="w-full p-6 rounded-3xl bg-gray-50 border-none text-xs outline-none" rows={4} value={newSheet.content} onChange={(e) => setNewSheet({...newSheet, content: e.target.value})} />
-                    <button onClick={handleAddTechnicalSheet} className="w-full py-4 bg-black text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest shadow-lg">Salva Scheda</button>
+                    <textarea placeholder="Inserisci formula colore, riflessante o note tecniche..." className="w-full p-6 rounded-3xl bg-gray-50 border-none text-xs outline-none" rows={4} value={newSheet.content} onChange={(e) => setNewSheet({...newSheet, content: e.target.value})} />
+                    <button onClick={handleAddTechnicalSheet} className="w-full py-4 bg-black text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest shadow-lg">Salva Annotazione</button>
                     <div className="space-y-4">
                        {(viewingGuest.technical_sheets || []).map((s: any) => (
                          <div key={s.id} className="p-6 bg-white border border-gray-50 rounded-3xl">
@@ -489,7 +463,7 @@ const App: React.FC = () => {
                     </div>
                  </div>
                  <div className="space-y-8">
-                    <h4 className="text-xl font-luxury font-bold border-l-4 border-gray-900 pl-4">Storico Appuntamenti</h4>
+                    <h4 className="text-xl font-luxury font-bold border-l-4 border-gray-900 pl-4">Storico Trattamenti</h4>
                     <div className="space-y-4">
                        {appointments.filter(a => a.client_id === viewingGuest.id).sort((a,b) => b.date.localeCompare(a.date)).map(app => (
                          <div key={app.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl">
