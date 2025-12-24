@@ -96,6 +96,26 @@ const App: React.FC = () => {
     return "Buonasera";
   }, []);
 
+  const refreshData = async () => {
+    try {
+      const [svcs, tm, appts, reqs, profs] = await Promise.all([
+        db.services.getAll().catch(() => []),
+        db.team.getAll().catch(() => []),
+        db.appointments.getAll().catch(() => []),
+        db.requests.getAll().catch(() => []),
+        db.profiles.getAll().catch(() => [])
+      ]);
+      
+      setServices(svcs.length ? svcs : DEFAULT_SERVICES);
+      setTeam(tm.length ? tm : DEFAULT_TEAM);
+      setAppointments(appts);
+      setRequests(reqs);
+      setProfiles(profs);
+    } catch (e) {
+      console.error("Refresh Data error", e);
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -140,26 +160,6 @@ const App: React.FC = () => {
     });
     return () => subscription.unsubscribe();
   }, []);
-
-  const refreshData = async () => {
-    try {
-      const [svcs, tm, appts, reqs, profs] = await Promise.all([
-        db.services.getAll().catch(() => []),
-        db.team.getAll().catch(() => []),
-        db.appointments.getAll().catch(() => []),
-        db.requests.getAll().catch(() => []),
-        db.profiles.getAll().catch(() => [])
-      ]);
-      
-      setServices(svcs.length ? svcs : DEFAULT_SERVICES);
-      setTeam(tm.length ? tm : DEFAULT_TEAM);
-      setAppointments(appts);
-      setRequests(reqs);
-      setProfiles(profs);
-    } catch (e) {
-      console.error("Refresh Data error", e);
-    }
-  };
 
   useEffect(() => {
     if (!loading) refreshData();
@@ -447,6 +447,17 @@ const App: React.FC = () => {
       </Layout>
 
       {/* MODAL SYSTEMS */}
+      {isAuthOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2000] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md relative">
+            <button onClick={() => setIsAuthOpen(false)} className="absolute top-8 right-8 text-gray-400 hover:text-black z-[2001]">
+              <i className="fas fa-times text-xl"></i>
+            </button>
+            <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
+          </div>
+        </div>
+      )}
+
       {editingMember && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
