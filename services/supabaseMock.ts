@@ -6,6 +6,7 @@ const STORAGE_KEY_APPOINTMENTS = 'kristal_appointments';
 const STORAGE_KEY_USER = 'kristal_user';
 const STORAGE_KEY_SERVICES = 'kristal_services';
 const STORAGE_KEY_TEAM = 'kristal_team';
+const STORAGE_KEY_PROFILES = 'kristal_profiles';
 
 export const supabaseMock = {
   auth: {
@@ -15,10 +16,61 @@ export const supabaseMock = {
     },
     signIn: (user: User) => {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      // Quando un utente fa il login, assicuriamoci che esista nel registro profili
+      supabaseMock.profiles.upsert({
+        id: user.id,
+        full_name: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        avatar: user.avatar
+      });
       return user;
     },
     signOut: () => {
       localStorage.removeItem(STORAGE_KEY_USER);
+    }
+  },
+  profiles: {
+    getAll: () => {
+      const data = localStorage.getItem(STORAGE_KEY_PROFILES);
+      if (!data) {
+        // Pre-popolamento account di sistema per facilitare il test
+        const initialProfiles = [
+          {
+            id: 'admin-id-123',
+            full_name: 'Direzione Kristal',
+            email: 'serop.serop@outlook.com',
+            role: 'admin',
+            avatar: 'https://ui-avatars.com/api/?name=Admin+Kristal&background=000&color=fff'
+          },
+          {
+            id: 'maurizio-id-456',
+            full_name: 'Maurizio Stylist',
+            email: 'sirop.sirop@outlook.sa',
+            role: 'collaborator',
+            avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&h=200&auto=format&fit=crop'
+          }
+        ];
+        localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(initialProfiles));
+        return initialProfiles;
+      }
+      return JSON.parse(data);
+    },
+    upsert: (profile: any) => {
+      const current = supabaseMock.profiles.getAll();
+      const idx = current.findIndex((p: any) => p.id === profile.id || p.email?.toLowerCase() === profile.email?.toLowerCase());
+      
+      const newProfile = {
+        ...profile,
+        id: profile.id || (idx > -1 ? current[idx].id : Math.random().toString(36).substr(2, 9))
+      };
+
+      if (idx > -1) current[idx] = { ...current[idx], ...newProfile };
+      else current.push(newProfile);
+      
+      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(current));
+      return newProfile;
     }
   },
   services: {
@@ -36,6 +88,7 @@ export const supabaseMock = {
       if (idx > -1) current[idx] = service;
       else current.push(service);
       localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(current));
+      return service;
     },
     delete: (id: string) => {
       const filtered = supabaseMock.services.getAll().filter(s => s.id !== id);
@@ -43,7 +96,7 @@ export const supabaseMock = {
     }
   },
   team: {
-    getAll: () => {
+    getAll: (): TeamMember[] => {
       const data = localStorage.getItem(STORAGE_KEY_TEAM);
       if (!data) {
         localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(INITIAL_TEAM));
@@ -54,9 +107,10 @@ export const supabaseMock = {
     upsert: (member: any) => {
       const current = supabaseMock.team.getAll();
       const idx = current.findIndex(m => m.name === member.name);
-      if (idx > -1) current[idx] = member;
+      if (idx > -1) current[idx] = { ...current[idx], ...member };
       else current.push(member);
       localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(current));
+      return idx > -1 ? current[idx] : member;
     },
     delete: (name: string) => {
       const filtered = supabaseMock.team.getAll().filter(m => m.name !== name);
