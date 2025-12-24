@@ -167,13 +167,24 @@ const App: React.FC = () => {
   const handleUpdateRole = async (profileId: string, newRole: any) => {
     const p = profiles.find(p => p.id === profileId);
     if (!p) return;
+    
+    // Assicuriamoci che il ruolo sia uno dei tre previsti dallo schema DB
+    const roleMap: Record<string, string> = {
+      'client': 'client',
+      'collaborator': 'collaborator',
+      'admin': 'admin'
+    };
+    
+    const dbRole = roleMap[newRole] || 'client';
+
     try {
       await db.profiles.upsert({ 
         ...p, 
-        role: newRole 
+        role: dbRole 
       });
       await refreshData();
-      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: newRole });
+      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: dbRole });
+      alert("Profilo aggiornato con successo.");
     } catch (e: any) {
       alert("Errore aggiornamento ruolo: " + e.message);
     }
