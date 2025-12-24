@@ -29,14 +29,13 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
-      // Usiamo avatar_url invece di avatar per compatibilità con gli schemi Supabase comuni
+      // Usiamo solo i campi core per evitare errori di schema se avatar_url/avatar non esistono
       const payload: any = {
         id: profile.id,
         email: profile.email || '',
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
         phone: profile.phone || '',
         role: profile.role || 'client',
-        avatar_url: profile.avatar_url || profile.avatar || '', 
         technical_sheets: profile.technical_sheets || [],
         treatment_history: profile.treatment_history || []
       };
