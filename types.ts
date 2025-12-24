@@ -22,6 +22,13 @@ export interface AbsenceEntry {
   notes?: string;
 }
 
+export interface TechnicalSheet {
+  id: string;
+  date: string;
+  category: string; // es. Colore, Taglio, Trattamento
+  content: string;
+}
+
 export interface TreatmentRecord {
   date: string;
   service: string;
@@ -43,7 +50,7 @@ export interface Appointment {
   service_id: string;
   team_member_name: TeamMemberName;
   date: string;
-  status: 'confirmed' | 'pending' | 'cancelled';
+  status: 'confirmed' | 'pending' | 'cancelled' | 'noshow';
   services?: { name: string; price: number; duration: number };
   profiles?: { full_name: string; phone: string };
 }
@@ -70,6 +77,7 @@ export interface User {
   role: 'client' | 'admin' | 'collaborator';
   avatar?: string;
   treatment_history?: TreatmentRecord[];
+  technical_sheets?: TechnicalSheet[];
 }
 
 export interface ChatMessage {
