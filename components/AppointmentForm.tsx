@@ -52,8 +52,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!selectedMember || !selectedDate || !selectedService) return [];
     if (selectedMember.unavailable_dates?.includes(selectedDate)) return [];
 
-    const startHour = selectedMember.start_hour ?? 8;
-    const endHour = selectedMember.end_hour ?? 19;
+    // Parse working hours from HH:mm format, defaulting to 8 AM and 7 PM
+    const startHour = selectedMember.work_start_time ? parseInt(selectedMember.work_start_time.split(':')[0], 10) : 8;
+    const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 19;
+    
     const slots = [];
     const durationMinutes = selectedService.duration;
     const now = new Date();
