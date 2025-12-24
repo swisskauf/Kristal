@@ -15,9 +15,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'vacations'>('analytics');
   const [startHour, setStartHour] = useState(member.start_hour || 8);
   const [endHour, setEndHour] = useState(member.end_hour || 19);
-  const [newVacationDate, setNewVacationDate] = useState('');
+  
+  const [vacationStart, setVacationStart] = useState('');
+  const [vacationEnd, setVacationEnd] = useState('');
 
-  // Sincronizza lo stato locale se il prop member cambia (es. dopo un refresh)
   useEffect(() => {
     setStartHour(member.start_hour || 8);
     setEndHour(member.end_hour || 19);
@@ -48,14 +49,25 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     });
   };
 
-  const addVacation = () => {
-    if (!newVacationDate) return;
-    const currentDates = member.unavailable_dates || [];
-    if (currentDates.includes(newVacationDate)) return;
+  const addVacationRange = () => {
+    if (!vacationStart) return;
     
-    const updatedDates = [...currentDates, newVacationDate];
+    const start = new Date(vacationStart);
+    const end = vacationEnd ? new Date(vacationEnd) : new Date(vacationStart);
+    const newDates: string[] = [];
+    
+    let current = new Date(start);
+    while (current <= end) {
+      newDates.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
+    
+    const currentDates = member.unavailable_dates || [];
+    const updatedDates = Array.from(new Set([...currentDates, ...newDates])).sort();
+    
     onSave({ ...member, unavailable_dates: updatedDates });
-    setNewVacationDate('');
+    setVacationStart('');
+    setVacationEnd('');
   };
 
   const removeVacation = (date: string) => {
@@ -151,34 +163,39 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               </div>
               <button onClick={handleUpdateHours} className="w-full mt-8 py-5 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-amber-700 transition-all shadow-lg">Salva Orari</button>
             </div>
-            <p className="text-[9px] text-gray-400 italic text-center px-10">L'aggiornamento degli orari influenzerà immediatamente la disponibilità visibile agli ospiti.</p>
           </div>
         )}
 
         {activeSubTab === 'vacations' && (
           <div className="space-y-8 animate-in slide-in-from-right-5 duration-300">
-            <div className="flex gap-4">
-              <input 
-                type="date" 
-                value={newVacationDate} 
-                onChange={(e) => setNewVacationDate(e.target.value)}
-                className="flex-1 p-5 rounded-2xl bg-gray-50 border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold"
-              />
-              <button onClick={addVacation} className="px-8 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-lg">Aggiungi</button>
+            <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Aggiungi Assenza (Serie o Singola)</h5>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Data Inizio</label>
+                  <input type="date" value={vacationStart} onChange={(e) => setVacationStart(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Data Fine (Opzionale)</label>
+                  <input type="date" value={vacationEnd} onChange={(e) => setVacationEnd(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-xs" />
+                </div>
+              </div>
+              <button onClick={addVacationRange} className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-[9px] tracking-widest shadow-lg">Pianifica Assenza</button>
             </div>
 
             <div className="space-y-3">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest mb-4 text-amber-600">Date di Assenza Pianificate</h5>
+              <h5 className="text-[10px] font-bold uppercase tracking-widest mb-4 text-amber-600">Assenze Registrate</h5>
               {(member.unavailable_dates || []).length > 0 ? (
-                <div className="grid gap-3">
-                  {(member.unavailable_dates || []).sort().map(date => (
-                    <div key={date} className="flex items-center justify-between p-5 bg-white border border-gray-100 rounded-2xl shadow-sm group hover:border-amber-200 transition-all">
-                      <span className="font-bold text-sm">{new Date(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                <div className="grid gap-2">
+                  {(member.unavailable_dates || []).sort().reverse().slice(0, 10).map(date => (
+                    <div key={date} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                      <span className="font-bold text-[11px]">{new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', weekday: 'short' })}</span>
                       <button onClick={() => removeVacation(date)} className="text-gray-300 hover:text-red-500 transition-colors">
-                        <i className="fas fa-trash-alt text-xs"></i>
+                        <i className="fas fa-trash-alt text-[10px]"></i>
                       </button>
                     </div>
                   ))}
+                  {(member.unavailable_dates || []).length > 10 && <p className="text-center text-[8px] text-gray-300 uppercase font-bold pt-2">+ Altri {(member.unavailable_dates || []).length - 10} giorni</p>}
                 </div>
               ) : (
                 <div className="py-12 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200 text-center">
