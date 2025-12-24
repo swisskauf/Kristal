@@ -7,7 +7,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const handleError = (error: any) => {
-  console.error('Supabase Error:', error.message);
+  console.error('Supabase Error:', error.message, error.details, error.hint);
   return error;
 };
 
@@ -64,7 +64,12 @@ export const db = {
       return data || [];
     },
     upsert: async (member: any) => {
-      const { data, error } = await supabase.from('team_members').upsert(member).select().single();
+      // Utilizziamo 'name' come colonna di conflitto per identificare il collaboratore
+      const { data, error } = await supabase
+        .from('team_members')
+        .upsert(member, { onConflict: 'name' })
+        .select()
+        .single();
       if (error) throw handleError(error);
       return data;
     },
