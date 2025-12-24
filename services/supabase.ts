@@ -10,6 +10,10 @@ const VALID_ROLES = ['client', 'admin', 'collaborator'];
 
 const handleError = (error: any) => {
   console.error('Supabase Error:', error);
+  // Restituiamo un messaggio più leggibile se possibile
+  if (error.code === '42703') {
+    return new Error("Errore di schema: una colonna prevista non esiste nel database. Esegui lo script SQL di aggiornamento.");
+  }
   return error;
 };
 
