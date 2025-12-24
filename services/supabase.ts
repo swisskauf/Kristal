@@ -15,25 +15,18 @@ const getEnv = (key: string): string => {
 const supabaseUrl = getEnv('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-// Inizializziamo il client reale solo se abbiamo le credenziali
 const realClient = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-// Funzione helper per decidere se usare Supabase o il Mock
 const useMock = !realClient;
 
-/**
- * Esportiamo un oggetto supabase "sicuro". 
- */
 export const supabase = realClient || ({
   auth: {
     getSession: async () => ({ data: { session: null }, error: null }),
     onAuthStateChange: (callback: any) => {
       const user = supabaseMock.auth.getUser();
-      if (user) {
-        setTimeout(() => callback('SIGNED_IN', { user }), 0);
-      }
+      if (user) setTimeout(() => callback('SIGNED_IN', { user }), 0);
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
     signInWithPassword: async ({ email, password }: any) => {
@@ -41,16 +34,10 @@ export const supabase = realClient || ({
       supabaseMock.auth.signIn(mockUser as any);
       return { data: { user: mockUser, session: {} }, error: null };
     },
-    signUp: async ({ email, password, options }: any) => {
-      const mockUser = { id: 'mock-id', email, fullName: options?.data?.full_name || 'Nuovo Utente', role: 'client' };
-      supabaseMock.auth.signIn(mockUser as any);
-      return { data: { user: mockUser, session: null }, error: null };
-    },
     signOut: async () => {
       supabaseMock.auth.signOut();
       return { error: null };
-    },
-    signInWithOAuth: async () => ({ error: new Error("OAuth non disponibile in modalità Mock") })
+    }
   },
   from: () => ({
     select: () => ({
@@ -64,9 +51,6 @@ const VALID_ROLES = ['client', 'admin', 'collaborator'];
 
 const handleError = (error: any) => {
   console.error('Supabase Error:', error);
-  if (error.code === '42703' || error.message?.includes('column')) {
-    return new Error("Schema database non aggiornato. Verificate la configurazione tabelle.");
-  }
   return error;
 };
 
@@ -90,11 +74,11 @@ export const db = {
     },
     upsert: async (profile: any) => {
       if (useMock) return profile;
-      const role = VALID_ROLES.includes(profile.role) ? profile.role : 'client';
+      // Normalizzazione dati per SQL schema: full_name, role, email, phone, avatar
       const payload: any = {
         id: profile.id,
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
-        role: role,
+        role: VALID_ROLES.includes(profile.role) ? profile.role : 'client',
         email: profile.email,
         phone: profile.phone,
         avatar: profile.avatar,
@@ -121,7 +105,7 @@ export const db = {
       return data;
     },
     delete: async (id: string) => {
-      if (useMock) return supabaseMock.services.delete(id);
+      if (useMock) return;
       const { error } = await realClient!.from('services').delete().eq('id', id);
       if (error) throw handleError(error);
     }
