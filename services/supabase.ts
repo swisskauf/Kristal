@@ -22,14 +22,24 @@ const useMock = !realClient;
 
 export const supabase = realClient || ({
   auth: {
-    getSession: async () => ({ data: { session: null }, error: null }),
+    getSession: async () => {
+      const user = supabaseMock.auth.getUser();
+      return { data: { session: user ? { user } : null }, error: null };
+    },
     onAuthStateChange: (callback: any) => {
       const user = supabaseMock.auth.getUser();
       if (user) setTimeout(() => callback('SIGNED_IN', { user }), 0);
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
     signInWithPassword: async ({ email, password }: any) => {
-      const mockUser = { id: 'mock-id', email, fullName: 'Utente Mock', role: 'admin' };
+      // In modalità mock, se l'email è quella di sistema, creiamo l'utente corrispondente
+      let role: 'admin' | 'collaborator' | 'client' = 'client';
+      let fullName = 'Ospite Kristal';
+      
+      if (email === 'serop.serop@outlook.com') { role = 'admin'; fullName = 'Direzione Kristal'; }
+      if (email === 'sirop.sirop@outlook.sa') { role = 'collaborator'; fullName = 'Maurizio Stylist'; }
+
+      const mockUser = { id: Math.random().toString(36).substr(2, 9), email, fullName, role };
       supabaseMock.auth.signIn(mockUser as any);
       return { data: { user: mockUser, session: {} }, error: null };
     },
@@ -38,7 +48,7 @@ export const supabase = realClient || ({
       return { error: null };
     }
   },
-  from: () => ({
+  from: (table: string) => ({
     select: () => ({
       eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
       order: () => ({ data: [], error: null })
@@ -56,28 +66,27 @@ const handleError = (error: any) => {
 export const db = {
   profiles: {
     getAll: async () => {
-      if (useMock) return [];
+      if (useMock) return supabaseMock.profiles.getAll();
       const { data, error } = await realClient!.from('profiles').select('*').order('full_name');
       if (error) throw handleError(error);
       return data || [];
     },
     get: async (id: string) => {
       if (useMock) {
-        const mockUser = supabaseMock.auth.getUser();
-        if (mockUser && mockUser.id === id) return { ...mockUser, full_name: mockUser.fullName };
-        return null;
+        const profs = supabaseMock.profiles.getAll();
+        const p = profs.find((p: any) => p.id === id);
+        return p || null;
       }
       const { data, error } = await realClient!.from('profiles').select('*').eq('id', id).maybeSingle();
       if (error) return null;
       return data;
     },
     upsert: async (profile: any) => {
-      if (useMock) return profile;
+      if (useMock) return supabaseMock.profiles.upsert(profile);
       
       const emailLower = profile.email?.toLowerCase();
       let role = VALID_ROLES.includes(profile.role) ? profile.role : 'client';
       
-      // Protezione ruoli critici a livello DB
       if (emailLower === 'serop.serop@outlook.com') role = 'admin';
       else if (emailLower === 'sirop.sirop@outlook.sa') role = 'collaborator';
 
@@ -111,7 +120,7 @@ export const db = {
       return data;
     },
     delete: async (id: string) => {
-      if (useMock) return;
+      if (useMock) return supabaseMock.services.delete(id);
       const { error } = await realClient!.from('services').delete().eq('id', id);
       if (error) throw handleError(error);
     }
