@@ -32,12 +32,12 @@ const App: React.FC = () => {
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
 
-  // Analisi Avanzata Business Intelligence
+  // Analisi Avanzata Business Intelligence (BI)
   const businessStats = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     
-    // Inizio settimana (Lunedì)
+    // Inizio settimana corrente (Lunedì)
     const startOfWeek = new Date(now);
     const day = startOfWeek.getDay();
     const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
@@ -46,47 +46,51 @@ const App: React.FC = () => {
 
     const confirmed = appointments.filter(a => a.status === 'confirmed');
 
-    const calcRev = (appts: any[]) => appts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
+    const getRevenue = (appts: any[]) => appts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
 
-    const global = {
-      day: calcRev(confirmed.filter(a => a.date.startsWith(todayStr))),
-      week: calcRev(confirmed.filter(a => new Date(a.date) >= startOfWeek)),
-      month: calcRev(confirmed.filter(a => {
+    const globalPerformance = {
+      daily: getRevenue(confirmed.filter(a => a.date.startsWith(todayStr))),
+      weekly: getRevenue(confirmed.filter(a => new Date(a.date) >= startOfWeek)),
+      monthly: getRevenue(confirmed.filter(a => {
         const d = new Date(a.date);
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
       })),
-      year: calcRev(confirmed.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
+      yearly: getRevenue(confirmed.filter(a => new Date(a.date).getFullYear() === now.getFullYear()))
     };
 
     const teamBreakdown = team.map(m => {
       const mAppts = confirmed.filter(a => a.team_member_name === m.name);
       
-      // Calcolo ferie godute
-      const vacationUsed = (m.absences_json || [])
+      // Calcolo vacanze godute (in giorni)
+      const vacationUsedDays = (m.absences_json || [])
         .filter(abs => abs.type === 'vacation')
         .reduce((acc, abs) => {
           const s = new Date(abs.startDate);
           const e = new Date(abs.endDate);
-          return acc + (Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1);
+          const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          return acc + days;
         }, 0);
+
+      const vacationRemaining = (m.total_vacation_days || 25) - vacationUsedDays;
 
       return {
         name: m.name,
         avatar: m.avatar,
-        day: calcRev(mAppts.filter(a => a.date.startsWith(todayStr))),
-        week: calcRev(mAppts.filter(a => new Date(a.date) >= startOfWeek)),
-        month: calcRev(mAppts.filter(a => {
+        daily: getRevenue(mAppts.filter(a => a.date.startsWith(todayStr))),
+        weekly: getRevenue(mAppts.filter(a => new Date(a.date) >= startOfWeek)),
+        monthly: getRevenue(mAppts.filter(a => {
           const d = new Date(a.date);
           return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         })),
-        year: calcRev(mAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
-        vacationRemaining: (m.total_vacation_days || 25) - vacationUsed,
-        totalAssigned: m.total_vacation_days || 25,
-        sickCount: (m.absences_json || []).filter(abs => abs.type === 'sick').length
+        yearly: getRevenue(mAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
+        vacationRemaining,
+        totalVacation: m.total_vacation_days || 25,
+        sickDays: (m.absences_json || []).filter(a => a.type === 'sick').length,
+        injuryDays: (m.absences_json || []).filter(a => a.type === 'injury').length,
       };
     });
 
-    return { global, teamBreakdown };
+    return { global: globalPerformance, team: teamBreakdown };
   }, [appointments, team]);
 
   const timeGreeting = useMemo(() => {
@@ -175,9 +179,10 @@ const App: React.FC = () => {
     if (!p) return;
     try {
       const updatedProfile = { ...p, role: newRole };
-      await db.profiles.upsert(updatedProfile);
+      // Inviamo solo i campi necessari per l'update del ruolo per evitare conflitti di schema su avatar_url
+      await db.profiles.upsert({ id: profileId, role: newRole, full_name: p.full_name, email: p.email });
       await refreshData();
-      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest(updatedProfile);
+      if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: newRole });
     } catch (e: any) {
       alert("Errore aggiornamento ruolo: " + e.message);
     }
@@ -243,29 +248,31 @@ const App: React.FC = () => {
                   {user ? user.fullName.split(' ')[0] : 'Benvenuti'}
                 </h2>
               </div>
-              {isAdmin && <span className="px-4 py-2 bg-gray-900 text-white text-[8px] font-bold uppercase rounded-full tracking-widest">Visione Aziendale</span>}
+              {isAdmin && <span className="px-4 py-2 bg-gray-900 text-white text-[8px] font-bold uppercase rounded-full tracking-widest">Business Intelligence</span>}
             </header>
 
             {isAdmin && (
-              <div className="space-y-12">
+              <div className="space-y-10">
                 {/* GLOBAL PERFORMANCE GRID */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'Oggi', value: businessStats.global.day, color: 'amber' },
-                    { label: 'Settimana', value: businessStats.global.week, color: 'gray' },
-                    { label: 'Mese', value: businessStats.global.month, color: 'gray' },
-                    { label: 'Anno', value: businessStats.global.year, color: 'black' },
+                    { label: 'Oggi', value: businessStats.global.daily, color: 'amber' },
+                    { label: 'Settimana', value: businessStats.global.weekly, color: 'gray' },
+                    { label: 'Mese', value: businessStats.global.monthly, color: 'gray' },
+                    { label: 'Anno', value: businessStats.global.yearly, color: 'black' },
                   ].map((stat, i) => (
-                    <div key={i} className={`p-6 rounded-[2rem] border border-gray-50 shadow-sm ${stat.color === 'black' ? 'bg-black text-white' : stat.color === 'amber' ? 'bg-amber-50 border-amber-100' : 'bg-white'}`}>
+                    <div key={i} className={`p-6 rounded-[2rem] border border-gray-50 shadow-sm transition-all hover:scale-[1.02] ${stat.color === 'black' ? 'bg-black text-white' : stat.color === 'amber' ? 'bg-amber-50 border-amber-100' : 'bg-white'}`}>
                       <p className={`text-[8px] font-bold uppercase tracking-widest mb-2 ${stat.color === 'black' ? 'text-amber-500' : 'text-gray-400'}`}>{stat.label}</p>
                       <h3 className="text-2xl font-luxury font-bold">CHF {stat.value}</h3>
                     </div>
                   ))}
                 </div>
 
-                {/* TEAM PERFORMANCE MATRIX */}
+                {/* TEAM PERFORMANCE & HR TABLE */}
                 <div className="bg-white p-8 md:p-10 rounded-[3.5rem] border border-gray-50 shadow-sm overflow-hidden">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Performance Artisti & Risorse</h3>
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Analisi Performance Artisti</h3>
+                  </div>
                   <div className="overflow-x-auto scrollbar-hide">
                     <table className="w-full text-left">
                       <thead>
@@ -275,26 +282,33 @@ const App: React.FC = () => {
                           <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Sett.</th>
                           <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Mese</th>
                           <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Anno</th>
-                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-right">Ferie Residue</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-right">Vacanza (Residuo)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {businessStats.teamBreakdown.map(m => (
+                        {businessStats.team.map(m => (
                           <tr key={m.name} className="group hover:bg-gray-50/50 transition-colors">
                             <td className="py-6">
                               <div className="flex items-center gap-3">
-                                <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-8 h-8 rounded-full grayscale group-hover:grayscale-0 transition-all" />
+                                <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-8 h-8 rounded-full shadow-sm grayscale group-hover:grayscale-0 transition-all" />
                                 <span className="font-bold text-sm">{m.name}</span>
                               </div>
                             </td>
-                            <td className="py-6 text-center font-luxury font-bold text-sm">CHF {m.day}</td>
-                            <td className="py-6 text-center font-luxury text-sm">CHF {m.week}</td>
-                            <td className="py-6 text-center font-luxury font-bold text-sm text-amber-600">CHF {m.month}</td>
-                            <td className="py-6 text-center font-luxury text-sm">CHF {m.year}</td>
+                            <td className="py-6 text-center font-luxury font-bold text-sm">CHF {m.daily}</td>
+                            <td className="py-6 text-center font-luxury text-sm">CHF {m.weekly}</td>
+                            <td className="py-6 text-center font-luxury font-bold text-sm text-amber-600">CHF {m.monthly}</td>
+                            <td className="py-6 text-center font-luxury text-sm">CHF {m.yearly}</td>
                             <td className="py-6 text-right">
                               <div className="flex flex-col items-end">
-                                <span className={`text-[10px] font-bold ${m.vacationRemaining < 5 ? 'text-red-500' : 'text-gray-900'}`}>{m.vacationRemaining} / {m.totalAssigned} gg</span>
-                                {m.sickCount > 0 && <span className="text-[7px] font-bold text-red-400 uppercase">+{m.sickCount} Malattie</span>}
+                                <span className={`text-[10px] font-bold ${m.vacationRemaining < 5 ? 'text-red-500' : 'text-green-600'}`}>
+                                  {m.vacationRemaining} / {m.totalVacation} gg
+                                </span>
+                                {(m.sickDays > 0 || m.injuryDays > 0) && (
+                                  <span className="text-[7px] text-gray-400 font-bold uppercase mt-1">
+                                    {m.sickDays > 0 ? `${m.sickDays} Malattia ` : ''}
+                                    {m.injuryDays > 0 ? `${m.injuryDays} Infortunio` : ''}
+                                  </span>
+                                )}
                               </div>
                             </td>
                           </tr>
