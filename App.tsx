@@ -5,6 +5,7 @@ import Auth from './components/Auth';
 import AIAssistant from './components/AIAssistant';
 import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
+import TeamManagement from './components/TeamManagement';
 import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, TreatmentRecord, Appointment } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -25,7 +26,7 @@ const App: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('Tutti');
   const [clientSearch, setClientSearch] = useState('');
 
-  const [editingMember, setEditingMember] = useState<any>(null);
+  const [managingMember, setManagingMember] = useState<TeamMember | null>(null);
   const [viewingHistory, setViewingHistory] = useState<User | null>(null);
   const [editingTreatmentIndex, setEditingTreatmentIndex] = useState<number | null>(null);
 
@@ -168,6 +169,17 @@ const App: React.FC = () => {
       await refreshData();
     } catch (e) {
       console.error("Service delete error:", e);
+    }
+  };
+
+  const handleSaveTeamMember = async (updatedMember: TeamMember) => {
+    try {
+      await db.team.upsert(updatedMember);
+      await refreshData();
+      setManagingMember(null);
+    } catch (e) {
+      console.error("Team save error:", e);
+      alert("Impossibile salvare le modifiche al collaboratore.");
     }
   };
 
@@ -345,7 +357,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* GESTIONE SERVIZI (TAB NUOVA PER ADMIN) */}
+      {/* GESTIONE SERVIZI */}
       {activeTab === 'services_management' && isAdmin && (
         <div className="space-y-12 animate-in fade-in duration-500 pb-20">
           <header className="flex items-center justify-between">
@@ -388,18 +400,19 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* GESTIONE TEAM */}
       {activeTab === 'team_schedule' && isAdmin && (
         <div className="space-y-12 animate-in fade-in duration-500 pb-20">
            <h2 className="text-5xl font-luxury font-bold">Il Team</h2>
            <div className="grid md:grid-cols-3 gap-8">
              {team.map(m => (
-               <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-6 text-center">
-                 <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-32 h-32 rounded-full mx-auto shadow-xl" />
+               <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-6 text-center group hover:border-amber-200 transition-all">
+                 <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-32 h-32 rounded-full mx-auto shadow-xl group-hover:scale-105 transition-transform" />
                  <div>
                    <h4 className="text-2xl font-luxury font-bold">{m.name}</h4>
                    <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{m.role}</p>
                  </div>
-                 <button onClick={() => setEditingMember(m)} className="text-[9px] font-bold text-gray-400 uppercase tracking-widest hover:text-black">Gestisci Turni</button>
+                 <button onClick={() => setManagingMember(m)} className="w-full py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">Gestisci Collaboratore</button>
                </div>
              ))}
            </div>
@@ -454,7 +467,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL PRENOTAZIONE */}
+      {/* MODALI ESISTENTI */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
@@ -474,7 +487,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL SERVIZIO (NUOVA) */}
       {isServiceFormOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
@@ -489,9 +501,24 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL TEAM MANAGEMENT (NUOVO) */}
+      {managingMember && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
+          <div className="w-full max-w-3xl h-[85vh] bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative flex flex-col">
+            <TeamManagement 
+              member={managingMember}
+              appointments={appointments}
+              services={services}
+              onSave={handleSaveTeamMember}
+              onClose={() => setManagingMember(null)}
+            />
+          </div>
+        </div>
+      )}
+
       <AIAssistant user={user} />
 
-      {/* SCHEDA TECNICA MODAL (viewingHistory) */}
+      {/* SCHEDA TECNICA MODAL */}
       {viewingHistory && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[700] flex items-center justify-center p-6 overflow-y-auto">
           <div className="bg-white w-full max-w-4xl rounded-[4rem] p-12 relative animate-in zoom-in-95">
