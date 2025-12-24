@@ -29,15 +29,14 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
-      // Pulizia oggetto per garantire compatibilità DB
-      // Se l'ID è un guest-ID generato, assicuriamoci che sia gestito o trasformato se il DB richiede UUID
-      const payload = {
+      // Usiamo avatar_url invece di avatar per compatibilità con gli schemi Supabase comuni
+      const payload: any = {
         id: profile.id,
         email: profile.email || '',
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
         phone: profile.phone || '',
         role: profile.role || 'client',
-        avatar: profile.avatar || '',
+        avatar_url: profile.avatar_url || profile.avatar || '', 
         technical_sheets: profile.technical_sheets || [],
         treatment_history: profile.treatment_history || []
       };
@@ -70,8 +69,6 @@ export const db = {
       return data || [];
     },
     upsert: async (member: any) => {
-      // IMPORTANTE: Sincronizziamo absences_json con unavailable_dates
-      // In questo modo l'interfaccia di planning (calendario) e quella gestionale (congedi) sono unite
       let unavailable_dates = [...(member.unavailable_dates || [])];
       
       if (member.absences_json && Array.isArray(member.absences_json)) {
@@ -84,7 +81,6 @@ export const db = {
             curr.setDate(curr.getDate() + 1);
           }
         });
-        // Uniamo le date rimosse/aggiunte manualmente con quelle derivanti dai periodi
         unavailable_dates = Array.from(new Set([...unavailable_dates, ...generatedDates]));
       }
 
