@@ -15,7 +15,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
   const weekDays = useMemo(() => {
     const days = [];
     const startOfWeek = new Date(viewDate);
-    startOfWeek.setDate(viewDate.getDate() - viewDate.getDay() + 1); // Lunedì
+    // Correzione lunedì: getDay() restituisce 0 per domenica. 
+    // In Italia la settimana inizia lunedì.
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
     
     for (let i = 0; i < 7; i++) {
       const d = new Date(startOfWeek);
@@ -78,7 +82,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                 {team.filter(m => selectedMembers.includes(m.name)).map(m => (
                   <th key={m.name} className="p-6 text-center min-w-[160px]">
                     <div className="flex flex-col items-center gap-2">
-                      <img src={m.avatar} className="w-8 h-8 rounded-full shadow-md" alt={m.name} />
+                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-8 h-8 rounded-full shadow-md object-cover" alt={m.name} />
                       <span className="text-[10px] font-bold uppercase tracking-widest">{m.name}</span>
                     </div>
                   </th>
@@ -103,7 +107,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                         <td key={m.name} className="p-4">
                           <button 
                             onClick={() => onToggleVacation(m.name, date)}
-                            className={`w-full p-4 rounded-2xl border transition-all text-left relative group ${
+                            className={`w-full p-4 rounded-2xl border transition-all text-left relative group min-h-[60px] ${
                               isOff 
                                 ? 'bg-gray-900 border-gray-900 text-gray-500' 
                                 : dayAppts.length > 0 
@@ -138,21 +142,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
               })}
             </tbody>
           </table>
-        </div>
-      </div>
-      
-      <div className="flex justify-center gap-10">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded bg-gray-900"></div>
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Assenza / Ferie</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded border border-amber-100 bg-white shadow-sm"></div>
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Impegni fissati</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded border border-gray-50 border-dashed bg-white"></div>
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Disponibile</span>
         </div>
       </div>
     </div>
