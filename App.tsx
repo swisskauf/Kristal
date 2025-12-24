@@ -32,9 +32,7 @@ const App: React.FC = () => {
   const [selectedService, setSelectedService] = useState<Service | undefined>();
   const [teamViewMode, setTeamViewMode] = useState<'planning' | 'grid'>('planning');
   
-  const [filterCategory, setFilterCategory] = useState<string>('Tutti');
   const [clientSearch, setClientSearch] = useState('');
-  
   const [newSheet, setNewSheet] = useState({ category: 'Colore', content: '' });
 
   const isAdmin = user?.role === 'admin';
@@ -149,21 +147,34 @@ const App: React.FC = () => {
     const p = profiles.find(p => p.id === profileId);
     if (!p) return;
     try {
-      // Garantiamo che tutti i campi obbligatori siano presenti
-      const updatedProfile = { 
-        ...p, 
-        role: newRole 
-      };
+      const updatedProfile = { ...p, role: newRole };
       await db.profiles.upsert(updatedProfile);
       await refreshData();
-      
-      // Se stiamo visualizzando i dettagli del cliente, aggiorniamo la modale
       if (viewingGuest && viewingGuest.id === profileId) {
         setViewingGuest(updatedProfile);
       }
     } catch (e: any) {
       console.error("Errore ruolo:", e);
       alert("Impossibile aggiornare il ruolo: " + e.message);
+    }
+  };
+
+  const handleToggleVacation = async (memberName: string, date: string) => {
+    const member = team.find(m => m.name === memberName);
+    if (!member) return;
+
+    let updatedDates = [...(member.unavailable_dates || [])];
+    if (updatedDates.includes(date)) {
+      updatedDates = updatedDates.filter(d => d !== date);
+    } else {
+      updatedDates.push(date);
+    }
+
+    try {
+      await db.team.upsert({ ...member, unavailable_dates: updatedDates });
+      refreshData();
+    } catch (e) {
+      alert("Errore nell'aggiornamento disponibilità team.");
     }
   };
 
@@ -192,9 +203,9 @@ const App: React.FC = () => {
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     const guest = {
       id: Math.random().toString(36).substr(2, 9),
-      full_name: formData.get('fullName'),
-      email: formData.get('email'),
-      phone: formData.get('phone'),
+      full_name: formData.get('fullName') as string,
+      email: formData.get('email') as string,
+      phone: formData.get('phone') as string,
       role: 'client',
       technical_sheets: [],
       treatment_history: []
@@ -211,22 +222,13 @@ const App: React.FC = () => {
   const getGuestStats = (clientId: string) => {
     const now = new Date();
     const guestAppts = appointments.filter(a => a.client_id === clientId);
-    
     const monthAppts = guestAppts.filter(a => {
       const d = new Date(a.date);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
-    
     const yearAppts = guestAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear());
-    
     const noShows = guestAppts.filter(a => a.status === 'noshow').length;
-    
-    return { 
-      total: guestAppts.length, 
-      month: monthAppts.length, 
-      year: yearAppts.length, 
-      noShows 
-    };
+    return { total: guestAppts.length, month: monthAppts.length, year: yearAppts.length, noShows };
   };
 
   if (loading) return (
@@ -267,7 +269,7 @@ const App: React.FC = () => {
           <section className="space-y-12">
             <h3 className="text-3xl font-luxury font-bold text-gray-900 border-b border-gray-100 pb-8">I Nostri Ritual</h3>
             <div className="grid md:grid-cols-2 gap-8">
-              {services.filter(s => filterCategory === 'Tutti' || s.category === filterCategory).map(s => (
+              {services.map(s => (
                 <button key={s.id} onClick={() => { if(!user) setIsAuthOpen(true); else { setSelectedAppointment({ service_id: s.id }); setIsFormOpen(true); } }} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 flex justify-between items-center hover:shadow-xl hover:border-amber-200 transition-all group text-left">
                   <div className="flex-1 pr-6">
                     <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">{s.category}</p>
@@ -290,34 +292,26 @@ const App: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
             <h2 className="text-5xl font-luxury font-bold">I Nostri Ospiti</h2>
             <div className="flex gap-4">
-              <div className="relative">
-                <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-300"></i>
-                <input type="text" placeholder="Ricerca ospite..." className="pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl text-sm min-w-[250px] shadow-sm outline-none focus:ring-2 focus:ring-amber-500 transition-all" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
-              </div>
+              <input type="text" placeholder="Ricerca ospite..." className="pl-6 pr-4 py-4 bg-white border border-gray-100 rounded-2xl text-sm min-w-[250px] shadow-sm outline-none focus:ring-2 focus:ring-amber-500 transition-all" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
               <button onClick={() => setIsAddingGuest(true)} className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Nuovo Ospite</button>
             </div>
           </div>
 
           <div className="grid gap-6">
-            {profiles.filter(p => p.full_name?.toLowerCase().includes(clientSearch.toLowerCase())).map(p => {
+            {profiles.filter(p => (p.full_name || '').toLowerCase().includes(clientSearch.toLowerCase())).map(p => {
               const stats = getGuestStats(p.id);
               return (
                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex flex-col md:flex-row items-center justify-between hover:shadow-lg transition-all group">
                   <div className="flex items-center gap-6 flex-1">
-                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}&background=f8f8f8&color=999`} className="w-20 h-20 rounded-full border-2 border-white shadow-sm object-cover" />
+                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name || 'U'}&background=f8f8f8&color=999`} className="w-20 h-20 rounded-full border-2 border-white shadow-sm object-cover" />
                     <div>
                       <div className="flex items-center gap-3">
-                        <h5 className="font-bold text-2xl text-gray-900">{p.full_name}</h5>
+                        <h5 className="font-bold text-2xl text-gray-900">{p.full_name || 'Ospite Kristal'}</h5>
                         <span className={`px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase ${p.role === 'admin' ? 'bg-black text-white' : p.role === 'collaborator' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{p.role}</span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        <i className="fas fa-envelope mr-2"></i>{p.email} 
-                        <span className="mx-3 text-gray-200">|</span> 
-                        <i className="fas fa-phone mr-2"></i>{p.phone || 'Non fornito'}
-                      </p>
+                      <p className="text-xs text-gray-400 mt-1">{p.email} | {p.phone || 'Nessun telefono'}</p>
                     </div>
                   </div>
-                  
                   <div className="flex items-center gap-12 mt-6 md:mt-0">
                     <div className="text-center">
                        <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Mese / Anno</p>
@@ -327,12 +321,40 @@ const App: React.FC = () => {
                        <p className="text-[8px] font-bold text-red-400 uppercase mb-1">No-Show</p>
                        <p className={`text-xl font-luxury font-bold ${stats.noShows > 0 ? 'text-red-500' : 'text-gray-300'}`}>{stats.noShows}</p>
                     </div>
-                    <button onClick={() => setViewingGuest(p)} className="px-8 py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">CRM Dettagli</button>
+                    <button onClick={() => setViewingGuest(p)} className="px-8 py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">Dettagli CRM</button>
                   </div>
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'team_schedule' && isAdmin && (
+        <div className="space-y-16 animate-in fade-in duration-500 pb-20">
+           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <h2 className="text-5xl font-luxury font-bold">Il Team</h2>
+              <div className="flex bg-gray-50 p-1 rounded-2xl">
+                 <button onClick={() => setTeamViewMode('planning')} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${teamViewMode === 'planning' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Planning</button>
+                 <button onClick={() => setTeamViewMode('grid')} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${teamViewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Artisti</button>
+              </div>
+           </div>
+           {teamViewMode === 'planning' ? (
+             <TeamPlanning team={team} appointments={appointments} onToggleVacation={handleToggleVacation} />
+           ) : (
+             <div className="grid md:grid-cols-3 gap-8">
+               {team.map(m => (
+                 <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm text-center group hover:border-amber-200 transition-all">
+                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-32 h-32 rounded-full mx-auto shadow-xl object-cover" />
+                   <div className="mt-6 mb-8">
+                     <h4 className="text-2xl font-luxury font-bold">{m.name}</h4>
+                     <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{m.role}</p>
+                   </div>
+                   <button onClick={() => setEditingMember(m)} className="w-full py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">Gestisci</button>
+                 </div>
+               ))}
+             </div>
+           )}
         </div>
       )}
 
@@ -361,22 +383,8 @@ const App: React.FC = () => {
                        </div>
                     </div>
                     <div className="flex gap-4">
-                      <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest"><i className="fas fa-envelope mr-2"></i>{viewingGuest.email}</p>
-                      <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest"><i className="fas fa-phone mr-2"></i>{viewingGuest.phone || 'Cellulare non impostato'}</p>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-amber-50 p-6 rounded-3xl text-center border border-amber-100">
-                       <p className="text-[8px] font-bold text-amber-600 uppercase mb-1">Mese Corrente</p>
-                       <p className="text-2xl font-luxury font-bold text-gray-900">{getGuestStats(viewingGuest.id).month}</p>
-                    </div>
-                    <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100">
-                       <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Totale Anno</p>
-                       <p className="text-2xl font-luxury font-bold text-gray-900">{getGuestStats(viewingGuest.id).year}</p>
-                    </div>
-                    <div className="bg-red-50 p-6 rounded-3xl text-center border border-red-100">
-                       <p className="text-[8px] font-bold text-red-600 uppercase mb-1">No-Show</p>
-                       <p className="text-2xl font-luxury font-bold text-red-600">{getGuestStats(viewingGuest.id).noShows}</p>
+                      <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">{viewingGuest.email}</p>
+                      <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">{viewingGuest.phone || 'Cellulare non impostato'}</p>
                     </div>
                  </div>
               </div>
@@ -385,72 +393,51 @@ const App: React.FC = () => {
                  <div className="space-y-8">
                     <h4 className="text-xl font-luxury font-bold border-l-4 border-amber-600 pl-4">Schede Tecniche</h4>
                     <div className="bg-gray-50 p-8 rounded-[3rem] border border-gray-100 space-y-4">
-                       <div className="space-y-2">
-                         <label className="text-[8px] font-bold uppercase text-gray-400 ml-1">Categoria</label>
-                         <select value={newSheet.category} onChange={(e) => setNewSheet({...newSheet, category: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-100 text-xs font-bold outline-none focus:ring-1 focus:ring-amber-500">
-                            <option>Colore</option>
-                            <option>Taglio</option>
-                            <option>Trattamento Viso</option>
-                            <option>Nails</option>
-                            <option>Dermocosmesi</option>
-                         </select>
-                       </div>
-                       <div className="space-y-2">
-                          <label className="text-[8px] font-bold uppercase text-gray-400 ml-1">Formulazione e Note</label>
-                          <textarea 
-                             placeholder="Inserisci formula colore, tempi di posa, sensibilità o note tecniche..." 
-                             className="w-full p-6 rounded-3xl bg-white border border-gray-100 text-xs resize-none outline-none focus:ring-1 focus:ring-amber-500" 
-                             rows={4}
-                             value={newSheet.content}
-                             onChange={(e) => setNewSheet({...newSheet, content: e.target.value})}
-                          />
-                       </div>
+                       <textarea 
+                          placeholder="Inserisci formula colore, tempi di posa, sensibilità o note tecniche..." 
+                          className="w-full p-6 rounded-3xl bg-white border border-gray-100 text-xs resize-none outline-none focus:ring-1 focus:ring-amber-500" 
+                          rows={4}
+                          value={newSheet.content}
+                          onChange={(e) => setNewSheet({...newSheet, content: e.target.value})}
+                       />
                        <button onClick={handleAddTechnicalSheet} className="w-full py-4 bg-black text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all">Salva Scheda Tecnica</button>
                     </div>
 
                     <div className="space-y-4">
-                       {(viewingGuest.technical_sheets || []).length > 0 ? viewingGuest.technical_sheets.map((s: any) => (
-                         <div key={s.id} className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm hover:border-amber-200 transition-all">
+                       {(viewingGuest.technical_sheets || []).map((s: any) => (
+                         <div key={s.id} className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm">
                             <div className="flex justify-between items-center mb-3">
                                <span className="text-[8px] font-bold text-amber-600 uppercase bg-amber-50 px-3 py-1 rounded-full">{s.category}</span>
-                               <span className="text-[9px] text-gray-300 font-bold"><i className="fas fa-calendar-alt mr-2"></i>{new Date(s.date).toLocaleDateString()}</span>
+                               <span className="text-[9px] text-gray-300 font-bold">{new Date(s.date).toLocaleDateString()}</span>
                             </div>
                             <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">{s.content}</p>
                          </div>
-                       )) : (
-                         <div className="text-center py-10 text-gray-300 uppercase text-[9px] font-bold tracking-widest">Nessuna scheda tecnica registrata.</div>
-                       )}
+                       ))}
                     </div>
                  </div>
 
                  <div className="space-y-8">
                     <h4 className="text-xl font-luxury font-bold border-l-4 border-gray-900 pl-4">Storico Appuntamenti</h4>
                     <div className="space-y-4">
-                       {appointments.filter(a => a.client_id === viewingGuest.id).length > 0 ? (
-                         appointments.filter(a => a.client_id === viewingGuest.id)
-                          .sort((a,b) => b.date.localeCompare(a.date))
-                          .map(app => (
-                            <div key={app.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl group hover:border-gray-200 transition-all">
-                                <div>
-                                  <p className="text-[10px] font-bold text-gray-900">{app.services?.name}</p>
-                                  <p className="text-[8px] text-gray-400 uppercase tracking-widest mt-1">{new Date(app.date).toLocaleDateString()} • Artist: {app.team_member_name}</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className={`text-[7px] font-bold uppercase px-3 py-1 rounded-full ${app.status === 'noshow' ? 'bg-red-50 text-red-500 border border-red-100' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
-                                      {app.status === 'noshow' ? 'No-Show' : 'Eseguito'}
-                                  </span>
-                                  {app.status !== 'noshow' && (
-                                    <button onClick={async () => {
-                                        await db.appointments.upsert({...app, status: 'noshow'});
-                                        refreshData();
-                                    }} className="text-red-300 opacity-0 group-hover:opacity-100 transition-all text-[8px] font-bold uppercase hover:text-red-600">Segna No-Show</button>
-                                  )}
-                                </div>
+                       {appointments.filter(a => a.client_id === viewingGuest.id).sort((a,b) => b.date.localeCompare(a.date)).map(app => (
+                         <div key={app.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl group">
+                            <div>
+                               <p className="text-[10px] font-bold text-gray-900">{app.services?.name}</p>
+                               <p className="text-[8px] text-gray-400 uppercase tracking-widest mt-1">{new Date(app.date).toLocaleDateString()} • {app.team_member_name}</p>
                             </div>
-                          ))
-                       ) : (
-                         <div className="text-center py-10 text-gray-300 uppercase text-[9px] font-bold tracking-widest">Nessun appuntamento passato.</div>
-                       )}
+                            <div className="flex items-center gap-3">
+                               <span className={`text-[7px] font-bold uppercase px-3 py-1 rounded-full ${app.status === 'noshow' ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-400'}`}>
+                                  {app.status === 'noshow' ? 'No-Show' : 'Eseguito'}
+                               </span>
+                               {app.status !== 'noshow' && (
+                                 <button onClick={async () => {
+                                    await db.appointments.upsert({...app, status: 'noshow'});
+                                    refreshData();
+                                 }} className="text-red-300 opacity-0 group-hover:opacity-100 transition-all text-[8px] font-bold uppercase hover:text-red-600">Segna No-Show</button>
+                               )}
+                            </div>
+                         </div>
+                       ))}
                     </div>
                  </div>
               </div>
@@ -458,30 +445,52 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ADD GUEST MODAL */}
       {isAddingGuest && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[850] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
            <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
               <button onClick={() => setIsAddingGuest(false)} className="absolute top-10 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-xl"></i></button>
-              <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Registra Nuovo Ospite</h3>
+              <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Nuovo Ospite</h3>
               <form onSubmit={handleAddGuest} className="space-y-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-amber-600 uppercase ml-1">Nome e Cognome</label>
-                    <input name="fullName" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold outline-none focus:ring-2 focus:ring-amber-500" placeholder="es. Maria Rossi" />
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-amber-600 uppercase ml-1">Email</label>
-                       <input name="email" type="email" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold outline-none focus:ring-2 focus:ring-amber-500" placeholder="mail@esempio.com" />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-amber-600 uppercase ml-1">Cellulare</label>
-                       <input name="phone" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold outline-none focus:ring-2 focus:ring-amber-500" placeholder="+41..." />
-                    </div>
-                 </div>
-                 <button type="submit" className="w-full py-5 bg-black text-white font-bold rounded-3xl shadow-2xl uppercase text-[10px] tracking-widest hover:bg-amber-600 transition-all">Sincronizza Ospite nel Database</button>
+                 <input name="fullName" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="Nome e Cognome" />
+                 <input name="email" type="email" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="Email" />
+                 <input name="phone" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="Cellulare" />
+                 <button type="submit" className="w-full py-5 bg-black text-white font-bold rounded-3xl shadow-2xl uppercase text-[10px] tracking-widest">Sincronizza Ospite</button>
               </form>
            </div>
+        </div>
+      )}
+
+      {isFormOpen && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
+          <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
+            <button onClick={() => setIsFormOpen(false)} className="absolute top-10 right-10 text-gray-400"><i className="fas fa-times text-xl"></i></button>
+            <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Riserva il Tuo Momento</h3>
+            <AppointmentForm 
+              onSave={async (app) => {
+                await db.appointments.upsert({ ...app, id: Math.random().toString(36).substr(2, 9), client_id: isAdmin ? app.client_id : user?.id });
+                setIsFormOpen(false);
+                refreshData();
+              }} 
+              onCancel={() => setIsFormOpen(false)} 
+              services={services} 
+              team={team} 
+              existingAppointments={appointments} 
+              isAdmin={isAdmin} 
+              profiles={profiles} 
+            />
+          </div>
+        </div>
+      )}
+
+      {editingMember && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
+          <div className="w-full max-w-4xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
+            <TeamManagement member={editingMember} appointments={appointments} services={services} onSave={async (m) => {
+               await db.team.upsert(m);
+               refreshData();
+               setEditingMember(null);
+            }} onClose={() => setEditingMember(null)} />
+          </div>
         </div>
       )}
 
