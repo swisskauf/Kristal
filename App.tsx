@@ -174,12 +174,16 @@ const App: React.FC = () => {
 
   const handleSaveTeamMember = async (updatedMember: TeamMember) => {
     try {
+      console.log("Saving team member:", updatedMember);
       await db.team.upsert(updatedMember);
       await refreshData();
-      setManagingMember(null);
-    } catch (e) {
-      console.error("Team save error:", e);
-      alert("Impossibile salvare le modifiche al collaboratore.");
+      // Opzionale: non chiudiamo il modal se vogliamo che l'admin veda l'aggiornamento
+      // ma aggiorniamo il managingMember per riflettere i nuovi dati nello UI
+      setManagingMember(updatedMember);
+    } catch (e: any) {
+      console.error("Team save error full details:", e);
+      const msg = e.message || "Errore sconosciuto";
+      alert(`Impossibile salvare le modifiche al collaboratore. Dettaglio: ${msg}`);
     }
   };
 
@@ -501,7 +505,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL TEAM MANAGEMENT (NUOVO) */}
+      {/* MODAL TEAM MANAGEMENT */}
       {managingMember && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-3xl h-[85vh] bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative flex flex-col">
