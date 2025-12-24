@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { TeamMember, Appointment, Service } from '../types';
+import { TeamMember, Appointment, Service, AbsenceEntry, AbsenceType } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface TeamManagementProps {
@@ -15,191 +15,249 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'vacations'>('analytics');
   const [startHour, setStartHour] = useState(member.start_hour || 8);
   const [endHour, setEndHour] = useState(member.end_hour || 19);
+  const [totalVacationDays, setTotalVacationDays] = useState(member.total_vacation_days || 25);
   
-  const [vacationStart, setVacationStart] = useState('');
-  const [vacationEnd, setVacationEnd] = useState('');
+  const [newAbsence, setNewAbsence] = useState<{start: string, end: string, type: AbsenceType}>({
+    start: '',
+    end: '',
+    type: 'vacation'
+  });
 
-  useEffect(() => {
-    setStartHour(member.start_hour || 8);
-    setEndHour(member.end_hour || 19);
-  }, [member]);
+  const absences = useMemo(() => member.absences_json || [], [member.absences_json]);
 
-  const memberStats = useMemo(() => {
-    const memberAppointments = appointments.filter(a => a.team_member_name === member.name);
-    const totalRevenue = memberAppointments.reduce((acc, a) => acc + (a.services?.price || 0), 0);
-    const serviceCount = memberAppointments.length;
-    
-    const categories: Record<string, number> = {};
-    memberAppointments.forEach(a => {
-      const cat = services.find(s => s.id === a.service_id)?.category || 'Altro';
-      categories[cat] = (categories[cat] || 0) + 1;
-    });
+  const usedVacationDays = useMemo(() => {
+    return absences
+      .filter(a => a.type === 'vacation')
+      .reduce((acc, a) => {
+        const start = new Date(a.startDate);
+        const end = new Date(a.endDate);
+        const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        return acc + diff;
+      }, 0);
+  }, [absences]);
 
-    const pieData = Object.entries(categories).map(([name, value]) => ({ name, value }));
-    return { totalRevenue, serviceCount, pieData };
-  }, [appointments, member.name, services]);
-
-  const COLORS = ['#d97706', '#111827', '#4b5563', '#9ca3af'];
+  const stats = useMemo(() => {
+    const memberAppts = appointments.filter(a => a.team_member_name === member.name);
+    const revenue = memberAppts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
+    return { revenue, count: memberAppts.length };
+  }, [appointments, member.name]);
 
   const handleUpdateHours = () => {
     onSave({ 
       ...member, 
       start_hour: Number(startHour), 
-      end_hour: Number(endHour) 
+      end_hour: Number(endHour),
+      total_vacation_days: Number(totalVacationDays)
     });
   };
 
-  const addVacationRange = () => {
-    if (!vacationStart) return;
+  const addAbsence = () => {
+    if (!newAbsence.start || !newAbsence.end) return;
     
-    const start = new Date(vacationStart);
-    const end = vacationEnd ? new Date(vacationEnd) : new Date(vacationStart);
-    const newDates: string[] = [];
+    const entry: AbsenceEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      startDate: newAbsence.start,
+      endDate: newAbsence.end,
+      type: newAbsence.type
+    };
+
+    const updatedAbsences = [...absences, entry].sort((a, b) => b.startDate.localeCompare(a.startDate));
     
-    let current = new Date(start);
-    while (current <= end) {
-      newDates.push(current.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
+    // Generiamo anche l'array legacy per il planning visivo
+    const legacyDates: string[] = [];
+    let curr = new Date(entry.startDate);
+    const stop = new Date(entry.endDate);
+    while(curr <= stop) {
+      legacyDates.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
     }
+
+    onSave({ 
+      ...member, 
+      absences_json: updatedAbsences,
+      unavailable_dates: Array.from(new Set([...(member.unavailable_dates || []), ...legacyDates]))
+    });
     
-    const currentDates = member.unavailable_dates || [];
-    const updatedDates = Array.from(new Set([...currentDates, ...newDates])).sort();
-    
-    onSave({ ...member, unavailable_dates: updatedDates });
-    setVacationStart('');
-    setVacationEnd('');
+    setNewAbsence({ start: '', end: '', type: 'vacation' });
   };
 
-  const removeVacation = (date: string) => {
-    const updatedDates = (member.unavailable_dates || []).filter(d => d !== date);
-    onSave({ ...member, unavailable_dates: updatedDates });
+  const removeAbsence = (id: string) => {
+    const entryToRemove = absences.find(a => a.id === id);
+    if (!entryToRemove) return;
+
+    const updatedAbsences = absences.filter(a => a.id !== id);
+    
+    // Ricalcoliamo le date legacy rimosse
+    let datesToRemove: string[] = [];
+    let curr = new Date(entryToRemove.startDate);
+    const stop = new Date(entryToRemove.endDate);
+    while(curr <= stop) {
+      datesToRemove.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    const updatedLegacy = (member.unavailable_dates || []).filter(d => !datesToRemove.includes(d));
+
+    onSave({ 
+      ...member, 
+      absences_json: updatedAbsences,
+      unavailable_dates: updatedLegacy
+    });
+  };
+
+  const getAbsenceBadge = (type: AbsenceType) => {
+    switch(type) {
+      case 'vacation': return <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[8px] font-bold uppercase">Ferie</span>;
+      case 'sick': return <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[8px] font-bold uppercase">Malattia</span>;
+      case 'injury': return <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-[8px] font-bold uppercase">Infortunio</span>;
+      default: return <span className="px-3 py-1 bg-gray-50 text-gray-600 rounded-full text-[8px] font-bold uppercase">Altro</span>;
+    }
   };
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500">
-      <div className="flex items-center justify-between mb-10">
+    <div className="flex flex-col h-full animate-in fade-in duration-500 max-h-[85vh]">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">
-          <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-20 h-20 rounded-full shadow-2xl border-4 border-white" alt={member.name} />
+          <img src={member.avatar} className="w-16 h-16 rounded-full shadow-lg border-2 border-white object-cover" />
           <div>
-            <h3 className="text-3xl font-luxury font-bold text-gray-900">{member.name}</h3>
-            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{member.role}</p>
+            <h3 className="text-2xl font-luxury font-bold text-gray-900">{member.name}</h3>
+            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{member.role}</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-300 hover:text-black transition-colors">
-          <i className="fas fa-times text-xl"></i>
-        </button>
+        <button onClick={onClose} className="text-gray-300 hover:text-black"><i className="fas fa-times text-xl"></i></button>
       </div>
 
-      <div className="flex gap-8 border-b border-gray-100 mb-10 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-6 border-b border-gray-100 mb-8 overflow-x-auto scrollbar-hide">
         {[
           { id: 'analytics', label: 'Performance', icon: 'fa-chart-line' },
-          { id: 'schedule', label: 'Orari e Turni', icon: 'fa-clock' },
-          { id: 'vacations', label: 'Vacanze e Assenze', icon: 'fa-calendar-times' }
+          { id: 'schedule', label: 'Gestione Orari', icon: 'fa-clock' },
+          { id: 'vacations', label: 'Assenze e Bilancio', icon: 'fa-calendar-alt' }
         ].map(tab => (
-          <button 
-            key={tab.id} 
-            onClick={() => setActiveSubTab(tab.id as any)}
-            className={`flex items-center gap-3 pb-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeSubTab === tab.id ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-300 hover:text-gray-600'}`}
-          >
-            <i className={`fas ${tab.icon}`}></i>
-            {tab.label}
+          <button key={tab.id} onClick={() => setActiveSubTab(tab.id as any)} className={`flex items-center gap-2 pb-3 text-[9px] font-bold uppercase tracking-widest transition-all ${activeSubTab === tab.id ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-300'}`}>
+            <i className={`fas ${tab.icon}`}></i> {tab.label}
           </button>
         ))}
       </div>
 
       <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
         {activeSubTab === 'analytics' && (
-          <div className="space-y-10">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100">
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Valore Generato</p>
-                <h4 className="text-3xl font-luxury font-bold text-gray-900">CHF {memberStats.totalRevenue}</h4>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-6 rounded-3xl">
+                <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Fatturato</p>
+                <h4 className="text-2xl font-luxury font-bold">CHF {stats.revenue}</h4>
               </div>
-              <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100">
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Rituali Eseguiti</p>
-                <h4 className="text-3xl font-luxury font-bold text-gray-900">{memberStats.serviceCount}</h4>
+              <div className="bg-gray-50 p-6 rounded-3xl">
+                <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Servizi</p>
+                <h4 className="text-2xl font-luxury font-bold">{stats.count}</h4>
               </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm h-64">
-              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-6">Specializzazione Artistica</p>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={memberStats.pieData}
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {memberStats.pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
             </div>
           </div>
         )}
 
         {activeSubTab === 'schedule' && (
-          <div className="space-y-8 animate-in slide-in-from-right-5 duration-300">
-            <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest mb-8 text-amber-600">Configurazione Disponibilità Giornaliera</h5>
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Inizio Mattina</label>
-                  <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} className="w-full p-5 rounded-2xl bg-white border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold">
-                    {[7,8,9,10,11].map(h => <option key={h} value={h}>{h}:00</option>)}
-                  </select>
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Chiusura</label>
-                  <select value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} className="w-full p-5 rounded-2xl bg-white border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold">
-                    {[17,18,19,20,21,22].map(h => <option key={h} value={h}>{h}:00</option>)}
-                  </select>
-                </div>
-              </div>
-              <button onClick={handleUpdateHours} className="w-full mt-8 py-5 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-amber-700 transition-all shadow-lg">Salva Orari</button>
+          <div className="space-y-6">
+            <div className="bg-gray-50 p-8 rounded-[2.5rem] space-y-6">
+               <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[9px] font-bold text-gray-400 uppercase mb-2 block">Inizio Turno</label>
+                    <input type="number" value={startHour} onChange={e => setStartHour(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-gray-400 uppercase mb-2 block">Fine Turno</label>
+                    <input type="number" value={endHour} onChange={e => setStartHour(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold" />
+                  </div>
+               </div>
+               <div>
+                  <label className="text-[9px] font-bold text-gray-400 uppercase mb-2 block">Budget Ferie Annuo (Giorni)</label>
+                  <input type="number" value={totalVacationDays} onChange={e => setTotalVacationDays(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold" />
+               </div>
+               <button onClick={handleUpdateHours} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Salva Impostazioni</button>
             </div>
           </div>
         )}
 
         {activeSubTab === 'vacations' && (
-          <div className="space-y-8 animate-in slide-in-from-right-5 duration-300">
-            <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Aggiungi Assenza (Serie o Singola)</h5>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Data Inizio</label>
-                  <input type="date" value={vacationStart} onChange={(e) => setVacationStart(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-xs" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Data Fine (Opzionale)</label>
-                  <input type="date" value={vacationEnd} onChange={(e) => setVacationEnd(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-xs" />
-                </div>
+          <div className="space-y-8 pb-10">
+            {/* BILANCIO FERIE */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 text-center">
+                <p className="text-[8px] font-bold text-blue-600 uppercase mb-1">Contratto</p>
+                <p className="text-2xl font-luxury font-bold">{totalVacationDays}</p>
+                <p className="text-[7px] text-blue-400 uppercase font-bold">Giorni</p>
               </div>
-              <button onClick={addVacationRange} className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-[9px] tracking-widest shadow-lg">Pianifica Assenza</button>
+              <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100 text-center">
+                <p className="text-[8px] font-bold text-amber-600 uppercase mb-1">Godute</p>
+                <p className="text-2xl font-luxury font-bold">{usedVacationDays}</p>
+                <p className="text-[7px] text-amber-400 uppercase font-bold">Giorni</p>
+              </div>
+              <div className="bg-green-50/50 p-6 rounded-3xl border border-green-100 text-center">
+                <p className="text-[8px] font-bold text-green-600 uppercase mb-1">Residuo</p>
+                <p className="text-2xl font-luxury font-bold">{totalVacationDays - usedVacationDays}</p>
+                <p className="text-[7px] text-green-400 uppercase font-bold">Giorni</p>
+              </div>
             </div>
 
-            <div className="space-y-3">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest mb-4 text-amber-600">Assenze Registrate</h5>
-              {(member.unavailable_dates || []).length > 0 ? (
-                <div className="grid gap-2">
-                  {(member.unavailable_dates || []).sort().reverse().slice(0, 10).map(date => (
-                    <div key={date} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
-                      <span className="font-bold text-[11px]">{new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', weekday: 'short' })}</span>
-                      <button onClick={() => removeVacation(date)} className="text-gray-300 hover:text-red-500 transition-colors">
-                        <i className="fas fa-trash-alt text-[10px]"></i>
-                      </button>
-                    </div>
-                  ))}
-                  {(member.unavailable_dates || []).length > 10 && <p className="text-center text-[8px] text-gray-300 uppercase font-bold pt-2">+ Altri {(member.unavailable_dates || []).length - 10} giorni</p>}
+            {/* NUOVA ASSENZA */}
+            <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Registra Nuovo Periodo</h5>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Dal</label>
+                  <input type="date" value={newAbsence.start} onChange={e => setNewAbsence({...newAbsence, start: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Al</label>
+                  <input type="date" value={newAbsence.end} onChange={e => setNewAbsence({...newAbsence, end: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Tipologia</label>
+                <select value={newAbsence.type} onChange={e => setNewAbsence({...newAbsence, type: e.target.value as AbsenceType})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold">
+                  <option value="vacation">Vacanza / Ferie</option>
+                  <option value="sick">Malattia</option>
+                  <option value="injury">Infortunio</option>
+                  <option value="other">Altro</option>
+                </select>
+              </div>
+              <button onClick={addAbsence} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Conferma Registrazione</button>
+            </div>
+
+            {/* LISTA PERIODI */}
+            <div className="space-y-4">
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Assenze Registrate</h5>
+              {absences.length > 0 ? (
+                <div className="space-y-3">
+                  {absences.map(a => {
+                    const start = new Date(a.startDate);
+                    const end = new Date(a.endDate);
+                    const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    return (
+                      <div key={a.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl shadow-sm group">
+                        <div className="flex items-center gap-6">
+                           <div className="text-center min-w-[50px]">
+                              <p className="text-lg font-luxury font-bold">{diff}</p>
+                              <p className="text-[7px] text-gray-400 font-bold uppercase">Giorni</p>
+                           </div>
+                           <div className="border-l border-gray-100 pl-6">
+                              <div className="mb-1">{getAbsenceBadge(a.type)}</div>
+                              <p className="text-[11px] font-bold text-gray-900">
+                                {start.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} 
+                                <span className="mx-2 text-gray-300">→</span>
+                                {end.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </p>
+                           </div>
+                        </div>
+                        <button onClick={() => removeAbsence(a.id)} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-200 hover:text-red-500 hover:bg-red-50 transition-all">
+                          <i className="fas fa-trash-alt text-[10px]"></i>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="py-12 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200 text-center">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna assenza registrata.</p>
+                  <p className="text-gray-400 text-[9px] font-bold uppercase tracking-widest">Nessuna assenza nello storico.</p>
                 </div>
               )}
             </div>
