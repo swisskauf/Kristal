@@ -16,25 +16,24 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const isGuest = !user;
 
   const guestNav = [
-    { id: 'dashboard', label: 'L\'Atelier', icon: 'fa-spa' },
+    { id: 'dashboard', label: "L'Atelier", icon: 'fa-spa' },
   ];
 
   const clientNav = [
-    { id: 'dashboard', label: 'Riserva Tempo', icon: 'fa-calendar-plus' },
-    { id: 'calendar', label: 'Il Tuo Percorso', icon: 'fa-star' },
+    { id: 'dashboard', label: 'Prenota', icon: 'fa-calendar-plus' },
+    { id: 'calendar', label: 'Miei Appuntamenti', icon: 'fa-history' },
   ];
 
   const collaboratorNav = [
-    { id: 'collab_dashboard', label: 'Mia Agenda', icon: 'fa-user-clock' },
-    { id: 'collab_absences', label: 'Miei Congedi', icon: 'fa-calendar-minus' },
+    { id: 'collab_dashboard', label: 'Agenda', icon: 'fa-user-clock' },
+    { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
   ];
 
   const adminNav = [
-    { id: 'admin_dashboard', label: 'Visione', icon: 'fa-eye' },
+    { id: 'dashboard', label: 'Visione', icon: 'fa-chart-pie' },
     { id: 'services_management', label: 'Servizi', icon: 'fa-concierge-bell' },
-    { id: 'team_schedule', label: 'Il Team', icon: 'fa-users' },
-    { id: 'clients', label: 'I Nostri Ospiti', icon: 'fa-heart' },
-    { id: 'calendar', label: 'Agenda Atelier', icon: 'fa-calendar-check' },
+    { id: 'team_schedule', label: 'Team', icon: 'fa-users' },
+    { id: 'clients', label: 'Ospiti', icon: 'fa-heart' },
   ];
 
   let navItems = guestNav;
@@ -44,6 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fcfcfc]">
+      {/* SIDEBAR DESKTOP */}
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-gray-50 sticky top-0 h-screen z-40">
         <div className="p-12">
           <h1 className="text-3xl font-luxury font-bold text-gray-900 tracking-tighter">
@@ -90,7 +90,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
           ) : (
             <button 
               onClick={onLoginClick}
-              className="w-full py-4 bg-gray-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg"
+              className="w-full py-4 bg-gray-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all"
             >
               Accedi
             </button>
@@ -98,13 +98,22 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
         </div>
       </aside>
 
-      <main className="flex-1 p-8 md:p-16 overflow-y-auto pb-40 md:pb-16">
+      {/* MOBILE HEADER */}
+      <div className="md:hidden flex items-center justify-between p-6 bg-white border-b border-gray-50">
+        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter">KRISTAL</h1>
+        {isGuest && (
+          <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
+        )}
+      </div>
+
+      <main className="flex-1 p-6 md:p-16 overflow-y-auto pb-32 md:pb-16">
         <div className="max-w-5xl mx-auto">
           {children}
         </div>
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-100 px-8 py-4 flex justify-around items-center z-50 rounded-t-[2.5rem] shadow-2xl">
+      {/* BOTTOM NAV MOBILE */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex justify-around items-center z-50 shadow-2xl">
         {navItems.map((item) => (
           <button
             key={item.id}
@@ -114,9 +123,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
             }`}
           >
             <i className={`fas ${item.icon} text-lg`}></i>
-            <span className="text-[7px] font-bold uppercase tracking-widest">{item.label.split(' ')[0]}</span>
+            <span className="text-[7px] font-bold uppercase tracking-widest">{item.label}</span>
           </button>
         ))}
+        {!isGuest && (
+          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300">
+            <i className="fas fa-sign-out-alt text-lg"></i>
+            <span className="text-[7px] font-bold uppercase tracking-widest">Esci</span>
+          </button>
+        )}
       </nav>
     </div>
   );
