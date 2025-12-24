@@ -29,14 +29,14 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
-      // Pulizia oggetto per garantire compatibilità DB
+      // Pulizia oggetto: inviamo solo le colonne reali della tabella
       const payload = {
         id: profile.id,
         email: profile.email,
-        full_name: profile.full_name || profile.fullName,
-        phone: profile.phone,
+        full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
+        phone: profile.phone || '',
         role: profile.role || 'client',
-        avatar: profile.avatar,
+        avatar: profile.avatar || '',
         technical_sheets: profile.technical_sheets || [],
         treatment_history: profile.treatment_history || []
       };
@@ -109,7 +109,9 @@ export const db = {
       return data || [];
     },
     upsert: async (appointment: any) => {
-      const { data, error } = await supabase.from('appointments').upsert(appointment).select().single();
+      // IMPORTANTE: Rimuovere oggetti nidificati prima dell'upsert
+      const { services, profiles, ...cleanData } = appointment;
+      const { data, error } = await supabase.from('appointments').upsert(cleanData).select().single();
       if (error) throw handleError(error);
       return data;
     },
