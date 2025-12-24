@@ -31,8 +31,8 @@ export interface AbsenceEntry {
   id: string;
   startDate: string;
   endDate: string;
-  startTime?: string; // HH:mm
-  endTime?: string;   // HH:mm
+  startTime?: string;
+  endTime?: string;
   type: AbsenceType;
   notes?: string;
 }
