@@ -2,7 +2,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 
-// Tentativo sicuro di recuperare le variabili d'ambiente
 const getEnv = (key: string): string => {
   try {
     // @ts-ignore
@@ -78,7 +77,6 @@ export const db = {
       const emailLower = profile.email?.toLowerCase();
       let role = VALID_ROLES.includes(profile.role) ? profile.role : 'client';
       
-      // Forzatura ruolo in base all'email durante l'upsert
       if (emailLower === 'serop.serop@outlook.com') role = 'admin';
       else if (emailLower === 'sirop.sirop@outlook.sa') role = 'collaborator';
 
