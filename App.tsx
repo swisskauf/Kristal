@@ -35,7 +35,6 @@ const App: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('Tutti');
   const [clientSearch, setClientSearch] = useState('');
   
-  // New Technical Sheet State
   const [newSheet, setNewSheet] = useState({ category: 'Colore', content: '' });
 
   const isAdmin = user?.role === 'admin';
@@ -122,14 +121,21 @@ const App: React.FC = () => {
 
   const refreshData = async () => {
     try {
-      db.appointments.getAll().then(data => setAppointments(data || [])).catch(e => console.warn("Appts load fail", e));
-      db.services.getAll().then(data => { if(data?.length) setServices(data); }).catch(e => console.warn("Svcs load fail", e));
-      db.team.getAll().then(data => { if(data?.length) setTeam(data); }).catch(e => console.warn("Team load fail", e));
+      const [appts, svcs, teamData] = await Promise.all([
+        db.appointments.getAll(),
+        db.services.getAll(),
+        db.team.getAll()
+      ]);
+      setAppointments(appts || []);
+      if(svcs?.length) setServices(svcs);
+      if(teamData?.length) setTeam(teamData);
+      
       if (user?.role === 'admin') {
-        db.profiles.getAll().then(data => setProfiles(data || [])).catch(e => console.warn("Profiles load fail", e));
+        const profs = await db.profiles.getAll();
+        setProfiles(profs || []);
       }
     } catch (err) {
-      console.error("Errore generico refresh:", err);
+      console.error("Errore refresh dati:", err);
     }
   };
 
@@ -143,10 +149,21 @@ const App: React.FC = () => {
     const p = profiles.find(p => p.id === profileId);
     if (!p) return;
     try {
-      await db.profiles.upsert({ ...p, role: newRole });
-      refreshData();
-    } catch (e) {
-      alert("Errore aggiornamento ruolo");
+      // Garantiamo che tutti i campi obbligatori siano presenti
+      const updatedProfile = { 
+        ...p, 
+        role: newRole 
+      };
+      await db.profiles.upsert(updatedProfile);
+      await refreshData();
+      
+      // Se stiamo visualizzando i dettagli del cliente, aggiorniamo la modale
+      if (viewingGuest && viewingGuest.id === profileId) {
+        setViewingGuest(updatedProfile);
+      }
+    } catch (e: any) {
+      console.error("Errore ruolo:", e);
+      alert("Impossibile aggiornare il ruolo: " + e.message);
     }
   };
 
@@ -166,7 +183,7 @@ const App: React.FC = () => {
       setNewSheet({ category: 'Colore', content: '' });
       refreshData();
     } catch (e) {
-      alert("Errore salvataggio scheda");
+      alert("Errore salvataggio scheda tecnica");
     }
   };
 
@@ -179,27 +196,37 @@ const App: React.FC = () => {
       email: formData.get('email'),
       phone: formData.get('phone'),
       role: 'client',
-      technical_sheets: []
+      technical_sheets: [],
+      treatment_history: []
     };
     try {
       await db.profiles.upsert(guest);
       setIsAddingGuest(false);
-      refreshData();
+      await refreshData();
     } catch (e) {
-      alert("Errore aggiunta ospite");
+      alert("Errore aggiunta nuovo ospite");
     }
   };
 
   const getGuestStats = (clientId: string) => {
     const now = new Date();
     const guestAppts = appointments.filter(a => a.client_id === clientId);
+    
     const monthAppts = guestAppts.filter(a => {
       const d = new Date(a.date);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
+    
     const yearAppts = guestAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear());
+    
     const noShows = guestAppts.filter(a => a.status === 'noshow').length;
-    return { total: guestAppts.length, month: monthAppts.length, year: yearAppts.length, noShows };
+    
+    return { 
+      total: guestAppts.length, 
+      month: monthAppts.length, 
+      year: yearAppts.length, 
+      noShows 
+    };
   };
 
   if (loading) return (
@@ -221,14 +248,52 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* DASHBOARD & OTHER SECTIONS OMITTED FOR BREVITY, FOCUSING ON GUESTS */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-20 pb-20">
+          <header className="flex flex-col md:flex-row md:items-end justify-between gap-10">
+            <div className="space-y-4">
+              <span className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] block border-l-2 border-amber-600 pl-4">Atelier di Bellezza</span>
+              <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tight">
+                {user ? `${timeGreeting}, ${user.fullName.split(' ')[0]}` : "Benvenuti in Kristal"}
+              </h2>
+            </div>
+            {!isAdmin && !isCollaborator && (
+              <button onClick={() => { if(!user) setIsAuthOpen(true); else setIsFormOpen(true); }} className="bg-black text-white px-10 py-6 rounded-3xl font-bold shadow-2xl hover:bg-amber-700 hover:scale-105 transition-all uppercase tracking-widest text-[10px]">
+                Riserva un Istante
+              </button>
+            )}
+          </header>
+
+          <section className="space-y-12">
+            <h3 className="text-3xl font-luxury font-bold text-gray-900 border-b border-gray-100 pb-8">I Nostri Ritual</h3>
+            <div className="grid md:grid-cols-2 gap-8">
+              {services.filter(s => filterCategory === 'Tutti' || s.category === filterCategory).map(s => (
+                <button key={s.id} onClick={() => { if(!user) setIsAuthOpen(true); else { setSelectedAppointment({ service_id: s.id }); setIsFormOpen(true); } }} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 flex justify-between items-center hover:shadow-xl hover:border-amber-200 transition-all group text-left">
+                  <div className="flex-1 pr-6">
+                    <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">{s.category}</p>
+                    <h4 className="font-bold text-2xl mb-2">{s.name}</h4>
+                    <p className="text-xs text-gray-400 italic line-clamp-2">{s.description}</p>
+                  </div>
+                  <div className="text-right border-l border-gray-50 pl-6 min-w-[100px]">
+                     <p className="font-luxury font-bold text-2xl">CHF {s.price}</p>
+                     <p className="text-[9px] text-gray-300 font-bold uppercase mt-2">{s.duration} MIN</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {activeTab === 'clients' && isAdmin && (
         <div className="space-y-12 pb-20 animate-in fade-in duration-500">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
             <h2 className="text-5xl font-luxury font-bold">I Nostri Ospiti</h2>
             <div className="flex gap-4">
-              <input type="text" placeholder="Ricerca ospite..." className="p-4 bg-white border border-gray-100 rounded-2xl text-sm min-w-[250px] shadow-sm" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
+              <div className="relative">
+                <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-300"></i>
+                <input type="text" placeholder="Ricerca ospite..." className="pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl text-sm min-w-[250px] shadow-sm outline-none focus:ring-2 focus:ring-amber-500 transition-all" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
+              </div>
               <button onClick={() => setIsAddingGuest(true)} className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Nuovo Ospite</button>
             </div>
           </div>
@@ -239,24 +304,28 @@ const App: React.FC = () => {
               return (
                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex flex-col md:flex-row items-center justify-between hover:shadow-lg transition-all group">
                   <div className="flex items-center gap-6 flex-1">
-                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}&background=f8f8f8&color=999`} className="w-20 h-20 rounded-full border-2 border-white shadow-sm" />
+                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}&background=f8f8f8&color=999`} className="w-20 h-20 rounded-full border-2 border-white shadow-sm object-cover" />
                     <div>
                       <div className="flex items-center gap-3">
                         <h5 className="font-bold text-2xl text-gray-900">{p.full_name}</h5>
                         <span className={`px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase ${p.role === 'admin' ? 'bg-black text-white' : p.role === 'collaborator' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{p.role}</span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1"><i className="fas fa-envelope mr-2"></i>{p.email} • <i className="fas fa-phone mr-2 ml-2"></i>{p.phone}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        <i className="fas fa-envelope mr-2"></i>{p.email} 
+                        <span className="mx-3 text-gray-200">|</span> 
+                        <i className="fas fa-phone mr-2"></i>{p.phone || 'Non fornito'}
+                      </p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-12 mt-6 md:mt-0">
                     <div className="text-center">
-                       <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Affidabilità</p>
-                       <p className={`text-lg font-bold ${stats.noShows > 2 ? 'text-red-500' : 'text-green-500'}`}>{stats.noShows} <span className="text-[10px] font-normal text-gray-300">No-Show</span></p>
+                       <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Mese / Anno</p>
+                       <p className="text-xl font-luxury font-bold text-gray-900">{stats.month} <span className="text-gray-200 text-sm">/</span> {stats.year}</p>
                     </div>
                     <div className="text-center">
-                       <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Mese / Anno</p>
-                       <p className="text-lg font-bold">{stats.month} <span className="text-gray-200">/</span> {stats.year}</p>
+                       <p className="text-[8px] font-bold text-red-400 uppercase mb-1">No-Show</p>
+                       <p className={`text-xl font-luxury font-bold ${stats.noShows > 0 ? 'text-red-500' : 'text-gray-300'}`}>{stats.noShows}</p>
                     </div>
                     <button onClick={() => setViewingGuest(p)} className="px-8 py-4 bg-gray-50 text-gray-400 rounded-2xl text-[9px] font-bold uppercase tracking-widest group-hover:bg-black group-hover:text-white transition-all">CRM Dettagli</button>
                   </div>
@@ -274,30 +343,40 @@ const App: React.FC = () => {
               <button onClick={() => setViewingGuest(null)} className="absolute top-10 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-xl"></i></button>
               
               <div className="flex items-center gap-10 mb-12 border-b border-gray-50 pb-10">
-                 <img src={viewingGuest.avatar || `https://ui-avatars.com/api/?name=${viewingGuest.full_name}`} className="w-32 h-32 rounded-full shadow-xl" />
+                 <img src={viewingGuest.avatar || `https://ui-avatars.com/api/?name=${viewingGuest.full_name}`} className="w-32 h-32 rounded-full shadow-xl object-cover" />
                  <div className="flex-1">
                     <div className="flex items-center gap-4 mb-2">
                        <h3 className="text-4xl font-luxury font-bold text-gray-900">{viewingGuest.full_name}</h3>
-                       <select 
-                          value={viewingGuest.role} 
-                          onChange={(e) => handleUpdateRole(viewingGuest.id, e.target.value)}
-                          className="bg-gray-50 border-none text-[9px] font-bold uppercase px-3 py-1 rounded-lg outline-none focus:ring-1 focus:ring-amber-500"
-                       >
-                          <option value="client">Ospite</option>
-                          <option value="collaborator">Collaboratore</option>
-                          <option value="admin">Direzione</option>
-                       </select>
+                       <div className="flex items-center bg-gray-50 p-1 rounded-xl">
+                          <span className="text-[7px] font-bold uppercase text-gray-400 px-2">Ruolo:</span>
+                          <select 
+                             value={viewingGuest.role} 
+                             onChange={(e) => handleUpdateRole(viewingGuest.id, e.target.value)}
+                             className="bg-white border border-gray-100 text-[9px] font-bold uppercase px-3 py-1 rounded-lg outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                          >
+                             <option value="client">Ospite</option>
+                             <option value="collaborator">Collaboratore</option>
+                             <option value="admin">Direzione</option>
+                          </select>
+                       </div>
                     </div>
-                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">{viewingGuest.email} • {viewingGuest.phone}</p>
+                    <div className="flex gap-4">
+                      <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest"><i className="fas fa-envelope mr-2"></i>{viewingGuest.email}</p>
+                      <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest"><i className="fas fa-phone mr-2"></i>{viewingGuest.phone || 'Cellulare non impostato'}</p>
+                    </div>
                  </div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-amber-50 p-6 rounded-3xl text-center">
-                       <p className="text-[8px] font-bold text-amber-600 uppercase mb-1">Total Rituals</p>
-                       <p className="text-2xl font-luxury font-bold">{getGuestStats(viewingGuest.id).total}</p>
+                 <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-amber-50 p-6 rounded-3xl text-center border border-amber-100">
+                       <p className="text-[8px] font-bold text-amber-600 uppercase mb-1">Mese Corrente</p>
+                       <p className="text-2xl font-luxury font-bold text-gray-900">{getGuestStats(viewingGuest.id).month}</p>
                     </div>
-                    <div className="bg-red-50 p-6 rounded-3xl text-center">
-                       <p className="text-[8px] font-bold text-red-600 uppercase mb-1">Mancate Presenze</p>
-                       <p className="text-2xl font-luxury font-bold">{getGuestStats(viewingGuest.id).noShows}</p>
+                    <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100">
+                       <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Totale Anno</p>
+                       <p className="text-2xl font-luxury font-bold text-gray-900">{getGuestStats(viewingGuest.id).year}</p>
+                    </div>
+                    <div className="bg-red-50 p-6 rounded-3xl text-center border border-red-100">
+                       <p className="text-[8px] font-bold text-red-600 uppercase mb-1">No-Show</p>
+                       <p className="text-2xl font-luxury font-bold text-red-600">{getGuestStats(viewingGuest.id).noShows}</p>
                     </div>
                  </div>
               </div>
@@ -305,58 +384,73 @@ const App: React.FC = () => {
               <div className="flex-1 overflow-y-auto grid md:grid-cols-2 gap-12 pr-4 scrollbar-hide">
                  <div className="space-y-8">
                     <h4 className="text-xl font-luxury font-bold border-l-4 border-amber-600 pl-4">Schede Tecniche</h4>
-                    <div className="bg-gray-50 p-8 rounded-[3rem] space-y-4">
-                       <select value={newSheet.category} onChange={(e) => setNewSheet({...newSheet, category: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-100 text-xs font-bold">
-                          <option>Colore</option>
-                          <option>Taglio</option>
-                          <option>Trattamento Viso</option>
-                          <option>Nails</option>
-                       </select>
-                       <textarea 
-                          placeholder="Inserisci formula colore, tempi di posa o note tecniche..." 
-                          className="w-full p-6 rounded-3xl bg-white border border-gray-100 text-xs resize-none" 
-                          rows={4}
-                          value={newSheet.content}
-                          onChange={(e) => setNewSheet({...newSheet, content: e.target.value})}
-                       />
-                       <button onClick={handleAddTechnicalSheet} className="w-full py-4 bg-black text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest shadow-lg">Salva Scheda Tecnica</button>
+                    <div className="bg-gray-50 p-8 rounded-[3rem] border border-gray-100 space-y-4">
+                       <div className="space-y-2">
+                         <label className="text-[8px] font-bold uppercase text-gray-400 ml-1">Categoria</label>
+                         <select value={newSheet.category} onChange={(e) => setNewSheet({...newSheet, category: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-100 text-xs font-bold outline-none focus:ring-1 focus:ring-amber-500">
+                            <option>Colore</option>
+                            <option>Taglio</option>
+                            <option>Trattamento Viso</option>
+                            <option>Nails</option>
+                            <option>Dermocosmesi</option>
+                         </select>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[8px] font-bold uppercase text-gray-400 ml-1">Formulazione e Note</label>
+                          <textarea 
+                             placeholder="Inserisci formula colore, tempi di posa, sensibilità o note tecniche..." 
+                             className="w-full p-6 rounded-3xl bg-white border border-gray-100 text-xs resize-none outline-none focus:ring-1 focus:ring-amber-500" 
+                             rows={4}
+                             value={newSheet.content}
+                             onChange={(e) => setNewSheet({...newSheet, content: e.target.value})}
+                          />
+                       </div>
+                       <button onClick={handleAddTechnicalSheet} className="w-full py-4 bg-black text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all">Salva Scheda Tecnica</button>
                     </div>
 
                     <div className="space-y-4">
-                       {(viewingGuest.technical_sheets || []).map((s: any) => (
-                         <div key={s.id} className="p-6 bg-white border border-gray-50 rounded-3xl shadow-sm">
+                       {(viewingGuest.technical_sheets || []).length > 0 ? viewingGuest.technical_sheets.map((s: any) => (
+                         <div key={s.id} className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm hover:border-amber-200 transition-all">
                             <div className="flex justify-between items-center mb-3">
                                <span className="text-[8px] font-bold text-amber-600 uppercase bg-amber-50 px-3 py-1 rounded-full">{s.category}</span>
-                               <span className="text-[9px] text-gray-300 font-bold">{new Date(s.date).toLocaleDateString()}</span>
+                               <span className="text-[9px] text-gray-300 font-bold"><i className="fas fa-calendar-alt mr-2"></i>{new Date(s.date).toLocaleDateString()}</span>
                             </div>
                             <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">{s.content}</p>
                          </div>
-                       ))}
+                       )) : (
+                         <div className="text-center py-10 text-gray-300 uppercase text-[9px] font-bold tracking-widest">Nessuna scheda tecnica registrata.</div>
+                       )}
                     </div>
                  </div>
 
                  <div className="space-y-8">
-                    <h4 className="text-xl font-luxury font-bold border-l-4 border-gray-900 pl-4">Cronologia Appuntamenti</h4>
+                    <h4 className="text-xl font-luxury font-bold border-l-4 border-gray-900 pl-4">Storico Appuntamenti</h4>
                     <div className="space-y-4">
-                       {appointments.filter(a => a.client_id === viewingGuest.id).sort((a,b) => b.date.localeCompare(a.date)).map(app => (
-                         <div key={app.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl group">
-                            <div>
-                               <p className="text-[10px] font-bold text-gray-900">{app.services?.name}</p>
-                               <p className="text-[8px] text-gray-400 uppercase tracking-widest mt-1">{new Date(app.date).toLocaleDateString()} • Artist: {app.team_member_name}</p>
+                       {appointments.filter(a => a.client_id === viewingGuest.id).length > 0 ? (
+                         appointments.filter(a => a.client_id === viewingGuest.id)
+                          .sort((a,b) => b.date.localeCompare(a.date))
+                          .map(app => (
+                            <div key={app.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl group hover:border-gray-200 transition-all">
+                                <div>
+                                  <p className="text-[10px] font-bold text-gray-900">{app.services?.name}</p>
+                                  <p className="text-[8px] text-gray-400 uppercase tracking-widest mt-1">{new Date(app.date).toLocaleDateString()} • Artist: {app.team_member_name}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-[7px] font-bold uppercase px-3 py-1 rounded-full ${app.status === 'noshow' ? 'bg-red-50 text-red-500 border border-red-100' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+                                      {app.status === 'noshow' ? 'No-Show' : 'Eseguito'}
+                                  </span>
+                                  {app.status !== 'noshow' && (
+                                    <button onClick={async () => {
+                                        await db.appointments.upsert({...app, status: 'noshow'});
+                                        refreshData();
+                                    }} className="text-red-300 opacity-0 group-hover:opacity-100 transition-all text-[8px] font-bold uppercase hover:text-red-600">Segna No-Show</button>
+                                  )}
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                               <span className={`text-[7px] font-bold uppercase px-3 py-1 rounded-full ${app.status === 'noshow' ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-400'}`}>
-                                  {app.status === 'noshow' ? 'No-Show' : 'Eseguito'}
-                               </span>
-                               {app.status !== 'noshow' && (
-                                 <button onClick={async () => {
-                                    await db.appointments.upsert({...app, status: 'noshow'});
-                                    refreshData();
-                                 }} className="text-red-300 opacity-0 group-hover:opacity-100 transition-all text-[8px] font-bold uppercase hover:text-red-600">Segna No-Show</button>
-                               )}
-                            </div>
-                         </div>
-                       ))}
+                          ))
+                       ) : (
+                         <div className="text-center py-10 text-gray-300 uppercase text-[9px] font-bold tracking-widest">Nessun appuntamento passato.</div>
+                       )}
                     </div>
                  </div>
               </div>
@@ -373,19 +467,19 @@ const App: React.FC = () => {
               <form onSubmit={handleAddGuest} className="space-y-6">
                  <div className="space-y-2">
                     <label className="text-[10px] font-bold text-amber-600 uppercase ml-1">Nome e Cognome</label>
-                    <input name="fullName" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="es. Maria Rossi" />
+                    <input name="fullName" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold outline-none focus:ring-2 focus:ring-amber-500" placeholder="es. Maria Rossi" />
                  </div>
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-amber-600 uppercase ml-1">Email</label>
-                       <input name="email" type="email" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="mail@esempio.com" />
+                       <input name="email" type="email" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold outline-none focus:ring-2 focus:ring-amber-500" placeholder="mail@esempio.com" />
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-amber-600 uppercase ml-1">Cellulare</label>
-                       <input name="phone" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="+41..." />
+                       <input name="phone" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold outline-none focus:ring-2 focus:ring-amber-500" placeholder="+41..." />
                     </div>
                  </div>
-                 <button type="submit" className="w-full py-5 bg-black text-white font-bold rounded-3xl shadow-2xl uppercase text-[10px] tracking-widest hover:bg-amber-600 transition-all">Sincronizza Ospite</button>
+                 <button type="submit" className="w-full py-5 bg-black text-white font-bold rounded-3xl shadow-2xl uppercase text-[10px] tracking-widest hover:bg-amber-600 transition-all">Sincronizza Ospite nel Database</button>
               </form>
            </div>
         </div>
