@@ -25,22 +25,18 @@ const useMock = !realClient;
 
 /**
  * Esportiamo un oggetto supabase "sicuro". 
- * Se il client reale non esiste, forniamo stub per evitare crash (es. supabase.auth.getSession)
  */
 export const supabase = realClient || ({
   auth: {
     getSession: async () => ({ data: { session: null }, error: null }),
     onAuthStateChange: (callback: any) => {
-      // In modalità mock, potremmo voler triggerare un evento iniziale
       const user = supabaseMock.auth.getUser();
       if (user) {
-        // Simuliamo un evento di signed in se c'è un utente nel mock
         setTimeout(() => callback('SIGNED_IN', { user }), 0);
       }
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
     signInWithPassword: async ({ email, password }: any) => {
-      // Semplice logica di bypass per il mock
       const mockUser = { id: 'mock-id', email, fullName: 'Utente Mock', role: 'admin' };
       supabaseMock.auth.signIn(mockUser as any);
       return { data: { user: mockUser, session: {} }, error: null };
@@ -69,7 +65,7 @@ const VALID_ROLES = ['client', 'admin', 'collaborator'];
 const handleError = (error: any) => {
   console.error('Supabase Error:', error);
   if (error.code === '42703' || error.message?.includes('column')) {
-    return new Error("Schema database non aggiornato. Per favore verificate il database.");
+    return new Error("Schema database non aggiornato. Verificate la configurazione tabelle.");
   }
   return error;
 };
