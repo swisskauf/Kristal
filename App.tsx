@@ -174,16 +174,25 @@ const App: React.FC = () => {
 
   const handleSaveTeamMember = async (updatedMember: TeamMember) => {
     try {
-      console.log("Saving team member:", updatedMember);
       await db.team.upsert(updatedMember);
       await refreshData();
-      // Opzionale: non chiudiamo il modal se vogliamo che l'admin veda l'aggiornamento
-      // ma aggiorniamo il managingMember per riflettere i nuovi dati nello UI
       setManagingMember(updatedMember);
     } catch (e: any) {
-      console.error("Team save error full details:", e);
-      const msg = e.message || "Errore sconosciuto";
-      alert(`Impossibile salvare le modifiche al collaboratore. Dettaglio: ${msg}`);
+      console.error("Team save error detail:", e);
+      
+      if (e.message?.includes('column')) {
+        const sqlFix = `
+-- ESEGUI QUESTO SQL NEL SQL EDITOR DI SUPABASE:
+ALTER TABLE team_members 
+ADD COLUMN IF NOT EXISTS start_hour INTEGER DEFAULT 8,
+ADD COLUMN IF NOT EXISTS end_hour INTEGER DEFAULT 19,
+ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';
+        `;
+        console.warn("Mancano delle colonne nel database! Esegui questo comando in Supabase:", sqlFix);
+        alert(`Il tuo database non è aggiornato. Apri la console (F12) per il comando SQL da eseguire su Supabase.`);
+      } else {
+        alert(`Errore nel salvataggio: ${e.message}`);
+      }
     }
   };
 
@@ -471,7 +480,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODALI ESISTENTI */}
+      {/* MODALI */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
@@ -505,7 +514,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL TEAM MANAGEMENT */}
       {managingMember && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
           <div className="w-full max-w-3xl h-[85vh] bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative flex flex-col">
