@@ -1,12 +1,23 @@
 
 export type TeamMemberName = string;
 
-export type AbsenceType = 'vacation' | 'sick' | 'injury' | 'other';
+export type AbsenceType = 
+  | 'vacation' 
+  | 'sick' 
+  | 'injury' 
+  | 'maternity' 
+  | 'paternity' 
+  | 'training' 
+  | 'bereavement' 
+  | 'unpaid' 
+  | 'overtime';
 
 export interface AbsenceEntry {
   id: string;
   startDate: string;
   endDate: string;
+  startTime?: string; // HH:mm
+  endTime?: string;   // HH:mm
   type: AbsenceType;
   notes?: string;
 }
@@ -42,11 +53,13 @@ export interface TeamMember {
   role: string;
   bio?: string;
   avatar?: string;
-  unavailable_dates?: string[]; // Mantenuto per compatibilità legacy
-  absences_json?: AbsenceEntry[]; // Nuovo campo strutturato
+  profile_id?: string; // Collegamento all'utente auth
+  unavailable_dates?: string[]; 
+  absences_json?: AbsenceEntry[];
   total_vacation_days?: number;
-  start_hour?: number;
-  end_hour?: number;
+  work_start_time?: string; // Formato HH:mm
+  work_end_time?: string;   // Formato HH:mm
+  overtime_balance?: number; // Ore di straordinario accumulate
 }
 
 export interface User {
@@ -54,7 +67,7 @@ export interface User {
   email: string;
   phone: string;
   fullName: string;
-  role: 'client' | 'admin';
+  role: 'client' | 'admin' | 'collaborator';
   avatar?: string;
   treatment_history?: TreatmentRecord[];
 }
