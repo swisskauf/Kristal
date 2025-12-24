@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [clientSearch, setClientSearch] = useState('');
 
   const [managingMember, setManagingMember] = useState<TeamMember | null>(null);
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [viewingHistory, setViewingHistory] = useState<User | null>(null);
   const [editingTreatmentIndex, setEditingTreatmentIndex] = useState<number | null>(null);
 
@@ -112,12 +113,12 @@ const App: React.FC = () => {
         db.services.getAll(),
         db.team.getAll()
       ]);
-      setAppointments(appts);
+      setAppointments(appts || []);
       if (svcs && svcs.length > 0) setServices(svcs);
       if (tm && tm.length > 0) setTeam(tm);
       if (user?.role === 'admin') {
         const prfs = await db.profiles.getAll();
-        setProfiles(prfs);
+        setProfiles(prfs || []);
       }
     } catch (err) {
       console.error("Errore refresh dati:", err);
@@ -129,6 +130,20 @@ const App: React.FC = () => {
     setUser(null);
     setActiveTab('dashboard');
   };
+
+  // ADMIN DASHBOARD STATS
+  const adminStats = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const todaysAppts = appointments.filter(a => a.date.startsWith(today));
+    const revenue = todaysAppts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
+    const pendingCount = appointments.filter(a => new Date(a.date) >= new Date()).length;
+    
+    return {
+      todayCount: todaysAppts.length,
+      todayRevenue: revenue,
+      totalPending: pendingCount
+    };
+  }, [appointments]);
 
   const saveAppointment = async (appData: Partial<Appointment>) => {
     if (!user) return;
@@ -147,7 +162,6 @@ const App: React.FC = () => {
       setSelectedAppointment(undefined);
     } catch (e) {
       console.error("Save error:", e);
-      alert("Un piccolo imprevisto nel rituale. Ti invitiamo a riprovare.");
     }
   };
 
@@ -157,19 +171,8 @@ const App: React.FC = () => {
       await refreshData();
       setIsServiceFormOpen(false);
       setSelectedService(undefined);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Service save error:", e);
-      alert("Impossibile salvare il servizio. Verificate la connessione.");
-    }
-  };
-
-  const handleDeleteService = async (id: string) => {
-    if (!confirm("Rimuovere definitivamente questo Ritual dal catalogo?")) return;
-    try {
-      await db.services.delete(id);
-      await refreshData();
-    } catch (e) {
-      console.error("Service delete error:", e);
     }
   };
 
@@ -177,98 +180,42 @@ const App: React.FC = () => {
     try {
       await db.team.upsert(updatedMember);
       await refreshData();
-      setManagingMember(updatedMember);
+      setManagingMember(null);
+      setIsAddingMember(false);
     } catch (e: any) {
       console.error("Team save error detail:", e);
-      if (e.message?.includes('column')) {
-        const sqlFix = "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS start_hour INTEGER DEFAULT 8, ADD COLUMN IF NOT EXISTS end_hour INTEGER DEFAULT 19, ADD COLUMN IF NOT EXISTS unavailable_dates TEXT[] DEFAULT '{}';";
-        console.warn("ESEGUI QUESTO SQL IN SUPABASE:", sqlFix);
-        alert(`Il database non è aggiornato. Copia il comando SQL dalla console F12 e incollalo nell'editor di Supabase.`);
-      } else {
-        alert(`Errore nel salvataggio: ${e.message}`);
-      }
     }
   };
 
   const handleToggleVacationQuickly = async (memberName: string, date: string) => {
     const member = team.find(m => m.name === memberName);
     if (!member) return;
-
     const currentDates = member.unavailable_dates || [];
     const updatedDates = currentDates.includes(date) 
       ? currentDates.filter(d => d !== date)
       : [...currentDates, date].sort();
-
     const updatedMember = { ...member, unavailable_dates: updatedDates };
-    
     try {
       await db.team.upsert(updatedMember);
       await refreshData();
-    } catch (e) {
-      console.error("Quick toggle error:", e);
-    }
+    } catch (e) { console.error(e); }
   };
 
   const addOrUpdateTreatment = async () => {
     if (!viewingHistory || !newTreatment.service) return;
-
     try {
       const currentHistory = viewingHistory.treatment_history || [];
-      const updatedHistory = [...currentHistory];
-      
-      if (editingTreatmentIndex !== null) {
-        updatedHistory[editingTreatmentIndex] = newTreatment;
-      } else {
-        updatedHistory.push(newTreatment);
-      }
+      const updatedHistory = editingTreatmentIndex !== null 
+        ? currentHistory.map((t, idx) => idx === editingTreatmentIndex ? newTreatment : t)
+        : [...currentHistory, newTreatment];
 
-      const dbProfile = {
-        id: viewingHistory.id,
-        full_name: viewingHistory.fullName,
-        phone: viewingHistory.phone,
-        role: viewingHistory.role,
-        avatar: viewingHistory.avatar,
-        treatment_history: updatedHistory
-      };
-
-      await db.profiles.upsert(dbProfile);
-      
-      setViewingHistory({
-        ...viewingHistory,
-        treatment_history: updatedHistory
-      });
-      
-      setNewTreatment({ 
-        date: new Date().toISOString().split('T')[0], 
-        service: '', 
-        notes: '' 
-      });
+      await db.profiles.upsert({ ...viewingHistory, treatment_history: updatedHistory });
+      setViewingHistory({ ...viewingHistory, treatment_history: updatedHistory });
+      setNewTreatment({ date: new Date().toISOString().split('T')[0], service: '', notes: '' });
       setEditingTreatmentIndex(null);
       await refreshData();
-    } catch (err) {
-      console.error("Errore salvataggio trattamento:", err);
-      alert("Impossibile salvare la nota tecnica.");
-    }
+    } catch (err) { console.error(err); }
   };
-
-  const nextClientAppointment = useMemo(() => {
-    if (!user || user.role === 'admin') return null;
-    const now = new Date();
-    return appointments
-      .filter(a => a.client_id === user.id && new Date(a.date) >= now)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
-  }, [user, appointments]);
-
-  const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const todaysAppts = appointments.filter(a => a.date.includes(today));
-    const revenue = todaysAppts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
-    return {
-      count: todaysAppts.length,
-      revenue,
-      next: todaysAppts[0]
-    };
-  }, [appointments]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
@@ -289,7 +236,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* DASHBOARD CLIENTE */}
       {activeTab === 'dashboard' && (
         <div className="space-y-20 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-20">
           <header className="flex flex-col md:flex-row md:items-end justify-between gap-10">
@@ -305,26 +251,6 @@ const App: React.FC = () => {
               </button>
             )}
           </header>
-
-          {nextClientAppointment && (
-            <section className="bg-amber-50 p-10 rounded-[4rem] border border-amber-100 animate-in zoom-in-95 duration-700">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="flex items-center gap-8">
-                  <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center shadow-md">
-                    <i className="fas fa-calendar-star text-amber-600 text-2xl"></i>
-                  </div>
-                  <div>
-                    <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-1">Il vostro prossimo appuntamento</h4>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {new Date(nextClientAppointment.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })} alle {new Date(nextClientAppointment.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                    </p>
-                    <p className="text-xs text-amber-700 font-medium mt-1">Con {nextClientAppointment.team_member_name} per {nextClientAppointment.services?.name}</p>
-                  </div>
-                </div>
-                <button onClick={() => { setSelectedAppointment(nextClientAppointment); setIsFormOpen(true); }} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest hover:underline">Sposta o Modifica</button>
-              </div>
-            </section>
-          )}
 
           <section className="space-y-12">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 border-b border-gray-100 pb-8">
@@ -356,54 +282,60 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* DASHBOARD ADMIN */}
       {activeTab === 'admin_dashboard' && isAdmin && (
-        <div className="space-y-16 animate-in fade-in duration-500 pb-20">
-          <header>
-             <h2 className="text-5xl font-luxury font-bold text-gray-900">Visione Atelier</h2>
-          </header>
-
+        <div className="space-y-12 animate-in fade-in duration-700 pb-20">
+          <h2 className="text-5xl font-luxury font-bold text-gray-900">Visione Atelier</h2>
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Ospiti Oggi</p>
-              <h4 className="text-6xl font-luxury font-bold text-amber-600">{stats.count}</h4>
-            </div>
-            <div className="bg-black p-10 rounded-[3rem] shadow-xl">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-6">Volume Valore</p>
-              <h4 className="text-5xl font-luxury font-bold text-white">CHF {stats.revenue}</h4>
-            </div>
-            <div className="bg-amber-50 p-10 rounded-[3rem] border border-amber-100 flex flex-col justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-4">Prossimo Ospite</p>
-                <h4 className="text-xl font-bold text-gray-900 truncate">{stats.next?.profiles?.full_name || "Nessuno"}</h4>
-              </div>
-              <button onClick={() => setActiveTab('calendar')} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline text-left mt-4">Vedi Agenda</button>
-            </div>
+             <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-50">
+                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">Rituali Oggi</p>
+                <p className="text-5xl font-luxury font-bold text-gray-900">{adminStats.todayCount}</p>
+             </div>
+             <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-50">
+                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">Ricavo Stimato</p>
+                <p className="text-5xl font-luxury font-bold text-gray-900">CHF {adminStats.todayRevenue}</p>
+             </div>
+             <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-50">
+                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">In Agenda</p>
+                <p className="text-5xl font-luxury font-bold text-gray-900">{adminStats.totalPending}</p>
+             </div>
+          </div>
+          
+          <div className="bg-white p-10 rounded-[4rem] border border-gray-50">
+             <h3 className="text-2xl font-luxury font-bold mb-8">Prossimi Appuntamenti</h3>
+             <div className="space-y-6">
+                {appointments.filter(a => new Date(a.date) >= new Date()).slice(0, 5).map(app => (
+                  <div key={app.id} className="flex items-center justify-between py-4 border-b border-gray-50 last:border-0">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">{app.profiles?.full_name}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest">{new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} • {app.services?.name}</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-600 uppercase">{app.team_member_name}</span>
+                  </div>
+                ))}
+             </div>
           </div>
         </div>
       )}
 
-      {/* GESTIONE TEAM CON PLANNING */}
       {activeTab === 'team_schedule' && isAdmin && (
         <div className="space-y-16 animate-in fade-in duration-500 pb-20">
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <h2 className="text-5xl font-luxury font-bold">Il Team</h2>
-              <div className="flex bg-gray-50 p-1 rounded-2xl">
-                 <button onClick={() => setManagingMember(null)} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${!managingMember ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Planning Globale</button>
-                 <button onClick={() => setManagingMember(team[0])} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${managingMember ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Gestione Singola</button>
+              <div className="flex gap-4">
+                <button onClick={() => setIsAddingMember(true)} className="bg-black text-white px-6 py-3 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg">Nuovo Collaboratore</button>
+                <div className="flex bg-gray-50 p-1 rounded-2xl">
+                   <button onClick={() => setManagingMember(null)} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${!managingMember ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Planning Globale</button>
+                   <button onClick={() => setManagingMember(team[0])} className={`px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${managingMember ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}>Gestione Singola</button>
+                </div>
               </div>
            </div>
 
            {!managingMember ? (
-             <TeamPlanning 
-              team={team} 
-              appointments={appointments} 
-              onToggleVacation={handleToggleVacationQuickly} 
-             />
+             <TeamPlanning team={team} appointments={appointments} onToggleVacation={handleToggleVacationQuickly} />
            ) : (
              <div className="grid md:grid-cols-3 gap-8">
                {team.map(m => (
-                 <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-6 text-center group hover:border-amber-200 transition-all">
+                 <div key={m.name} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-6 text-center group hover:border-amber-200 transition-all relative">
                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-32 h-32 rounded-full mx-auto shadow-xl group-hover:scale-105 transition-transform" />
                    <div>
                      <h4 className="text-2xl font-luxury font-bold">{m.name}</h4>
@@ -417,26 +349,11 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODALE GESTIONE SINGOLA */}
-      {managingMember && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
-          <div className="w-full max-w-3xl h-[85vh] bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative flex flex-col">
-            <TeamManagement 
-              member={managingMember}
-              appointments={appointments}
-              services={services}
-              onSave={handleSaveTeamMember}
-              onClose={() => setManagingMember(null)}
-            />
-          </div>
-        </div>
-      )}
-
       {activeTab === 'services_management' && isAdmin && (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-20">
+        <div className="space-y-12 pb-20">
           <header className="flex items-center justify-between">
             <h2 className="text-5xl font-luxury font-bold text-gray-900">Catalogo Ritual</h2>
-            <button onClick={() => { setSelectedService(undefined); setIsServiceFormOpen(true); }} className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Nuovo Servizio</button>
+            <button onClick={() => { setSelectedService(undefined); setIsServiceFormOpen(true); }} className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Nuovo Servizio</button>
           </header>
           <div className="grid gap-4">
             {services.map(s => (
@@ -446,17 +363,10 @@ const App: React.FC = () => {
                     <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest px-2 py-1 bg-amber-50 rounded-lg">{s.category}</span>
                     <h4 className="font-bold text-xl text-gray-900">{s.name}</h4>
                   </div>
-                  <p className="text-xs text-gray-400 font-light italic">{s.description}</p>
                 </div>
                 <div className="flex items-center gap-10">
-                  <div className="text-right">
-                    <p className="font-luxury font-bold text-xl text-gray-900">CHF {s.price}</p>
-                    <p className="text-[8px] text-gray-300 font-bold uppercase">{s.duration} MIN</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => { setSelectedService(s); setIsServiceFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-amber-600 transition-colors"><i className="fas fa-edit text-xs"></i></button>
-                    <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"><i className="fas fa-trash text-xs"></i></button>
-                  </div>
+                   <p className="font-luxury font-bold text-xl text-gray-900">CHF {s.price}</p>
+                   <button onClick={() => { setSelectedService(s); setIsServiceFormOpen(true); }} className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-amber-600"><i className="fas fa-edit text-xs"></i></button>
                 </div>
               </div>
             ))}
@@ -465,14 +375,14 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'clients' && isAdmin && (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-20">
+        <div className="space-y-12 pb-20">
           <div className="flex items-center justify-between gap-8">
             <h2 className="text-5xl font-luxury font-bold">I Nostri Ospiti</h2>
             <input type="text" placeholder="Ricerca..." className="p-4 bg-white border border-gray-50 rounded-2xl text-sm" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
           </div>
           <div className="grid gap-6">
             {profiles.filter(p => p.full_name?.toLowerCase().includes(clientSearch.toLowerCase())).map(p => (
-              <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between group hover:border-amber-200 transition-all">
+              <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between">
                 <div className="flex items-center gap-6">
                   <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-16 h-16 rounded-full" />
                   <div>
@@ -488,11 +398,11 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'calendar' && (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-20">
+        <div className="space-y-12 pb-20">
           <h2 className="text-5xl font-luxury font-bold">{isAdmin ? 'Agenda Atelier' : 'I Vostri Ritual'}</h2>
           <div className="grid gap-6">
             {(isAdmin ? appointments : appointments.filter(a => a.client_id === user?.id)).map(app => (
-              <div key={app.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div key={app.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between">
                 <div className="flex gap-6 items-center">
                   <div className="bg-gray-50 p-6 rounded-2xl text-center min-w-[80px]">
                     <p className="text-2xl font-bold">{new Date(app.date).getDate()}</p>
@@ -503,9 +413,6 @@ const App: React.FC = () => {
                     <p className="text-xs text-gray-400">Ore {new Date(app.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} • Artist: {app.team_member_name}</p>
                   </div>
                 </div>
-                {isAdmin && (
-                  <button onClick={async () => { if(confirm('Annullare rituale?')) { await db.appointments.delete(app.id); refreshData(); }}} className="text-red-400 text-sm"><i className="fas fa-trash"></i></button>
-                )}
               </div>
             ))}
           </div>
@@ -513,53 +420,16 @@ const App: React.FC = () => {
       )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center">
           <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
-            <button onClick={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black"><i className="fas fa-times text-xl"></i></button>
+            <button onClick={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} className="absolute top-10 right-10 text-gray-400"><i className="fas fa-times text-xl"></i></button>
             <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Riserva il Tuo Momento</h3>
             <AppointmentForm onSave={saveAppointment} onCancel={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} initialData={selectedAppointment} services={services} team={team} existingAppointments={appointments} isAdmin={isAdmin} profiles={profiles} />
           </div>
         </div>
       )}
 
-      {isServiceFormOpen && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[600] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-500">
-          <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
-            <button onClick={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black"><i className="fas fa-times text-xl"></i></button>
-            <h3 className="text-3xl font-luxury font-bold mb-10 text-center">{selectedService ? 'Modifica Ritual' : 'Crea Nuovo Ritual'}</h3>
-            <ServiceForm onSave={handleSaveService} onCancel={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} initialData={selectedService} />
-          </div>
-        </div>
-      )}
-
       <AIAssistant user={user} />
-
-      {viewingHistory && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[700] flex items-center justify-center p-6 overflow-y-auto">
-          <div className="bg-white w-full max-w-4xl rounded-[4rem] p-12 relative animate-in zoom-in-95">
-            <button onClick={() => setViewingHistory(null)} className="absolute top-8 right-8 text-gray-400"><i className="fas fa-times text-xl"></i></button>
-            <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Diario di Bellezza: {viewingHistory.fullName}</h3>
-            <div className="grid md:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <input type="date" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={newTreatment.date} onChange={e => setNewTreatment({...newTreatment, date: e.target.value})} />
-                <input placeholder="Servizio..." className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={newTreatment.service} onChange={e => setNewTreatment({...newTreatment, service: e.target.value})} />
-                <textarea placeholder="Note tecniche..." className="w-full p-4 bg-gray-50 rounded-2xl text-sm h-32" value={newTreatment.notes} onChange={e => setNewTreatment({...newTreatment, notes: e.target.value})} />
-                <button onClick={addOrUpdateTreatment} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px]">Salva Nota</button>
-              </div>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
-                {(viewingHistory.treatment_history || []).slice().reverse().map((r, i) => (
-                  <div key={i} className="p-6 bg-gray-50 rounded-3xl border border-gray-100 relative group">
-                    <p className="text-[9px] font-bold text-amber-600 mb-1">{r.date}</p>
-                    <p className="font-bold mb-2">{r.service}</p>
-                    <p className="text-xs italic text-gray-500">"{r.notes}"</p>
-                    <button onClick={() => { setNewTreatment(r); setEditingTreatmentIndex((viewingHistory.treatment_history || []).length - 1 - i); }} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-[8px] font-bold uppercase text-amber-600 transition-opacity">Modifica</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 };
