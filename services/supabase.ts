@@ -64,7 +64,9 @@ export const db = {
         bio: member.bio,
         start_hour: member.start_hour ?? 8,
         end_hour: member.end_hour ?? 19,
-        unavailable_dates: member.unavailable_dates ?? []
+        unavailable_dates: member.unavailable_dates ?? [],
+        total_vacation_days: member.total_vacation_days ?? 25,
+        absences_json: member.absences_json ?? []
       };
       
       const { data, error } = await supabase
