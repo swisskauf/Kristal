@@ -32,44 +32,61 @@ const App: React.FC = () => {
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
 
-  // Calcoli Statistici Avanzati per Admin
-  const stats = useMemo(() => {
-    const totalEarnings = appointments
-      .filter(a => a.status === 'confirmed')
-      .reduce((acc, a) => acc + (a.services?.price || 0), 0);
+  // Analisi Avanzata Business Intelligence
+  const businessStats = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
     
-    const monthlyEarnings = appointments
-      .filter(a => {
-        const d = new Date(a.date);
-        const now = new Date();
-        return a.status === 'confirmed' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      })
-      .reduce((acc, a) => acc + (a.services?.price || 0), 0);
+    // Inizio settimana (Lunedì)
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0,0,0,0);
 
-    const teamAbsences = team.map(m => {
-      const absences = m.absences_json || [];
+    const confirmed = appointments.filter(a => a.status === 'confirmed');
+
+    const calcRev = (appts: any[]) => appts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
+
+    const global = {
+      day: calcRev(confirmed.filter(a => a.date.startsWith(todayStr))),
+      week: calcRev(confirmed.filter(a => new Date(a.date) >= startOfWeek)),
+      month: calcRev(confirmed.filter(a => {
+        const d = new Date(a.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      })),
+      year: calcRev(confirmed.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
+    };
+
+    const teamBreakdown = team.map(m => {
+      const mAppts = confirmed.filter(a => a.team_member_name === m.name);
       
-      // Calcolo giorni ferie goduti
-      const vacationDaysUsed = absences
-        .filter(a => a.type === 'vacation')
-        .reduce((acc, a) => {
-          const start = new Date(a.startDate);
-          const end = new Date(a.endDate);
-          const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          return acc + diff;
+      // Calcolo ferie godute
+      const vacationUsed = (m.absences_json || [])
+        .filter(abs => abs.type === 'vacation')
+        .reduce((acc, abs) => {
+          const s = new Date(abs.startDate);
+          const e = new Date(abs.endDate);
+          return acc + (Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1);
         }, 0);
 
       return {
         name: m.name,
+        avatar: m.avatar,
+        day: calcRev(mAppts.filter(a => a.date.startsWith(todayStr))),
+        week: calcRev(mAppts.filter(a => new Date(a.date) >= startOfWeek)),
+        month: calcRev(mAppts.filter(a => {
+          const d = new Date(a.date);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        })),
+        year: calcRev(mAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
+        vacationRemaining: (m.total_vacation_days || 25) - vacationUsed,
         totalAssigned: m.total_vacation_days || 25,
-        vacationUsed: vacationDaysUsed,
-        vacationRemaining: (m.total_vacation_days || 25) - vacationDaysUsed,
-        sick: absences.filter(a => a.type === 'sick').length,
-        injury: absences.filter(a => a.type === 'injury').length,
+        sickCount: (m.absences_json || []).filter(abs => abs.type === 'sick').length
       };
     });
 
-    return { totalEarnings, monthlyEarnings, teamAbsences };
+    return { global, teamBreakdown };
   }, [appointments, team]);
 
   const timeGreeting = useMemo(() => {
@@ -216,52 +233,80 @@ const App: React.FC = () => {
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
-        {/* DASHBOARD / VISIONE */}
+        {/* DASHBOARD / VISIONE BUSINESS */}
         {activeTab === 'dashboard' && (
           <div className="space-y-12 animate-in fade-in duration-700">
-            <header className="flex justify-between items-end">
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
                 <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.3em] mb-2">{timeGreeting}</p>
                 <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
                   {user ? user.fullName.split(' ')[0] : 'Benvenuti'}
                 </h2>
               </div>
+              {isAdmin && <span className="px-4 py-2 bg-gray-900 text-white text-[8px] font-bold uppercase rounded-full tracking-widest">Visione Aziendale</span>}
             </header>
 
             {isAdmin && (
-              <div className="grid md:grid-cols-3 gap-6">
-                <div className="bg-black text-white p-8 rounded-[3rem] shadow-2xl flex flex-col justify-center">
-                   <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-2">Fatturato Globale</p>
-                   <h3 className="text-3xl font-luxury font-bold">CHF {stats.totalEarnings}</h3>
-                   <p className="text-[10px] text-gray-400 mt-4">Corrente: <span className="text-white">CHF {stats.monthlyEarnings}</span></p>
+              <div className="space-y-12">
+                {/* GLOBAL PERFORMANCE GRID */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Oggi', value: businessStats.global.day, color: 'amber' },
+                    { label: 'Settimana', value: businessStats.global.week, color: 'gray' },
+                    { label: 'Mese', value: businessStats.global.month, color: 'gray' },
+                    { label: 'Anno', value: businessStats.global.year, color: 'black' },
+                  ].map((stat, i) => (
+                    <div key={i} className={`p-6 rounded-[2rem] border border-gray-50 shadow-sm ${stat.color === 'black' ? 'bg-black text-white' : stat.color === 'amber' ? 'bg-amber-50 border-amber-100' : 'bg-white'}`}>
+                      <p className={`text-[8px] font-bold uppercase tracking-widest mb-2 ${stat.color === 'black' ? 'text-amber-500' : 'text-gray-400'}`}>{stat.label}</p>
+                      <h3 className="text-2xl font-luxury font-bold">CHF {stat.value}</h3>
+                    </div>
+                  ))}
                 </div>
-                <div className="col-span-2 bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm overflow-x-auto">
-                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-6">Resoconto Ferie & Assenze Team</p>
-                   <div className="flex gap-8 min-w-max">
-                      {stats.teamAbsences.map(m => (
-                        <div key={m.name} className="flex-1 min-w-[150px] bg-gray-50/50 p-4 rounded-2xl">
-                           <p className="font-bold text-xs mb-3 border-b border-gray-100 pb-2">{m.name}</p>
-                           <div className="space-y-2">
-                              <div className="flex justify-between items-center text-[10px]">
-                                 <span className="text-gray-400">Residuo Ferie</span>
-                                 <span className={`font-bold ${m.vacationRemaining < 5 ? 'text-red-500' : 'text-green-600'}`}>{m.vacationRemaining}gg</span>
+
+                {/* TEAM PERFORMANCE MATRIX */}
+                <div className="bg-white p-8 md:p-10 rounded-[3.5rem] border border-gray-50 shadow-sm overflow-hidden">
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Performance Artisti & Risorse</h3>
+                  <div className="overflow-x-auto scrollbar-hide">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-gray-50">
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest">Artista</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Oggi</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Sett.</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Mese</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Anno</th>
+                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-right">Ferie Residue</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {businessStats.teamBreakdown.map(m => (
+                          <tr key={m.name} className="group hover:bg-gray-50/50 transition-colors">
+                            <td className="py-6">
+                              <div className="flex items-center gap-3">
+                                <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-8 h-8 rounded-full grayscale group-hover:grayscale-0 transition-all" />
+                                <span className="font-bold text-sm">{m.name}</span>
                               </div>
-                              <div className="flex justify-between items-center text-[10px]">
-                                 <span className="text-gray-400">Malattie (Tot)</span>
-                                 <span className="font-bold text-gray-700">{m.sick}</span>
+                            </td>
+                            <td className="py-6 text-center font-luxury font-bold text-sm">CHF {m.day}</td>
+                            <td className="py-6 text-center font-luxury text-sm">CHF {m.week}</td>
+                            <td className="py-6 text-center font-luxury font-bold text-sm text-amber-600">CHF {m.month}</td>
+                            <td className="py-6 text-center font-luxury text-sm">CHF {m.year}</td>
+                            <td className="py-6 text-right">
+                              <div className="flex flex-col items-end">
+                                <span className={`text-[10px] font-bold ${m.vacationRemaining < 5 ? 'text-red-500' : 'text-gray-900'}`}>{m.vacationRemaining} / {m.totalAssigned} gg</span>
+                                {m.sickCount > 0 && <span className="text-[7px] font-bold text-red-400 uppercase">+{m.sickCount} Malattie</span>}
                               </div>
-                              <div className="flex justify-between items-center text-[10px]">
-                                 <span className="text-gray-400">Ferie Godute</span>
-                                 <span className="font-bold text-gray-400">{m.vacationUsed} / {m.totalAssigned}</span>
-                              </div>
-                           </div>
-                        </div>
-                      ))}
-                   </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* CUSTOMER FACING DASHBOARD */}
             <div className="grid md:grid-cols-3 gap-8">
               <div className="col-span-2 bg-white p-8 md:p-10 rounded-[3rem] border border-gray-50 shadow-sm">
                 <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Ritual d'Eccellenza</h3>
@@ -286,13 +331,13 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Tab OSPITI ... (omesso per brevità, non è cambiato) */}
+        {/* Tab OSPITI (CRM) */}
         {activeTab === 'clients' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <h2 className="text-4xl font-luxury font-bold">I Nostri Ospiti</h2>
               <div className="flex gap-4 w-full md:w-auto">
-                <input type="text" placeholder="Ricerca..." className="flex-1 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-amber-500" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
+                <input type="text" placeholder="Ricerca per nome..." className="flex-1 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-amber-500" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} />
               </div>
             </div>
             <div className="grid gap-4">
@@ -312,7 +357,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Altri Tab (Planning, Servizi, etc.) ... (rimangono invariati) */}
+        {/* Altri Tab (Planning, Servizi, etc.) */}
         {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Il Team & Planning</h2>
@@ -352,10 +397,34 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'calendar' && user && (
+          <div className="space-y-12 animate-in fade-in">
+             <h2 className="text-4xl font-luxury font-bold">I Tuoi Appuntamenti</h2>
+             <div className="space-y-4">
+                {appointments.filter(a => a.client_id === user.id).length > 0 ? (
+                  appointments.filter(a => a.client_id === user.id).map(app => (
+                    <div key={app.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-50 flex justify-between items-center shadow-sm">
+                       <div>
+                          <p className="text-[10px] font-bold text-amber-600 uppercase">{app.services?.name || 'Servizio'}</p>
+                          <p className="text-xl font-luxury font-bold">{new Date(app.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Con {app.team_member_name}</p>
+                       </div>
+                       <span className="px-4 py-2 bg-gray-50 rounded-full text-[8px] font-bold uppercase text-gray-400">Confermato</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="bg-white p-12 rounded-[3rem] text-center border border-dashed">
+                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun appuntamento in programma.</p>
+                  </div>
+                )}
+             </div>
+          </div>
+        )}
+
       </Layout>
 
-      {/* MODALI (Auth, Form, CRM, etc.) */}
-      {/* ... (Omitted as they are identical to previous version but remain present in the app) */}
+      {/* MODALI */}
       {isAuthOpen && !user && (
         <div className="fixed inset-0 z-[1000] bg-white overflow-y-auto animate-in slide-in-from-bottom duration-500">
           <button onClick={() => setIsAuthOpen(false)} className="absolute top-10 right-10 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center z-10 hover:rotate-90 transition-all duration-500">
