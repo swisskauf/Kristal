@@ -96,6 +96,28 @@ const App: React.FC = () => {
     return "Buonasera";
   }, []);
 
+  /**
+   * Forza i ruoli critici per le email specificate se non corrispondono.
+   */
+  const syncCriticalRoles = async (loadedProfiles: any[]) => {
+    const CRITICAL_ROLES = [
+      { email: 'serop.serop@outlook.sa', role: 'admin' },
+      { email: 'sirop.sirop@outlook.sa', role: 'collaborator' }
+    ];
+
+    for (const critical of CRITICAL_ROLES) {
+      const p = loadedProfiles.find(profile => profile.email?.toLowerCase() === critical.email.toLowerCase());
+      if (p && p.role !== critical.role) {
+        console.log(`Syncing role for ${critical.email} to ${critical.role}`);
+        try {
+          await db.profiles.upsert({ ...p, role: critical.role });
+        } catch (e) {
+          console.error("Critical role sync failed for", critical.email, e);
+        }
+      }
+    }
+  };
+
   const refreshData = async () => {
     try {
       const [svcs, tm, appts, reqs, profs] = await Promise.all([
@@ -111,6 +133,9 @@ const App: React.FC = () => {
       setAppointments(appts);
       setRequests(reqs);
       setProfiles(profs);
+
+      // Sincronizza i ruoli se necessario
+      await syncCriticalRoles(profs);
     } catch (e) {
       console.error("Refresh Data error", e);
     }
@@ -176,13 +201,7 @@ const App: React.FC = () => {
       const profile = profiles.find(p => p.id === profileId);
       if (!profile) return;
       
-      // Aggiorniamo il profilo nel database
       await db.profiles.upsert({ ...profile, role: newRole });
-      
-      // Se l'utente declassato è anche un team member, dobbiamo assicurarci che 
-      // il sistema non lo veda più come collaboratore se il ruolo è cambiato in client.
-      // Tuttavia, manteniamo il record nel team per non perdere bio/avatar, 
-      // ma il profile_id governa l'accesso.
       
       alert(`Ruolo per ${profile.full_name} aggiornato con successo a ${newRole.toUpperCase()}`);
       await refreshData();
