@@ -114,6 +114,10 @@ export const db = {
       const { data, error } = await supabase.from('leave_requests').update(updates).eq('id', id).select().single();
       if (error) throw handleError(error);
       return data;
+    },
+    delete: async (id: string) => {
+      const { error } = await supabase.from('leave_requests').delete().eq('id', id);
+      if (error) throw handleError(error);
     }
   }
 };
