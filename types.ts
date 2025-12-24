@@ -11,7 +11,8 @@ export type AbsenceType =
   | 'bereavement' 
   | 'unpaid' 
   | 'overtime'
-  | 'availability_change';
+  | 'availability_change'
+  | 'permit';
 
 export interface LeaveRequest {
   id: string;
@@ -19,8 +20,9 @@ export interface LeaveRequest {
   type: AbsenceType;
   start_date: string;
   end_date: string;
-  start_time?: string;
-  end_time?: string;
+  start_time?: string; // HH:mm
+  end_time?: string;   // HH:mm
+  is_full_day: boolean;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
   admin_notes?: string;
@@ -33,6 +35,7 @@ export interface AbsenceEntry {
   endDate: string;
   startTime?: string;
   endTime?: string;
+  isFullDay: boolean;
   type: AbsenceType;
   notes?: string;
 }
