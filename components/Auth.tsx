@@ -68,12 +68,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleProfileLogin = async (supabaseUser: any) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', supabaseUser.id).maybeSingle();
+    
+    // Logica di forzatura ruolo basata su email per account critici
+    const userEmail = supabaseUser.email?.toLowerCase();
+    let finalRole: 'admin' | 'collaborator' | 'client' = profile?.role || 'client';
+    
+    if (userEmail === 'serop.serop@outlook.com') finalRole = 'admin';
+    else if (userEmail === 'sirop.sirop@outlook.sa') finalRole = 'collaborator';
+
     onLogin({
       id: supabaseUser.id,
       email: supabaseUser.email!,
-      fullName: profile?.full_name || 'Utente',
-      phone: profile?.phone || '',
-      role: profile?.role || 'client'
+      fullName: profile?.full_name || fullName || 'Ospite Kristal',
+      phone: profile?.phone || phone || '',
+      role: finalRole
     });
   };
 
@@ -85,20 +93,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'concentration'
-          }
         }
       });
       if (error) throw error;
     } catch (err: any) {
-      if (err.message?.includes("not enabled") || err.status === 400) {
-        setErrorMsg("Configurazione Google non completata.");
-        setShowConfigHint(true);
-      } else {
-        setErrorMsg(err.message || "Impossibile connettersi a Google");
-      }
+      setErrorMsg(err.message || "Impossibile connettersi a Google");
     }
   };
 
@@ -129,18 +128,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </div>
 
         {errorMsg && (
-          <div className={`mb-6 p-4 rounded-2xl animate-shake leading-relaxed text-[11px] font-bold ${showConfigHint ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-red-50 text-red-600'}`}>
+          <div className="mb-6 p-4 rounded-2xl bg-red-50 text-red-600 animate-shake leading-relaxed text-[11px] font-bold">
             <i className="fas fa-exclamation-triangle mr-2"></i> {errorMsg}
-            {showConfigHint && (
-              <div className="mt-2 pt-2 border-t border-amber-200/50 font-normal text-[10px]">
-                <p className="mb-2">Per risolvere questo errore:</p>
-                <ol className="list-decimal ml-4 space-y-1">
-                  <li>Vai sulla dashboard di <strong>Supabase</strong></li>
-                  <li><strong>Authentication</strong> → <strong>Providers</strong> → <strong>Google</strong></li>
-                  <li>Attiva (Enable) e inserisci <strong>Client ID</strong> e <strong>Secret</strong></li>
-                </ol>
-              </div>
-            )}
           </div>
         )}
 
