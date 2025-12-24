@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
 
-  // Business Intelligence Engine
   const businessStats = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -102,7 +101,7 @@ const App: React.FC = () => {
               fullName: profile.full_name || 'Ospite',
               phone: profile.phone || '',
               role: profile.role || 'client',
-              avatar: profile.avatar || profile.avatar_url
+              avatar: profile.avatar
             });
           }
         }
@@ -124,7 +123,7 @@ const App: React.FC = () => {
             fullName: profile.full_name || 'Ospite',
             phone: profile.phone || '',
             role: profile.role || 'client',
-            avatar: profile.avatar || profile.avatar_url
+            avatar: profile.avatar
           });
         }
       } else {
@@ -169,7 +168,10 @@ const App: React.FC = () => {
     const p = profiles.find(p => p.id === profileId);
     if (!p) return;
     try {
-      await db.profiles.upsert({ ...p, role: newRole });
+      await db.profiles.upsert({ 
+        ...p, 
+        role: newRole 
+      });
       await refreshData();
       if (viewingGuest && viewingGuest.id === profileId) setViewingGuest({ ...viewingGuest, role: newRole });
     } catch (e: any) {
@@ -335,7 +337,7 @@ const App: React.FC = () => {
                     <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name || 'U'}`} className="w-12 h-12 rounded-full shadow-sm" />
                     <div>
                       <h5 className="font-bold text-lg">{p.full_name || 'Ospite Kristal'}</h5>
-                      <p className="text-[10px] text-gray-400 uppercase font-bold">{p.email || 'Email verificata'} | {p.phone || 'Nessun contatto'}</p>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">{p.email || 'Email non disponibile'} | {p.phone || 'Nessun contatto'}</p>
                     </div>
                   </div>
                   <button onClick={() => setViewingGuest(p)} className="px-6 py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all">Scheda CRM</button>
@@ -345,7 +347,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Altri Tab (Planning, etc.) rimangono invariati ... */}
         {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Il Team & Planning</h2>
