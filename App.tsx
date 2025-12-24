@@ -23,7 +23,6 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
-  const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [viewingGuest, setViewingGuest] = useState<any | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
@@ -32,6 +31,33 @@ const App: React.FC = () => {
 
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
+
+  // Calcoli Statistici per Admin
+  const stats = useMemo(() => {
+    const totalEarnings = appointments
+      .filter(a => a.status === 'confirmed')
+      .reduce((acc, a) => acc + (a.services?.price || 0), 0);
+    
+    const monthlyEarnings = appointments
+      .filter(a => {
+        const d = new Date(a.date);
+        const now = new Date();
+        return a.status === 'confirmed' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      })
+      .reduce((acc, a) => acc + (a.services?.price || 0), 0);
+
+    const teamAbsences = team.map(m => {
+      const absences = m.absences_json || [];
+      return {
+        name: m.name,
+        vacation: absences.filter(a => a.type === 'vacation').length,
+        sick: absences.filter(a => a.type === 'sick').length,
+        injury: absences.filter(a => a.type === 'injury').length,
+      };
+    });
+
+    return { totalEarnings, monthlyEarnings, teamAbsences };
+  }, [appointments, team]);
 
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -52,7 +78,8 @@ const App: React.FC = () => {
               email: session.user.email!,
               fullName: profile.full_name || 'Ospite',
               phone: profile.phone || '',
-              role: profile.role || 'client'
+              role: profile.role || 'client',
+              avatar: profile.avatar_url || profile.avatar
             });
           }
         }
@@ -73,7 +100,8 @@ const App: React.FC = () => {
             email: session.user.email!,
             fullName: profile.full_name || 'Ospite',
             phone: profile.phone || '',
-            role: profile.role || 'client'
+            role: profile.role || 'client',
+            avatar: profile.avatar_url || profile.avatar
           });
         }
       } else {
@@ -85,7 +113,6 @@ const App: React.FC = () => {
 
   const refreshData = async () => {
     try {
-      // Caricamento selettivo per evitare blocchi RLS
       const svcs = await db.services.getAll().catch(() => []);
       const tm = await db.team.getAll().catch(() => []);
       const appts = await db.appointments.getAll().catch(() => []);
@@ -176,7 +203,7 @@ const App: React.FC = () => {
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
-        {/* DASHBOARD */}
+        {/* DASHBOARD / VISIONE */}
         {activeTab === 'dashboard' && (
           <div className="space-y-12 animate-in fade-in duration-700">
             <header className="flex justify-between items-end">
@@ -187,6 +214,41 @@ const App: React.FC = () => {
                 </h2>
               </div>
             </header>
+
+            {isAdmin && (
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="bg-black text-white p-8 rounded-[3rem] shadow-2xl">
+                   <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-2">Fatturato Globale</p>
+                   <h3 className="text-3xl font-luxury font-bold">CHF {stats.totalEarnings}</h3>
+                   <p className="text-[10px] text-gray-400 mt-4">Questo mese: <span className="text-white">CHF {stats.monthlyEarnings}</span></p>
+                </div>
+                <div className="col-span-2 bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm overflow-x-auto">
+                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-6">Stato Assenze Team (Eventi Registrati)</p>
+                   <div className="flex gap-8">
+                      {stats.teamAbsences.map(m => (
+                        <div key={m.name} className="flex-1 min-w-[120px]">
+                           <p className="font-bold text-sm mb-3">{m.name}</p>
+                           <div className="space-y-2">
+                              <div className="flex justify-between items-center text-[10px]">
+                                 <span className="text-gray-400">Ferie</span>
+                                 <span className="font-bold text-blue-600">{m.vacation}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px]">
+                                 <span className="text-gray-400">Malattia</span>
+                                 <span className="font-bold text-red-600">{m.sick}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px]">
+                                 <span className="text-gray-400">Infortunio</span>
+                                 <span className="font-bold text-orange-600">{m.injury}</span>
+                              </div>
+                           </div>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid md:grid-cols-3 gap-8">
               <div className="col-span-2 bg-white p-8 md:p-10 rounded-[3rem] border border-gray-50 shadow-sm">
                 <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Ritual d'Eccellenza</h3>
@@ -224,7 +286,7 @@ const App: React.FC = () => {
               {profiles.filter(p => (p.full_name || '').toLowerCase().includes(clientSearch.toLowerCase())).map(p => (
                 <div key={p.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-50 flex items-center justify-between hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
-                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name || 'U'}`} className="w-12 h-12 rounded-full shadow-sm" />
+                    <img src={p.avatar_url || p.avatar || `https://ui-avatars.com/api/?name=${p.full_name || 'U'}`} className="w-12 h-12 rounded-full shadow-sm" />
                     <div>
                       <h5 className="font-bold text-lg">{p.full_name || 'Ospite Kristal'}</h5>
                       <p className="text-[10px] text-gray-400 uppercase font-bold">{p.email} | {p.phone || 'Nessun contatto'}</p>
@@ -257,7 +319,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* SERVIZI */}
+        {/* Altri Tab (Servizi, Calendario Cliente) ... Omitted for brevity since they didn't change */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex justify-between items-center">
@@ -279,7 +341,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* CALENDARIO CLIENTE */}
         {activeTab === 'calendar' && user && (
           <div className="space-y-12 animate-in fade-in">
              <h2 className="text-4xl font-luxury font-bold">I Tuoi Appuntamenti</h2>
@@ -306,7 +367,7 @@ const App: React.FC = () => {
 
       </Layout>
 
-      {/* MODALI - SPOSTATE AL LIVELLO ROOT PER OVERLAY CORRETTO */}
+      {/* MODALI (Auth, Form, CRM, etc.) */}
       {isAuthOpen && !user && (
         <div className="fixed inset-0 z-[1000] bg-white overflow-y-auto animate-in slide-in-from-bottom duration-500">
           <button onClick={() => setIsAuthOpen(false)} className="absolute top-10 right-10 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center z-10 hover:rotate-90 transition-all duration-500">
@@ -329,7 +390,7 @@ const App: React.FC = () => {
            <div className="w-full max-w-5xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative max-h-[90vh] flex flex-col">
               <button onClick={() => setViewingGuest(null)} className="absolute top-10 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-xl"></i></button>
               <div className="flex items-center gap-10 mb-12 border-b pb-10">
-                 <img src={viewingGuest.avatar || `https://ui-avatars.com/api/?name=${viewingGuest.full_name}`} className="w-32 h-32 rounded-full shadow-xl" />
+                 <img src={viewingGuest.avatar_url || viewingGuest.avatar || `https://ui-avatars.com/api/?name=${viewingGuest.full_name}`} className="w-32 h-32 rounded-full shadow-xl" />
                  <div className="flex-1">
                     <div className="flex items-center gap-4 mb-2">
                        <h3 className="text-4xl font-luxury font-bold">{viewingGuest.full_name}</h3>
