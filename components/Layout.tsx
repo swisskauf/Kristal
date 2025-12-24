@@ -12,6 +12,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick, activeTab, setActiveTab }) => {
   const isAdmin = user?.role === 'admin';
+  const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
 
   const guestNav = [
@@ -23,6 +24,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
     { id: 'calendar', label: 'Il Tuo Percorso', icon: 'fa-star' },
   ];
 
+  const collaboratorNav = [
+    { id: 'collab_dashboard', label: 'Mia Agenda', icon: 'fa-user-clock' },
+    { id: 'collab_absences', label: 'Miei Congedi', icon: 'fa-calendar-minus' },
+  ];
+
   const adminNav = [
     { id: 'admin_dashboard', label: 'Visione', icon: 'fa-eye' },
     { id: 'services_management', label: 'Servizi', icon: 'fa-concierge-bell' },
@@ -31,7 +37,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
     { id: 'calendar', label: 'Agenda Atelier', icon: 'fa-calendar-check' },
   ];
 
-  const navItems = isGuest ? guestNav : (isAdmin ? adminNav : clientNav);
+  let navItems = guestNav;
+  if (isAdmin) navItems = adminNav;
+  else if (isCollaborator) navItems = collaboratorNav;
+  else if (user) navItems = clientNav;
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fcfcfc]">
@@ -66,7 +75,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
                 <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full" />
                 <div className="overflow-hidden">
                   <p className="text-[10px] font-bold text-gray-900 truncate uppercase tracking-tighter">{user.fullName}</p>
-                  <p className="text-[8px] text-amber-600 font-bold uppercase tracking-widest">{isAdmin ? 'Direzione' : 'Ospite'}</p>
+                  <p className="text-[8px] text-amber-600 font-bold uppercase tracking-widest">
+                    {isAdmin ? 'Direzione' : isCollaborator ? 'Artista' : 'Ospite'}
+                  </p>
                 </div>
               </div>
               <button 
