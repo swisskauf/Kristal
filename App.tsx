@@ -97,7 +97,7 @@ const App: React.FC = () => {
   }, []);
 
   /**
-   * Forza i ruoli critici per le email specificate se non corrispondono.
+   * Sincronizzazione Critica: Forza i ruoli per le email specificate e aggiorna lo stato locale.
    */
   const syncCriticalRoles = async (loadedProfiles: any[]) => {
     const CRITICAL_ROLES = [
@@ -105,16 +105,31 @@ const App: React.FC = () => {
       { email: 'sirop.sirop@outlook.sa', role: 'collaborator' }
     ];
 
+    let updatedLocalUser = false;
+
     for (const critical of CRITICAL_ROLES) {
       const p = loadedProfiles.find(profile => profile.email?.toLowerCase() === critical.email.toLowerCase());
       if (p && p.role !== critical.role) {
-        console.log(`Syncing role for ${critical.email} to ${critical.role}`);
+        console.log(`Forcing critical role sync for ${critical.email} to ${critical.role}`);
         try {
-          await db.profiles.upsert({ ...p, role: critical.role });
+          const updatedProfile = await db.profiles.upsert({ ...p, role: critical.role });
+          
+          // Se l'utente correntemente loggato è quello aggiornato, aggiorna lo stato locale immediatamente
+          if (user && user.email.toLowerCase() === critical.email.toLowerCase()) {
+            setUser({
+              ...user,
+              role: critical.role as 'admin' | 'collaborator' | 'client'
+            });
+            updatedLocalUser = true;
+          }
         } catch (e) {
           console.error("Critical role sync failed for", critical.email, e);
         }
       }
+    }
+
+    if (updatedLocalUser) {
+      console.log("Local user role updated via sync.");
     }
   };
 
@@ -134,7 +149,7 @@ const App: React.FC = () => {
       setRequests(reqs);
       setProfiles(profs);
 
-      // Sincronizza i ruoli se necessario
+      // Esegui sincronizzazione ruoli basata sulle email
       await syncCriticalRoles(profs);
     } catch (e) {
       console.error("Refresh Data error", e);
@@ -188,7 +203,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!loading) refreshData();
-  }, [loading, user]);
+  }, [loading, user?.id]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -202,7 +217,6 @@ const App: React.FC = () => {
       if (!profile) return;
       
       await db.profiles.upsert({ ...profile, role: newRole });
-      
       alert(`Ruolo per ${profile.full_name} aggiornato con successo a ${newRole.toUpperCase()}`);
       await refreshData();
     } catch (e: any) {
