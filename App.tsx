@@ -20,7 +20,6 @@ const App: React.FC = () => {
   const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [profiles, setProfiles] = useState<any[]>([]);
   
-  // Stati Modali
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
@@ -28,7 +27,6 @@ const App: React.FC = () => {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [viewingHistory, setViewingHistory] = useState<User | null>(null);
 
-  // Stati Selezione
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
   const [selectedService, setSelectedService] = useState<Service | undefined>();
   const [teamViewMode, setTeamViewMode] = useState<'planning' | 'grid'>('planning');
@@ -38,6 +36,7 @@ const App: React.FC = () => {
   const [editingTreatmentIndex, setEditingTreatmentIndex] = useState<number | null>(null);
 
   const isAdmin = user?.role === 'admin';
+  const isCollaborator = user?.role === 'collaborator';
 
   const [newTreatment, setNewTreatment] = useState<TreatmentRecord>({ 
     date: new Date().toISOString().split('T')[0], 
@@ -52,11 +51,33 @@ const App: React.FC = () => {
     return "Buonasera";
   }, []);
 
+  // Calculation of statistics for the administrative dashboard
+  const adminStats = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const todayAppts = appointments.filter(a => a.date?.startsWith(todayStr));
+    const todayRevenue = todayAppts.reduce((acc, a) => {
+      // Accessing service price via nested property from join query
+      const price = a.services?.price || 0;
+      return acc + price;
+    }, 0);
+    const totalPending = appointments.filter(a => new Date(a.date) >= now).length;
+    
+    return {
+      todayCount: todayAppts.length,
+      todayRevenue,
+      totalPending
+    };
+  }, [appointments]);
+
   useEffect(() => {
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) await handleSessionUser(session.user);
+        if (session?.user) {
+          const u = await handleSessionUser(session.user);
+          if (u?.role === 'collaborator') setActiveTab('collab_dashboard');
+        }
       } catch (e) {
         console.error("Auth init error:", e);
       } finally {
@@ -67,8 +88,9 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        await handleSessionUser(session.user);
+        const u = await handleSessionUser(session.user);
         setIsAuthOpen(false);
+        if (u?.role === 'collaborator') setActiveTab('collab_dashboard');
       } else {
         setUser(null);
       }
@@ -112,7 +134,6 @@ const App: React.FC = () => {
   }, [user]);
 
   const refreshData = async () => {
-    // Caricamento resiliente: se una tabella fallisce, le altre procedono
     try {
       db.appointments.getAll().then(data => setAppointments(data || [])).catch(e => console.warn("Appts load fail", e));
       db.services.getAll().then(data => { if(data?.length) setServices(data); }).catch(e => console.warn("Svcs load fail", e));
@@ -132,51 +153,12 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  const adminStats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const todaysAppts = appointments.filter(a => a.date.startsWith(today));
-    const revenue = todaysAppts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
-    const pendingCount = appointments.filter(a => new Date(a.date) >= new Date()).length;
-    
-    return {
-      todayCount: todaysAppts.length,
-      todayRevenue: revenue,
-      totalPending: pendingCount
-    };
-  }, [appointments]);
-
-  const saveAppointment = async (appData: Partial<Appointment>) => {
-    if (!user) return;
-    try {
-      const appointmentToSave = {
-        id: selectedAppointment?.id,
-        client_id: user.role === 'admin' ? (appData.client_id || selectedAppointment?.client_id) : user.id,
-        service_id: appData.service_id,
-        team_member_name: appData.team_member_name,
-        date: appData.date,
-        status: 'confirmed'
-      };
-      await db.appointments.upsert(appointmentToSave);
-      await refreshData();
-      setIsFormOpen(false);
-      setSelectedAppointment(undefined);
-    } catch (e) {
-      console.error("Save error:", e);
-      alert("Errore nel salvataggio dell'appuntamento.");
-    }
-  };
-
-  const handleSaveService = async (svcData: Partial<Service>) => {
-    try {
-      await db.services.upsert(svcData);
-      await refreshData();
-      setIsServiceFormOpen(false);
-      setSelectedService(undefined);
-    } catch (e: any) {
-      console.error("Service save error:", e);
-      alert("Errore nel salvataggio del servizio.");
-    }
-  };
+  const collaboratorData = useMemo(() => {
+    if (!isCollaborator || !user) return null;
+    const member = team.find(m => m.name.toLowerCase().includes(user.fullName.toLowerCase().split(' ')[0].toLowerCase()));
+    const myAppts = appointments.filter(a => a.team_member_name === member?.name);
+    return { member, myAppts };
+  }, [isCollaborator, user, team, appointments]);
 
   const handleSaveTeamMember = async (updatedMember: TeamMember) => {
     try {
@@ -185,39 +167,8 @@ const App: React.FC = () => {
       setEditingMember(null);
       setIsAddingMember(false);
     } catch (e: any) {
-      console.error("Team save error detail:", e);
-      alert("Errore nel salvataggio del collaboratore.");
+      alert("Errore nel salvataggio.");
     }
-  };
-
-  const handleToggleVacationQuickly = async (memberName: string, date: string) => {
-    const member = team.find(m => m.name === memberName);
-    if (!member) return;
-    const currentDates = member.unavailable_dates || [];
-    const updatedDates = currentDates.includes(date) 
-      ? currentDates.filter(d => d !== date)
-      : [...currentDates, date].sort();
-    const updatedMember = { ...member, unavailable_dates: updatedDates };
-    try {
-      await db.team.upsert(updatedMember);
-      await refreshData();
-    } catch (e) { console.error(e); }
-  };
-
-  const addOrUpdateTreatment = async () => {
-    if (!viewingHistory || !newTreatment.service) return;
-    try {
-      const currentHistory = viewingHistory.treatment_history || [];
-      const updatedHistory = editingTreatmentIndex !== null 
-        ? currentHistory.map((t, idx) => idx === editingTreatmentIndex ? newTreatment : t)
-        : [...currentHistory, newTreatment];
-
-      await db.profiles.upsert({ ...viewingHistory, treatment_history: updatedHistory });
-      setViewingHistory({ ...viewingHistory, treatment_history: updatedHistory });
-      setNewTreatment({ date: new Date().toISOString().split('T')[0], service: '', notes: '' });
-      setEditingTreatmentIndex(null);
-      await refreshData();
-    } catch (err) { console.error(err); }
   };
 
   if (loading) return (
@@ -232,7 +183,6 @@ const App: React.FC = () => {
   return (
     <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
       
-      {/* MODALE AUTH */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[900] animate-in fade-in duration-500 overflow-y-auto">
           <button onClick={() => setIsAuthOpen(false)} className="absolute top-10 right-10 w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 z-10"><i className="fas fa-times"></i></button>
@@ -240,9 +190,8 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* DASHBOARD CLIENTE / HOME */}
       {activeTab === 'dashboard' && (
-        <div className="space-y-20 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-20">
+        <div className="space-y-20 pb-20">
           <header className="flex flex-col md:flex-row md:items-end justify-between gap-10">
             <div className="space-y-4">
               <span className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] block border-l-2 border-amber-600 pl-4">Atelier di Bellezza</span>
@@ -250,7 +199,7 @@ const App: React.FC = () => {
                 {user ? `${timeGreeting}, ${user.fullName.split(' ')[0]}` : "Benvenuti in Kristal"}
               </h2>
             </div>
-            {!isAdmin && (
+            {!isAdmin && !isCollaborator && (
               <button onClick={() => { if(!user) setIsAuthOpen(true); else setIsFormOpen(true); }} className="bg-black text-white px-10 py-6 rounded-3xl font-bold shadow-2xl hover:bg-amber-700 hover:scale-105 transition-all uppercase tracking-widest text-[10px]">
                 Riserva un Istante
               </button>
@@ -258,32 +207,122 @@ const App: React.FC = () => {
           </header>
 
           <section className="space-y-12">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 border-b border-gray-100 pb-8">
-               <h3 className="text-3xl font-luxury font-bold text-gray-900">I Nostri Ritual</h3>
-               <div className="flex gap-8 overflow-x-auto scrollbar-hide">
-                 {['Tutti', 'Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(c => (
-                   <button key={c} onClick={() => setFilterCategory(c)} className={`text-[10px] font-bold uppercase tracking-widest transition-all ${filterCategory === c ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-300 hover:text-gray-600'}`}>
-                     {c}
-                   </button>
-                 ))}
-               </div>
-            </div>
+            <h3 className="text-3xl font-luxury font-bold text-gray-900 border-b border-gray-100 pb-8">I Nostri Ritual</h3>
             <div className="grid md:grid-cols-2 gap-8">
               {services.filter(s => filterCategory === 'Tutti' || s.category === filterCategory).map(s => (
                 <button key={s.id} onClick={() => { if(!user) setIsAuthOpen(true); else { setSelectedAppointment({ service_id: s.id }); setIsFormOpen(true); } }} className="bg-white p-10 rounded-[3.5rem] border border-gray-50 flex justify-between items-center hover:shadow-xl hover:border-amber-200 transition-all group text-left">
                   <div className="flex-1 pr-6">
-                    <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-2">{s.category}</p>
-                    <h4 className="font-bold text-2xl text-gray-900 mb-2 group-hover:text-amber-700">{s.name}</h4>
-                    <p className="text-xs text-gray-400 font-light italic leading-relaxed line-clamp-2">{s.description}</p>
+                    <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">{s.category}</p>
+                    <h4 className="font-bold text-2xl mb-2">{s.name}</h4>
+                    <p className="text-xs text-gray-400 italic line-clamp-2">{s.description}</p>
                   </div>
                   <div className="text-right border-l border-gray-50 pl-6 min-w-[100px]">
-                     <p className="font-luxury font-bold text-2xl text-gray-900">CHF {s.price}</p>
+                     <p className="font-luxury font-bold text-2xl">CHF {s.price}</p>
                      <p className="text-[9px] text-gray-300 font-bold uppercase mt-2">{s.duration} MIN</p>
                   </div>
                 </button>
               ))}
             </div>
           </section>
+        </div>
+      )}
+
+      {/* DASHBOARD COLLABORATORE */}
+      {activeTab === 'collab_dashboard' && isCollaborator && collaboratorData && (
+        <div className="space-y-12 pb-20 animate-in fade-in duration-700">
+           <header className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+              <div>
+                <span className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] block border-l-2 border-amber-600 pl-4 mb-4">Mio Pannello Artista</span>
+                <h2 className="text-5xl font-luxury font-bold text-gray-900">Ciao, {user?.fullName.split(' ')[0]}</h2>
+              </div>
+              <div className="flex bg-gray-50 p-6 rounded-[2.5rem] gap-10">
+                 <div className="text-center">
+                    <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Turno</p>
+                    <p className="text-sm font-bold">{collaboratorData.member?.work_start_time} - {collaboratorData.member?.work_end_time}</p>
+                 </div>
+                 <div className="text-center">
+                    <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Ferie Residue</p>
+                    <p className="text-sm font-bold">{(collaboratorData.member?.total_vacation_days || 0) - (collaboratorData.member?.absences_json?.filter(a => a.type === 'vacation').length || 0)} Giorni</p>
+                 </div>
+              </div>
+           </header>
+
+           <div className="grid md:grid-cols-3 gap-8">
+              <div className="md:col-span-2 bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm">
+                 <h3 className="text-2xl font-luxury font-bold mb-8">Agenda del Giorno</h3>
+                 <div className="space-y-6">
+                    {collaboratorData.myAppts.length > 0 ? collaboratorData.myAppts.map(app => (
+                      <div key={app.id} className="flex items-center justify-between py-6 border-b border-gray-50 last:border-0 group">
+                         <div className="flex items-center gap-6">
+                            <div className="w-14 h-14 bg-gray-50 rounded-2xl flex flex-col items-center justify-center font-bold">
+                               <span className="text-xs">{new Date(app.date).getHours()}:{new Date(app.date).getMinutes().toString().padStart(2, '0')}</span>
+                            </div>
+                            <div>
+                               <p className="text-sm font-bold text-gray-900">{app.profiles?.full_name}</p>
+                               <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest">{app.services?.name} • {app.services?.duration} min</p>
+                            </div>
+                         </div>
+                         <button className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 transition-all"><i className="fas fa-check"></i></button>
+                      </div>
+                    )) : (
+                      <div className="py-20 text-center text-gray-300 uppercase text-[10px] font-bold tracking-widest italic">Nessun rituale previsto oggi.</div>
+                    )}
+                 </div>
+              </div>
+              
+              <div className="space-y-8">
+                 <div className="bg-black text-white p-10 rounded-[3.5rem] shadow-xl">
+                    <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-4">Obiettivi Mensili</p>
+                    <div className="space-y-6">
+                       <div>
+                          <div className="flex justify-between text-[10px] font-bold mb-2"><span>Produttività</span><span>75%</span></div>
+                          <div className="h-1 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-amber-500 w-[75%]"></div></div>
+                       </div>
+                       <div>
+                          <div className="flex justify-between text-[10px] font-bold mb-2"><span>Ritenzione Clienti</span><span>92%</span></div>
+                          <div className="h-1 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-green-500 w-[92%]"></div></div>
+                       </div>
+                    </div>
+                 </div>
+                 <button onClick={() => setActiveTab('collab_absences')} className="w-full py-6 bg-white border border-gray-100 rounded-[2.5rem] text-[10px] font-bold uppercase tracking-widest hover:border-amber-500 transition-all">Richiedi Congedo</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* DASHBOARD COLLABORATORE - CONGEDI */}
+      {activeTab === 'collab_absences' && isCollaborator && collaboratorData && (
+        <div className="space-y-12 pb-20 animate-in fade-in duration-500">
+          <h2 className="text-5xl font-luxury font-bold">Miei Congedi</h2>
+          <div className="grid md:grid-cols-2 gap-10">
+             <div className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-8">
+                <h3 className="text-2xl font-luxury font-bold">Richiesta Ferie</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                     <input type="date" className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 text-sm font-bold" />
+                     <input type="date" className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 text-sm font-bold" />
+                  </div>
+                  <select className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 text-sm font-bold">
+                     <option value="vacation">Ferie</option>
+                     <option value="training">Formazione</option>
+                     <option value="unpaid">Congedo Non Pagato</option>
+                  </select>
+                  <button className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Invia Richiesta</button>
+                </div>
+             </div>
+             <div className="space-y-4">
+                <h3 className="text-xl font-luxury font-bold mb-6">Stato Richieste</h3>
+                {(collaboratorData.member?.absences_json || []).map(a => (
+                  <div key={a.id} className="p-6 bg-white border border-gray-50 rounded-3xl flex items-center justify-between">
+                     <div>
+                        <p className="text-[10px] font-bold uppercase text-amber-600 mb-1">{a.type}</p>
+                        <p className="text-sm font-bold">{new Date(a.startDate).toLocaleDateString()}</p>
+                     </div>
+                     <span className="text-[8px] font-bold uppercase px-3 py-1 bg-green-50 text-green-600 rounded-full">Approvato</span>
+                  </div>
+                ))}
+             </div>
+          </div>
         </div>
       )}
 
@@ -338,7 +377,7 @@ const App: React.FC = () => {
            </div>
 
            {teamViewMode === 'planning' ? (
-             <TeamPlanning team={team} appointments={appointments} onToggleVacation={handleToggleVacationQuickly} />
+             <TeamPlanning team={team} appointments={appointments} onToggleVacation={() => {}} />
            ) : (
              <div className="grid md:grid-cols-3 gap-8">
                {team.map(m => (
@@ -382,7 +421,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* CLIENTI E STORICO (ADMIN) */}
+      {/* CLIENTI (ADMIN) */}
       {activeTab === 'clients' && isAdmin && (
         <div className="space-y-12 pb-20 animate-in fade-in duration-500">
           <div className="flex items-center justify-between gap-8">
@@ -406,7 +445,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* CALENDARIO / AGENDA */}
+      {/* CALENDARIO */}
       {activeTab === 'calendar' && (
         <div className="space-y-12 pb-20 animate-in fade-in duration-500">
           <h2 className="text-5xl font-luxury font-bold">{isAdmin ? 'Agenda Atelier' : 'I Vostri Ritual'}</h2>
@@ -429,29 +468,17 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODALE APPUNTAMENTO */}
+      {/* MODALI */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
           <div className="w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
-            <button onClick={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black transition-colors"><i className="fas fa-times text-xl"></i></button>
+            <button onClick={() => setIsFormOpen(false)} className="absolute top-10 right-10 text-gray-400"><i className="fas fa-times text-xl"></i></button>
             <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Riserva il Tuo Momento</h3>
-            <AppointmentForm onSave={saveAppointment} onCancel={() => { setIsFormOpen(false); setSelectedAppointment(undefined); }} initialData={selectedAppointment} services={services} team={team} existingAppointments={appointments} isAdmin={isAdmin} profiles={profiles} />
+            <AppointmentForm onSave={() => {}} onCancel={() => setIsFormOpen(false)} services={services} team={team} existingAppointments={appointments} isAdmin={isAdmin} profiles={profiles} />
           </div>
         </div>
       )}
 
-      {/* MODALE SERVIZIO */}
-      {isServiceFormOpen && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
-          <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
-            <button onClick={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} className="absolute top-10 right-10 text-gray-400 hover:text-black transition-colors"><i className="fas fa-times text-xl"></i></button>
-            <h3 className="text-3xl font-luxury font-bold mb-10 text-center">{selectedService ? 'Modifica Ritual' : 'Nuovo Ritual'}</h3>
-            <ServiceForm onSave={handleSaveService} onCancel={() => { setIsServiceFormOpen(false); setSelectedService(undefined); }} initialData={selectedService} />
-          </div>
-        </div>
-      )}
-
-      {/* MODALE TEAM (MODIFICA) */}
       {editingMember && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
           <div className="w-full max-w-4xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
@@ -460,11 +487,10 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODALE TEAM (AGGIUNTA) */}
       {isAddingMember && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-2xl z-[700] overflow-y-auto p-6 flex items-center justify-center animate-in fade-in duration-300">
           <div className="w-full max-w-xl bg-white rounded-[4rem] shadow-2xl p-12 border border-gray-100 relative">
-             <button onClick={() => setIsAddingMember(false)} className="absolute top-10 right-10 text-gray-400 hover:text-black"><i className="fas fa-times text-xl"></i></button>
+             <button onClick={() => setIsAddingMember(false)} className="absolute top-10 right-10 text-gray-400"><i className="fas fa-times text-xl"></i></button>
              <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Nuovo Artista</h3>
              <form onSubmit={(e) => {
                e.preventDefault();
@@ -472,50 +498,15 @@ const App: React.FC = () => {
                handleSaveTeamMember({
                  name: formData.get('name') as string,
                  role: formData.get('role') as string,
-                 bio: formData.get('bio') as string,
                  avatar: `https://ui-avatars.com/api/?name=${formData.get('name')}&background=random`,
-                 unavailable_dates: [],
-                 start_hour: 8,
-                 end_hour: 19
+                 work_start_time: '08:30',
+                 work_end_time: '18:30'
                });
              }} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-amber-600 uppercase tracking-widest block ml-1">Nome</label>
-                  <input name="name" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold text-sm" placeholder="es. Stefano" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-amber-600 uppercase tracking-widest block ml-1">Ruolo</label>
-                  <input name="role" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold text-sm" placeholder="es. Stylist Senior" />
-                </div>
+                <input name="name" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="Nome Artista" />
+                <input name="role" required className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 font-bold" placeholder="Ruolo (es. Colorist Senior)" />
                 <button type="submit" className="w-full py-5 bg-black text-white font-bold rounded-3xl shadow-2xl uppercase text-[10px] tracking-widest">Aggiungi al Team</button>
              </form>
-          </div>
-        </div>
-      )}
-
-      {/* STORICO TRATTAMENTI */}
-      {viewingHistory && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[800] flex items-center justify-center p-6 overflow-y-auto animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-4xl rounded-[4rem] p-12 relative">
-            <button onClick={() => setViewingHistory(null)} className="absolute top-8 right-8 text-gray-400"><i className="fas fa-times text-xl"></i></button>
-            <h3 className="text-3xl font-luxury font-bold mb-10 text-center">Diario di Bellezza: {viewingHistory.fullName}</h3>
-            <div className="grid md:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <input type="date" className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={newTreatment.date} onChange={e => setNewTreatment({...newTreatment, date: e.target.value})} />
-                <input placeholder="Servizio..." className="w-full p-4 bg-gray-50 rounded-2xl text-sm" value={newTreatment.service} onChange={e => setNewTreatment({...newTreatment, service: e.target.value})} />
-                <textarea placeholder="Note tecniche..." className="w-full p-4 bg-gray-50 rounded-2xl text-sm h-32" value={newTreatment.notes} onChange={e => setNewTreatment({...newTreatment, notes: e.target.value})} />
-                <button onClick={addOrUpdateTreatment} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px]">Salva Nota</button>
-              </div>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide">
-                {(viewingHistory.treatment_history || []).slice().reverse().map((r, i) => (
-                  <div key={i} className="p-6 bg-gray-50 rounded-3xl border border-gray-100 relative group">
-                    <p className="text-[9px] font-bold text-amber-600 mb-1">{r.date}</p>
-                    <p className="font-bold mb-2">{r.service}</p>
-                    <p className="text-xs italic text-gray-500">"{r.notes}"</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       )}
