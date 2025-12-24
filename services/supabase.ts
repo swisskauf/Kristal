@@ -17,18 +17,6 @@ const handleError = (error: any) => {
 };
 
 export const db = {
-  settings: {
-    get: async () => {
-      const { data, error } = await supabase.from('settings').select('*').eq('id', 'global').maybeSingle();
-      if (error && error.code !== 'PGRST116') return { instagram_enabled: true };
-      return data || { instagram_enabled: true };
-    },
-    update: async (settings: any) => {
-      const { data, error } = await supabase.from('settings').upsert({ id: 'global', ...settings }).select().single();
-      if (error) throw handleError(error);
-      return data;
-    }
-  },
   profiles: {
     getAll: async () => {
       const { data, error } = await supabase.from('profiles').select('*').order('full_name');
@@ -69,13 +57,28 @@ export const db = {
       return data || [];
     },
     upsert: async (member: any) => {
+      const payload = {
+        name: member.name,
+        role: member.role,
+        avatar: member.avatar,
+        bio: member.bio,
+        start_hour: member.start_hour ?? 8,
+        end_hour: member.end_hour ?? 19,
+        unavailable_dates: member.unavailable_dates ?? []
+      };
+      
       const { data, error } = await supabase
         .from('team_members')
-        .upsert(member, { onConflict: 'name' })
+        .upsert(payload, { onConflict: 'name' })
         .select()
         .single();
+        
       if (error) throw handleError(error);
       return data;
+    },
+    delete: async (name: string) => {
+      const { error } = await supabase.from('team_members').delete().eq('name', name);
+      if (error) throw handleError(error);
     }
   },
   appointments: {
