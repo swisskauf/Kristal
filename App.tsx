@@ -27,8 +27,9 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  // Fix: Added state for the service currently being edited to resolve setEditingService error
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
   const [clientSearch, setClientSearch] = useState('');
 
@@ -59,65 +60,62 @@ const App: React.FC = () => {
     };
   }, [appointments]);
 
+  // Fix: Defined timeGreeting for the dashboard header to resolve name reference error
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Buongiorno";
-    if (hour < 18) return "Buon pomeriggio";
-    return "Buonasera";
+    if (hour < 12) return 'Buongiorno';
+    if (hour < 18) return 'Buon Pomeriggio';
+    return 'Buonasera';
   }, []);
 
   /**
-   * Sincronizzazione Critica:
-   * 1. Forza i ruoli per le email specifiche.
-   * 2. Collega Maurizio alla mail sirop.sirop@outlook.sa.
+   * Sync di Sistema: 
+   * 1. Ruoli Protetti
+   * 2. Collegamento Maurizio -> sirop.sirop@outlook.sa
    */
-  const syncCriticalRoles = async (loadedProfiles: any[], loadedTeam: TeamMember[]) => {
-    const CRITICAL_ROLES: Record<string, 'admin' | 'collaborator'> = {
-      'serop.serop@outlook.com': 'admin',
-      'sirop.sirop@outlook.sa': 'collaborator'
-    };
+  const performSystemSync = async (allProfiles: any[], allTeam: TeamMember[]) => {
+    const ADMIN_EMAIL = 'serop.serop@outlook.com';
+    const COLLAB_EMAIL = 'sirop.sirop@outlook.sa';
 
-    let needsLocalUpdate = false;
-    const updatedProfiles = [...loadedProfiles];
-    const updatedTeam = [...loadedTeam];
+    let localProfiles = [...allProfiles];
+    let localTeam = [...allTeam];
+    let changed = false;
 
-    for (const emailKey in CRITICAL_ROLES) {
-      const targetRole = CRITICAL_ROLES[emailKey];
-      const profile = updatedProfiles.find(p => p.email?.toLowerCase() === emailKey.toLowerCase());
-      
-      if (profile) {
-        // Forza Ruolo
-        if (profile.role !== targetRole) {
-          console.log(`[Kristal Sync] Forza Ruolo: ${emailKey} -> ${targetRole}`);
-          try {
-            const updated = await db.profiles.upsert({ ...profile, role: targetRole });
-            const idx = updatedProfiles.findIndex(p => p.id === profile.id);
-            if (idx !== -1) updatedProfiles[idx] = updated;
-            if (user?.id === profile.id) {
-              setUser(prev => prev ? { ...prev, role: targetRole } : null);
-              needsLocalUpdate = true;
-            }
-          } catch (e) { console.error(e); }
-        }
-
-        // Collega Maurizio a sirop.sirop@outlook.sa
-        if (emailKey === 'sirop.sirop@outlook.sa') {
-          const maurizio = updatedTeam.find(m => m.name === 'Maurizio');
-          if (maurizio && maurizio.profile_id !== profile.id) {
-            console.log(`[Kristal Sync] Collegamento Maurizio all'ID: ${profile.id}`);
-            try {
-              const updatedM = await db.team.upsert({ ...maurizio, profile_id: profile.id });
-              const mIdx = updatedTeam.findIndex(m => m.name === 'Maurizio');
-              if (mIdx !== -1) updatedTeam[mIdx] = updatedM;
-              setTeam(updatedTeam);
-            } catch (e) { console.error(e); }
-          }
-        }
+    // 1. Allineamento Profili
+    for (const p of localProfiles) {
+      const email = p.email?.toLowerCase();
+      if (email === ADMIN_EMAIL && p.role !== 'admin') {
+        const updated = await db.profiles.upsert({ ...p, role: 'admin' });
+        localProfiles = localProfiles.map(lp => lp.id === p.id ? updated : lp);
+        changed = true;
+      }
+      if (email === COLLAB_EMAIL && p.role !== 'collaborator') {
+        const updated = await db.profiles.upsert({ ...p, role: 'collaborator' });
+        localProfiles = localProfiles.map(lp => lp.id === p.id ? updated : lp);
+        changed = true;
       }
     }
 
-    if (needsLocalUpdate) {
-      setProfiles(updatedProfiles);
+    // 2. Collegamento Maurizio
+    const maurizioProfile = localProfiles.find(p => p.email?.toLowerCase() === COLLAB_EMAIL);
+    const maurizioMember = localTeam.find(m => m.name === 'Maurizio');
+    
+    if (maurizioProfile && maurizioMember && maurizioMember.profile_id !== maurizioProfile.id) {
+      console.log("[Kristal] Linking Maurizio to profile", maurizioProfile.id);
+      const updatedM = await db.team.upsert({ ...maurizioMember, profile_id: maurizioProfile.id });
+      localTeam = localTeam.map(m => m.name === 'Maurizio' ? updatedM : m);
+      changed = true;
+    }
+
+    if (changed) {
+      setProfiles(localProfiles);
+      setTeam(localTeam);
+      
+      // Se l'utente corrente è coinvolto, aggiorna lo stato locale
+      const currentUserProfile = localProfiles.find(p => p.id === user?.id);
+      if (currentUserProfile && currentUserProfile.role !== user?.role) {
+        setUser(prev => prev ? { ...prev, role: currentUserProfile.role } : null);
+      }
     }
   };
 
@@ -140,7 +138,7 @@ const App: React.FC = () => {
       setRequests(reqs);
       setProfiles(profs);
 
-      await syncCriticalRoles(profs, currentTeam);
+      await performSystemSync(profs, currentTeam);
     } catch (e) {
       console.error("Refresh Data error", e);
     }
@@ -217,29 +215,35 @@ const App: React.FC = () => {
       const emailLower = profile.email?.toLowerCase();
       if ((emailLower === 'serop.serop@outlook.com' && newRole !== 'admin') ||
           (emailLower === 'sirop.sirop@outlook.sa' && newRole !== 'collaborator')) {
-        alert("Questo account ha un ruolo protetto dal sistema.");
+        alert("Questo account ha privilegi di sistema e non può essere modificato.");
         return;
       }
 
       await db.profiles.upsert({ ...profile, role: newRole });
-      alert(`Ruolo aggiornato.`);
+      alert(`Ruolo per ${profile.full_name} aggiornato a ${newRole}.`);
       await refreshData();
     } catch (e: any) {
-      alert("Errore: " + e.message);
+      alert("Errore SQL: " + e.message);
     }
   };
 
   const handleToggleVacation = async (memberName: string, date: string) => {
     const member = team.find(m => m.name === memberName);
     if (!member) return;
-    if (isCollaborator && member.profile_id !== user?.id) { alert("Azione non consentita."); return; }
-    setQuickRequestData({ date, memberName });
+    
+    // Admin può gestire tutti, Collaboratore solo se stesso
+    if (isAdmin || (isCollaborator && member.profile_id === user?.id)) {
+      setQuickRequestData({ date, memberName });
+    } else {
+      alert("Azione consentita solo per il proprio profilo.");
+    }
   };
 
   const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
     if (!quickRequestData) return;
     try {
       if (action === 'create' && data) {
+        // Se è l'admin, creiamo una richiesta già approvata o la mandiamo nel flusso
         await db.requests.create({
           member_name: quickRequestData.memberName,
           type: data.type,
@@ -248,15 +252,27 @@ const App: React.FC = () => {
           is_full_day: data.isFullDay,
           start_time: data.startTime,
           end_time: data.endTime,
-          status: 'pending',
-          notes: data.notes || 'Richiesta rapida.'
+          status: isAdmin ? 'approved' : 'pending',
+          notes: data.notes || (isAdmin ? 'Inserito dalla Direzione' : 'Richiesta rapida.')
         });
+
+        // Se approvato (admin), aggiorniamo subito il team
+        if (isAdmin) {
+          const member = team.find(m => m.name === quickRequestData.memberName);
+          if (member) {
+            const entry = { id: Math.random().toString(), startDate: quickRequestData.date, endDate: quickRequestData.date, isFullDay: data.isFullDay, type: data.type };
+            let absences = [...(member.absences_json || []), entry];
+            let dates = [...(member.unavailable_dates || [])];
+            if (data.isFullDay && !dates.includes(quickRequestData.date)) dates.push(quickRequestData.date);
+            await db.team.upsert({ ...member, absences_json: absences, unavailable_dates: dates });
+          }
+        }
       } else if (action === 'cancel') {
         const req = requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending');
         if (req) await db.requests.delete(req.id);
       }
       await refreshData();
-    } catch (e) { alert("Errore operazione."); }
+    } catch (e) { console.error(e); }
     setQuickRequestData(null);
   };
 
@@ -385,7 +401,7 @@ const App: React.FC = () => {
               </div>
               <div className="grid gap-4">
                 {profiles
-                  .filter(p => p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()) || p.email?.toLowerCase().includes(clientSearch.toLowerCase()))
+                  .filter(p => !clientSearch || p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()) || p.email?.toLowerCase().includes(clientSearch.toLowerCase()))
                   .map(p => {
                     const isSystemAcc = p.email?.toLowerCase() === 'serop.serop@outlook.com' || p.email?.toLowerCase() === 'sirop.sirop@outlook.sa';
                     return (
@@ -419,14 +435,48 @@ const App: React.FC = () => {
                       </div>
                     );
                   })}
+                {profiles.length === 0 && <p className="text-center py-10 text-gray-300 font-bold uppercase text-[10px]">Nessun profilo trovato nel database.</p>}
               </div>
             </div>
           </div>
         )}
 
+        {/* TAB TEAM E PLANNING (ADMIN/COLLAB) */}
+        {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
+          <div className="space-y-12 animate-in fade-in">
+            <div className="flex justify-between items-center">
+              <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
+              {isAdmin && (
+                <div className="flex gap-4">
+                   <div className="flex -space-x-3">
+                      {team.map(m => (
+                        <button key={m.name} onClick={() => setSelectedMemberToManage(m)} className="w-10 h-10 rounded-full border-2 border-white overflow-hidden shadow-md hover:scale-110 transition-transform">
+                          <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                   </div>
+                </div>
+              )}
+            </div>
+            
+            {isAdmin && <RequestManagement requests={requests} onAction={handleRequestAction} />}
+            
+            <TeamPlanning 
+              team={team} 
+              appointments={appointments} 
+              onToggleVacation={handleToggleVacation} 
+              currentUserMemberName={currentMember?.name} 
+              requests={requests} 
+            />
+          </div>
+        )}
+
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold text-gray-900">Menu Ritual</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-4xl font-luxury font-bold text-gray-900">Menu Ritual</h2>
+              <button onClick={() => { setEditingService(null); setIsServiceFormOpen(true); }} className="px-6 py-3 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all">Nuovo Ritual</button>
+            </div>
             <div className="grid md:grid-cols-2 gap-6">
               {services.map(s => (
                 <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex justify-between items-center group shadow-sm hover:shadow-lg transition-all">
@@ -439,14 +489,6 @@ const App: React.FC = () => {
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
-          <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
-            {isAdmin && <RequestManagement requests={requests} onAction={handleRequestAction} />}
-            <TeamPlanning team={team} appointments={appointments} onToggleVacation={handleToggleVacation} currentUserMemberName={currentMember?.name} requests={requests} />
           </div>
         )}
 
@@ -468,6 +510,42 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
              <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdmin={isAdmin} profiles={profiles} initialData={selectedAppointment} />
+          </div>
+        </div>
+      )}
+
+      {/* Fix: Added missing ServiceForm modal to handle isServiceFormOpen and editingService state usage */}
+      {isServiceFormOpen && isAdmin && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[800] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <ServiceForm 
+              initialData={editingService || undefined} 
+              onSave={async (s) => { 
+                await db.services.upsert(s); 
+                setIsServiceFormOpen(false); 
+                setEditingService(null);
+                refreshData(); 
+              }} 
+              onCancel={() => { 
+                setIsServiceFormOpen(false); 
+                setEditingService(null);
+              }} 
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedMemberToManage && isAdmin && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl">
+             <TeamManagement 
+              member={selectedMemberToManage} 
+              appointments={appointments} 
+              services={services} 
+              profiles={profiles} 
+              onClose={() => setSelectedMemberToManage(null)} 
+              onSave={async (m) => { await db.team.upsert(m); setSelectedMemberToManage(null); refreshData(); }}
+            />
           </div>
         </div>
       )}
