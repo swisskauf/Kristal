@@ -6,6 +6,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+const VALID_ROLES = ['client', 'admin', 'collaborator'];
+
 const handleError = (error: any) => {
   console.error('Supabase Error:', {
     message: error.message,
@@ -29,19 +31,27 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
+      // Validazione rigorosa del ruolo per evitare errori SQL Check Constraint
+      const role = VALID_ROLES.includes(profile.role) ? profile.role : 'client';
+      
       const payload: any = {
         id: profile.id,
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
-        role: profile.role || 'client'
+        role: role
       };
 
       if (profile.email) payload.email = profile.email;
       if (profile.phone) payload.phone = profile.phone;
-      if (profile.avatar || profile.avatar_url) payload.avatar = profile.avatar || profile.avatar_url;
+      if (profile.avatar) payload.avatar = profile.avatar;
       if (profile.technical_sheets) payload.technical_sheets = profile.technical_sheets;
       if (profile.treatment_history) payload.treatment_history = profile.treatment_history;
 
-      const { data, error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select().single();
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(payload, { onConflict: 'id' })
+        .select()
+        .single();
+        
       if (error) throw handleError(error);
       return data;
     }
