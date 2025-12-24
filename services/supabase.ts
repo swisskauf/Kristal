@@ -7,11 +7,12 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const handleError = (error: any) => {
-  console.error('Supabase Error Details:', {
+  console.error('Supabase API Error:', {
     message: error.message,
     details: error.details,
     hint: error.hint,
-    code: error.code
+    code: error.code,
+    table: error.table
   });
   return error;
 };
@@ -29,13 +30,14 @@ export const db = {
       return data;
     },
     upsert: async (profile: any) => {
-      // Usiamo solo i campi core per evitare errori di schema se avatar_url/avatar non esistono
+      // Ora includiamo l'email perché lo script SQL ha aggiunto la colonna
       const payload: any = {
         id: profile.id,
-        email: profile.email || '',
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
+        email: profile.email || '',
         phone: profile.phone || '',
         role: profile.role || 'client',
+        avatar: profile.avatar || profile.avatar_url || '',
         technical_sheets: profile.technical_sheets || [],
         treatment_history: profile.treatment_history || []
       };
@@ -68,21 +70,6 @@ export const db = {
       return data || [];
     },
     upsert: async (member: any) => {
-      let unavailable_dates = [...(member.unavailable_dates || [])];
-      
-      if (member.absences_json && Array.isArray(member.absences_json)) {
-        const generatedDates: string[] = [];
-        member.absences_json.forEach((abs: any) => {
-          let curr = new Date(abs.startDate);
-          const end = new Date(abs.endDate);
-          while(curr <= end) {
-            generatedDates.push(curr.toISOString().split('T')[0]);
-            curr.setDate(curr.getDate() + 1);
-          }
-        });
-        unavailable_dates = Array.from(new Set([...unavailable_dates, ...generatedDates]));
-      }
-
       const payload = {
         name: member.name,
         role: member.role,
@@ -90,7 +77,7 @@ export const db = {
         bio: member.bio,
         work_start_time: member.work_start_time || '08:30',
         work_end_time: member.work_end_time || '18:30',
-        unavailable_dates: unavailable_dates,
+        unavailable_dates: member.unavailable_dates || [],
         total_vacation_days: member.total_vacation_days ?? 25,
         absences_json: member.absences_json ?? []
       };
@@ -116,7 +103,7 @@ export const db = {
         .select(`
           *,
           services (name, price, duration),
-          profiles (full_name, phone)
+          profiles (full_name, phone, email)
         `)
         .order('date', { ascending: true });
       if (error) throw handleError(error);
