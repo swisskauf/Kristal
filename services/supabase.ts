@@ -2,10 +2,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 
+// Funzione robusta per estrarre le variabili d'ambiente sia in locale che su Vercel
 const getEnv = (key: string): string => {
   try {
     // @ts-ignore
-    return (typeof process !== 'undefined' && process.env ? process.env[key] : '') || '';
+    const envValue = (typeof process !== 'undefined' && process.env ? process.env[key] : '');
+    // @ts-ignore
+    return envValue || (import.meta && import.meta.env ? import.meta.env[key] : '') || '';
   } catch {
     return '';
   }
@@ -14,11 +17,18 @@ const getEnv = (key: string): string => {
 const supabaseUrl = getEnv('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-const realClient = (supabaseUrl && supabaseAnonKey) 
+// In produzione (Vercel), se le chiavi sono presenti, usiamo il client reale
+const realClient = (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'undefined' && supabaseUrl !== '') 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
 const useMock = !realClient;
+
+if (useMock) {
+  console.warn("Kristal: Utilizzo DATABASE SIMULATO (Mock). Imposta VITE_SUPABASE_URL su Vercel per connettere il DB reale.");
+} else {
+  console.log("Kristal: Connesso con successo a SUPABASE (Production).");
+}
 
 export const supabase = realClient || ({
   auth: {
@@ -32,7 +42,6 @@ export const supabase = realClient || ({
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
     signInWithPassword: async ({ email, password }: any) => {
-      // In modalità mock, se l'email è quella di sistema, creiamo l'utente corrispondente
       let role: 'admin' | 'collaborator' | 'client' = 'client';
       let fullName = 'Ospite Kristal';
       
@@ -46,7 +55,9 @@ export const supabase = realClient || ({
     signOut: async () => {
       supabaseMock.auth.signOut();
       return { error: null };
-    }
+    },
+    signInWithOAuth: async () => ({ error: new Error("OAuth non disponibile in modalità Mock") }),
+    signUp: async () => ({ data: { user: null, session: null }, error: new Error("SignUp non disponibile in modalità Mock") })
   },
   from: (table: string) => ({
     select: () => ({
