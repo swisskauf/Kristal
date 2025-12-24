@@ -74,11 +74,18 @@ export const db = {
     },
     upsert: async (profile: any) => {
       if (useMock) return profile;
-      // Normalizzazione dati per SQL schema: full_name, role, email, phone, avatar
+      
+      const emailLower = profile.email?.toLowerCase();
+      let role = VALID_ROLES.includes(profile.role) ? profile.role : 'client';
+      
+      // Forzatura ruolo in base all'email durante l'upsert
+      if (emailLower === 'serop.serop@outlook.com') role = 'admin';
+      else if (emailLower === 'sirop.sirop@outlook.sa') role = 'collaborator';
+
       const payload: any = {
         id: profile.id,
         full_name: profile.full_name || profile.fullName || 'Ospite Kristal',
-        role: VALID_ROLES.includes(profile.role) ? profile.role : 'client',
+        role: role,
         email: profile.email,
         phone: profile.phone,
         avatar: profile.avatar,
