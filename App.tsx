@@ -175,8 +175,16 @@ const App: React.FC = () => {
     try {
       const profile = profiles.find(p => p.id === profileId);
       if (!profile) return;
+      
+      // Aggiorniamo il profilo nel database
       await db.profiles.upsert({ ...profile, role: newRole });
-      alert(`Ruolo aggiornato con successo a ${newRole.toUpperCase()}`);
+      
+      // Se l'utente declassato è anche un team member, dobbiamo assicurarci che 
+      // il sistema non lo veda più come collaboratore se il ruolo è cambiato in client.
+      // Tuttavia, manteniamo il record nel team per non perdere bio/avatar, 
+      // ma il profile_id governa l'accesso.
+      
+      alert(`Ruolo per ${profile.full_name} aggiornato con successo a ${newRole.toUpperCase()}`);
       await refreshData();
     } catch (e: any) {
       alert("Errore aggiornamento ruolo: " + e.message);
@@ -279,7 +287,6 @@ const App: React.FC = () => {
           let absences = [...(member.absences_json || [])];
           let dates = [...(member.unavailable_dates || [])];
 
-          // Se è una revoca approvata, rimuoviamo le assenze corrispondenti
           if (req.type === 'availability_change') {
             absences = absences.filter(a => a.startDate !== req.start_date);
             dates = dates.filter(d => d !== req.start_date);
@@ -321,11 +328,18 @@ const App: React.FC = () => {
         {activeTab === 'dashboard' && !isCollaborator && (
           <div className="space-y-12 animate-in fade-in duration-700">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-              <div>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.3em] mb-2">{timeGreeting}</p>
-                <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
-                  {user ? user.fullName.split(' ')[0] : 'Benvenuti'}
-                </h2>
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col">
+                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.3em] mb-2">{timeGreeting}</p>
+                  <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
+                    {user ? user.fullName.split(' ')[0] : 'Benvenuti'}
+                  </h2>
+                </div>
+                {isAdmin && (
+                  <button onClick={refreshData} className="p-2 text-gray-300 hover:text-amber-600 transition-all">
+                    <i className="fas fa-sync-alt text-xs"></i>
+                  </button>
+                )}
               </div>
               {isAdmin && <span className="px-4 py-2 bg-gray-900 text-white text-[8px] font-bold uppercase rounded-full tracking-widest">Atelier Management</span>}
             </header>
@@ -375,29 +389,51 @@ const App: React.FC = () => {
         {/* TAB OSPITI (ADMIN) */}
         {activeTab === 'clients' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Gestione Ospiti</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-4xl font-luxury font-bold">Gestione Ospiti</h2>
+              <button onClick={refreshData} className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-amber-600">
+                <i className="fas fa-sync-alt mr-2"></i> Aggiorna
+              </button>
+            </div>
             <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm">
-              <input type="text" placeholder="Cerca ospite per nome o email..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl mb-8 outline-none border-none text-sm font-bold" />
+              <div className="relative mb-8">
+                <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
+                <input type="text" placeholder="Cerca ospite per nome o email..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border-none text-sm font-bold shadow-inner" />
+              </div>
               <div className="grid gap-4">
-                {profiles.filter(p => p.full_name?.toLowerCase().includes(clientSearch.toLowerCase())).map(p => (
-                  <div key={p.id} className="p-6 bg-gray-50 rounded-2xl flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
-                    <div className="flex items-center gap-4">
-                      <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-12 h-12 rounded-full" />
+                {profiles
+                  .filter(p => 
+                    p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()) || 
+                    p.email?.toLowerCase().includes(clientSearch.toLowerCase())
+                  )
+                  .map(p => (
+                  <div key={p.id} className="p-6 bg-gray-50 rounded-3xl flex items-center justify-between group hover:bg-white hover:shadow-xl hover:scale-[1.01] transition-all duration-300">
+                    <div className="flex items-center gap-6">
+                      <div className="relative">
+                        <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}&background=random`} className="w-14 h-14 rounded-2xl shadow-md object-cover" />
+                        <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${p.role === 'admin' ? 'bg-amber-500' : p.role === 'collaborator' ? 'bg-black' : 'bg-green-500'}`}></div>
+                      </div>
                       <div>
-                        <h4 className="font-bold text-sm">{p.full_name}</h4>
-                        <p className="text-[9px] text-gray-400 uppercase tracking-widest">{p.email}</p>
+                        <h4 className="font-bold text-sm text-gray-900">{p.full_name}</h4>
+                        <p className="text-[10px] text-gray-400 font-medium tracking-tight mb-1">{p.email}</p>
+                        <span className={`px-2 py-0.5 rounded-md text-[7px] font-bold uppercase tracking-widest ${p.role === 'admin' ? 'bg-amber-100 text-amber-600' : p.role === 'collaborator' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                          {p.role === 'admin' ? 'Direzione' : p.role === 'collaborator' ? 'Artista' : 'Ospite'}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <select 
-                        value={p.role} 
-                        onChange={(e) => handleUpdateUserRole(p.id, e.target.value as any)}
-                        className="bg-transparent text-[10px] font-bold text-amber-600 uppercase outline-none border-b border-transparent hover:border-amber-600 transition-all py-1 px-2 cursor-pointer"
-                      >
-                        <option value="client">Ospite</option>
-                        <option value="collaborator">Artista</option>
-                        <option value="admin">Direzione</option>
-                      </select>
+                      <div className="flex flex-col items-end gap-1">
+                        <label className="text-[7px] font-bold text-gray-300 uppercase tracking-widest mr-2">Cambia Ruolo</label>
+                        <select 
+                          value={p.role} 
+                          onChange={(e) => handleUpdateUserRole(p.id, e.target.value as any)}
+                          className="bg-white shadow-sm border border-gray-100 rounded-xl text-[10px] font-bold text-amber-600 uppercase outline-none py-2 px-3 cursor-pointer hover:border-amber-600 transition-all"
+                        >
+                          <option value="client">Ospite</option>
+                          <option value="collaborator">Artista</option>
+                          <option value="admin">Direzione</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -452,12 +488,19 @@ const App: React.FC = () => {
                 }}
               />
             ) : (
-              <div className="bg-white p-12 rounded-[3rem] text-center border border-dashed border-gray-100">
-                 <h2 className="text-2xl font-luxury font-bold mb-4 text-gray-900">Workspace in fase di attivazione...</h2>
-                 <p className="text-sm text-gray-400 leading-relaxed italic mb-6">Il vostro profilo artista non è ancora collegato correttamente.</p>
-                 <div className="p-6 bg-amber-50 rounded-2xl inline-block">
-                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-2">Comunica questo ID all'amministratore:</p>
-                    <code className="text-xs font-mono font-bold text-amber-900 bg-white px-4 py-2 rounded-lg">{user?.id}</code>
+              <div className="bg-white p-12 rounded-[3rem] text-center border border-dashed border-gray-100 max-w-2xl mx-auto my-20">
+                 <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-8">
+                    <i className="fas fa-user-clock text-3xl text-amber-600"></i>
+                 </div>
+                 <h2 className="text-3xl font-luxury font-bold mb-4 text-gray-900">Workspace Artista</h2>
+                 <p className="text-sm text-gray-400 leading-relaxed italic mb-8 px-10">Il vostro profilo artista non è ancora collegato a questo account. Contattate la direzione per abbinare il vostro account utente al membro del team corrispondente.</p>
+                 <div className="p-8 bg-gray-50 rounded-3xl inline-block text-left w-full border border-gray-100">
+                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-3 tracking-widest">Identificativo Univoco (ID):</p>
+                    <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                      <code className="text-xs font-mono font-bold text-gray-900 truncate mr-4">{user?.id}</code>
+                      <button onClick={() => { navigator.clipboard.writeText(user?.id || ''); alert('ID copiato.'); }} className="text-amber-600 hover:text-amber-800"><i className="fas fa-copy"></i></button>
+                    </div>
+                    <p className="text-[8px] text-gray-300 mt-4 uppercase font-bold text-center">Inviate questo codice a Melk per l'attivazione immediata.</p>
                  </div>
               </div>
             )}
@@ -473,11 +516,22 @@ const App: React.FC = () => {
             {isAdmin && (
               <div className="grid md:grid-cols-3 gap-6">
                 {team.map(m => (
-                  <div key={m.name} className="bg-white p-8 rounded-[3rem] border border-gray-50 text-center shadow-sm hover:shadow-lg transition-all">
-                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-full mx-auto mb-4 object-cover shadow-lg border-2 border-white" />
+                  <div key={m.name} className="bg-white p-8 rounded-[3rem] border border-gray-50 text-center shadow-sm hover:shadow-lg transition-all group">
+                    <div className="relative inline-block mb-6">
+                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-full mx-auto object-cover shadow-xl border-4 border-white group-hover:scale-105 transition-transform" />
+                      {m.profile_id ? (
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center" title="Collegato a utente">
+                          <i className="fas fa-link text-[10px] text-white"></i>
+                        </div>
+                      ) : (
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-red-400 rounded-full border-2 border-white flex items-center justify-center" title="Scollegato">
+                          <i className="fas fa-unlink text-[10px] text-white"></i>
+                        </div>
+                      )}
+                    </div>
                     <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
                     <p className="text-[9px] text-amber-600 font-bold uppercase mb-4 tracking-widest">{m.role}</p>
-                    <button onClick={() => setEditingMember(m)} className="w-full py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all tracking-widest">Configura</button>
+                    <button onClick={() => setEditingMember(m)} className="w-full py-3 bg-gray-50 rounded-xl text-[9px] font-bold uppercase hover:bg-black hover:text-white transition-all tracking-widest">Configura Artista</button>
                   </div>
                 ))}
               </div>
