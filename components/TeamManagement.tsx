@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TeamMember, Appointment, Service } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface TeamManagementProps {
   member: TeamMember;
@@ -17,13 +17,17 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const [endHour, setEndHour] = useState(member.end_hour || 19);
   const [newVacationDate, setNewVacationDate] = useState('');
 
-  // Calcolo statistiche membro
+  // Sincronizza lo stato locale se il prop member cambia (es. dopo un refresh)
+  useEffect(() => {
+    setStartHour(member.start_hour || 8);
+    setEndHour(member.end_hour || 19);
+  }, [member]);
+
   const memberStats = useMemo(() => {
     const memberAppointments = appointments.filter(a => a.team_member_name === member.name);
     const totalRevenue = memberAppointments.reduce((acc, a) => acc + (a.services?.price || 0), 0);
     const serviceCount = memberAppointments.length;
     
-    // Distribuzione per categoria
     const categories: Record<string, number> = {};
     memberAppointments.forEach(a => {
       const cat = services.find(s => s.id === a.service_id)?.category || 'Altro';
@@ -31,19 +35,25 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     });
 
     const pieData = Object.entries(categories).map(([name, value]) => ({ name, value }));
-
-    return { totalRevenue, serviceCount, pieData, memberAppointments };
+    return { totalRevenue, serviceCount, pieData };
   }, [appointments, member.name, services]);
 
   const COLORS = ['#d97706', '#111827', '#4b5563', '#9ca3af'];
 
   const handleUpdateHours = () => {
-    onSave({ ...member, start_hour: startHour, end_hour: endHour });
+    onSave({ 
+      ...member, 
+      start_hour: Number(startHour), 
+      end_hour: Number(endHour) 
+    });
   };
 
   const addVacation = () => {
     if (!newVacationDate) return;
-    const updatedDates = [...(member.unavailable_dates || []), newVacationDate];
+    const currentDates = member.unavailable_dates || [];
+    if (currentDates.includes(newVacationDate)) return;
+    
+    const updatedDates = [...currentDates, newVacationDate];
     onSave({ ...member, unavailable_dates: updatedDates });
     setNewVacationDate('');
   };
@@ -57,7 +67,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     <div className="flex flex-col h-full animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-10">
         <div className="flex items-center gap-6">
-          <img src={member.avatar} className="w-20 h-20 rounded-full shadow-2xl border-4 border-white" alt={member.name} />
+          <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-20 h-20 rounded-full shadow-2xl border-4 border-white" alt={member.name} />
           <div>
             <h3 className="text-3xl font-luxury font-bold text-gray-900">{member.name}</h3>
             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{member.role}</p>
@@ -139,9 +149,9 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                   </select>
                 </div>
               </div>
-              <button onClick={handleUpdateHours} className="w-full mt-8 py-5 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-amber-700 transition-all">Salva Orari</button>
+              <button onClick={handleUpdateHours} className="w-full mt-8 py-5 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-amber-700 transition-all shadow-lg">Salva Orari</button>
             </div>
-            <p className="text-[9px] text-gray-400 italic text-center px-10">L'aggiornamento degli orari influenzerà immediatamente la disponibilità visibile agli ospiti per le nuove prenotazioni.</p>
+            <p className="text-[9px] text-gray-400 italic text-center px-10">L'aggiornamento degli orari influenzerà immediatamente la disponibilità visibile agli ospiti.</p>
           </div>
         )}
 
@@ -154,7 +164,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                 onChange={(e) => setNewVacationDate(e.target.value)}
                 className="flex-1 p-5 rounded-2xl bg-gray-50 border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 font-bold"
               />
-              <button onClick={addVacation} className="px-8 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Aggiungi</button>
+              <button onClick={addVacation} className="px-8 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-lg">Aggiungi</button>
             </div>
 
             <div className="space-y-3">
@@ -162,9 +172,9 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               {(member.unavailable_dates || []).length > 0 ? (
                 <div className="grid gap-3">
                   {(member.unavailable_dates || []).sort().map(date => (
-                    <div key={date} className="flex items-center justify-between p-5 bg-white border border-gray-100 rounded-2xl">
+                    <div key={date} className="flex items-center justify-between p-5 bg-white border border-gray-100 rounded-2xl shadow-sm group hover:border-amber-200 transition-all">
                       <span className="font-bold text-sm">{new Date(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                      <button onClick={() => removeVacation(date)} className="text-red-300 hover:text-red-500 transition-colors">
+                      <button onClick={() => removeVacation(date)} className="text-gray-300 hover:text-red-500 transition-colors">
                         <i className="fas fa-trash-alt text-xs"></i>
                       </button>
                     </div>
