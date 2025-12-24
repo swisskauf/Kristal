@@ -6,17 +6,19 @@ interface TeamManagementProps {
   member: TeamMember;
   appointments: Appointment[];
   services: Service[];
+  profiles: any[];
   onSave: (updatedMember: TeamMember) => void;
   onClose: () => void;
 }
 
-const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, services, onSave, onClose }) => {
+const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, services, profiles, onSave, onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'vacations'>('analytics');
   
   const [workStartTime, setWorkStartTime] = useState(member.work_start_time || '08:30');
   const [workEndTime, setWorkEndTime] = useState(member.work_end_time || '18:30');
   const [totalVacationDays, setTotalVacationDays] = useState(member.total_vacation_days || 25);
   const [avatarUrl, setAvatarUrl] = useState(member.avatar || '');
+  const [profileId, setProfileId] = useState(member.profile_id || '');
   
   const [newAbsence, setNewAbsence] = useState<{start: string, end: string, type: AbsenceType, notes: string}>({
     start: '',
@@ -50,7 +52,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       work_start_time: workStartTime,
       work_end_time: workEndTime,
       total_vacation_days: Number(totalVacationDays),
-      avatar: avatarUrl
+      avatar: avatarUrl,
+      profile_id: profileId || undefined
     });
   };
 
@@ -66,13 +69,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     };
 
     const updatedAbsences = [...absences, entry].sort((a, b) => b.startDate.localeCompare(a.startDate));
-    
-    onSave({ 
-      ...member, 
-      absences_json: updatedAbsences,
-      total_vacation_days: Number(totalVacationDays) // Assicuriamo che mantenga il valore aggiornato
-    });
-    
+    onSave({ ...member, absences_json: updatedAbsences });
     setNewAbsence({ start: '', end: '', type: 'vacation', notes: '' });
   };
 
@@ -86,14 +83,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       vacation: { label: 'Ferie', color: 'bg-blue-50 text-blue-600' },
       sick: { label: 'Malattia', color: 'bg-red-50 text-red-600' },
       injury: { label: 'Infortunio', color: 'bg-orange-50 text-orange-600' },
-      maternity: { label: 'Maternità', color: 'bg-pink-50 text-pink-600' },
-      paternity: { label: 'Paternità', color: 'bg-indigo-50 text-indigo-600' },
       training: { label: 'Formazione', color: 'bg-green-50 text-green-600' },
-      bereavement: { label: 'Lutto', color: 'bg-gray-800 text-white' },
-      unpaid: { label: 'Non Pagato', color: 'bg-gray-100 text-gray-500' },
       overtime: { label: 'Straordinario', color: 'bg-amber-100 text-amber-700' }
     };
-    const c = config[type] || config.unpaid;
+    const c = config[type] || { label: 'Altro', color: 'bg-gray-100 text-gray-500' };
     return <span className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase ${c.color}`}>{c.label}</span>;
   };
 
@@ -141,6 +134,16 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
         {activeSubTab === 'schedule' && (
           <div className="space-y-6">
             <div className="bg-gray-50 p-8 rounded-[2.5rem] space-y-6">
+               <div className="space-y-2">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Account Collegato</label>
+                  <select value={profileId} onChange={e => setProfileId(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-xs outline-none">
+                    <option value="">Seleziona Collaboratore...</option>
+                    {profiles.filter(p => p.role === 'collaborator' || p.role === 'admin').map(p => (
+                      <option key={p.id} value={p.id}>{p.full_name} ({p.email})</option>
+                    ))}
+                  </select>
+                  <p className="text-[7px] text-gray-400 italic mt-1 ml-1">Collega questo artista a un utente registrato per abilitare il workspace personale.</p>
+               </div>
                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Inizio Turno</label>
@@ -154,7 +157,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                <div className="space-y-2">
                   <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Giorni Ferie da Contratto</label>
                   <input type="number" value={totalVacationDays} onChange={e => setTotalVacationDays(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold" />
-                  <p className="text-[8px] text-gray-400 italic mt-1 ml-1">Questo valore determina il "Residuo" visualizzato nella dashboard Visione.</p>
                </div>
                <button onClick={handleUpdateProfile} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Salva Configurazione</button>
             </div>
@@ -179,7 +181,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
             </div>
 
             <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Registra Nuova Assenza</h5>
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Registra Nuova Assenza Forzata</h5>
               <div className="grid grid-cols-2 gap-4">
                 <input type="date" value={newAbsence.start} onChange={e => setNewAbsence({...newAbsence, start: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
                 <input type="date" value={newAbsence.end} onChange={e => setNewAbsence({...newAbsence, end: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
@@ -187,15 +189,13 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               <select value={newAbsence.type} onChange={e => setNewAbsence({...newAbsence, type: e.target.value as AbsenceType})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold">
                 <option value="vacation">Ferie / Vacanza</option>
                 <option value="sick">Malattia</option>
-                <option value="injury">Infortunio</option>
                 <option value="training">Formazione</option>
-                <option value="overtime">Compensazione Straordinario</option>
               </select>
-              <button onClick={addAbsence} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Salva Periodo</button>
+              <button onClick={addAbsence} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Forza Periodo</button>
             </div>
 
             <div className="space-y-4">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Periodi Registrati</h5>
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Periodi Approvati</h5>
               <div className="space-y-3">
                 {absences.map(a => (
                   <div key={a.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl shadow-sm">
@@ -209,7 +209,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                        <div>
                           <div className="mb-1">{getAbsenceBadge(a.type)}</div>
                           <p className="text-[10px] font-bold text-gray-900">
-                            {new Date(a.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} → {new Date(a.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                            {new Date(a.startDate).toLocaleDateString()} → {new Date(a.endDate).toLocaleDateString()}
                           </p>
                        </div>
                     </div>
