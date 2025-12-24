@@ -7,9 +7,11 @@ interface TeamPlanningProps {
   appointments: Appointment[];
   onToggleVacation: (memberName: string, date: string) => void;
   currentUserMemberName?: string;
+  // Aggiunto per visualizzare le richieste pendenti direttamente nell'agenda
+  requests?: any[];
 }
 
-const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggleVacation, currentUserMemberName }) => {
+const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggleVacation, currentUserMemberName, requests = [] }) => {
   const [selectedMembers, setSelectedMembers] = useState<string[]>(team.map(m => m.name));
   const [viewDate, setViewDate] = useState(new Date());
 
@@ -105,6 +107,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                       const dayAppts = appointments.filter(a => a.team_member_name === m.name && a.date.includes(date));
                       const isMe = m.name === currentUserMemberName;
                       
+                      // Cerca se c'è una richiesta pendente per questo giorno e artista
+                      const pendingReq = isMe ? requests?.find(r => r.member_name === m.name && r.start_date === date && r.status === 'pending') : null;
+
                       return (
                         <td key={m.name} className={`p-4 ${isMe ? 'bg-amber-50/10' : ''}`}>
                           <button 
@@ -112,15 +117,22 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                             className={`w-full p-4 rounded-2xl border transition-all text-left relative group min-h-[60px] ${
                               isOff 
                                 ? 'bg-gray-900 border-gray-900 text-gray-500' 
-                                : dayAppts.length > 0 
-                                  ? 'bg-white border-amber-100 shadow-sm' 
-                                  : 'bg-white border-gray-50 hover:border-amber-500 border-dashed'
+                                : pendingReq 
+                                  ? 'bg-amber-50 border-amber-500 border-dashed animate-pulse'
+                                  : dayAppts.length > 0 
+                                    ? 'bg-white border-amber-100 shadow-sm' 
+                                    : 'bg-white border-gray-50 hover:border-amber-500 border-dashed'
                             } ${isMe && !isOff && dayAppts.length === 0 ? 'hover:bg-amber-50' : ''}`}
                           >
                             {isOff ? (
                               <div className="flex items-center gap-2">
                                 <i className="fas fa-plane text-[8px]"></i>
                                 <span className="text-[8px] font-bold uppercase tracking-widest">Congedo</span>
+                              </div>
+                            ) : pendingReq ? (
+                              <div className="flex flex-col">
+                                <span className="text-[7px] font-bold text-amber-600 uppercase tracking-widest">In Attesa...</span>
+                                <span className="text-[7px] text-gray-400 italic">Clicca per annullare</span>
                               </div>
                             ) : dayAppts.length > 0 ? (
                               <div>
@@ -133,7 +145,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                               <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="text-[7px] font-bold text-gray-400 uppercase tracking-widest">Disponibile</span>
                                 <span className="text-[7px] text-amber-600 uppercase font-bold">
-                                  {isMe ? 'Richiedi Congedo' : 'Vedi Orari'}
+                                  {isMe ? 'Gestisci' : 'Vedi Orari'}
                                 </span>
                               </div>
                             )}
@@ -151,7 +163,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
       <div className="flex items-center gap-4 px-8 py-4 bg-gray-50 rounded-2xl">
         <i className="fas fa-info-circle text-amber-600 text-xs"></i>
         <p className="text-[10px] text-gray-400 leading-tight">
-          <strong>Artisti:</strong> Cliccate su una vostra cella vuota per richiedere un congedo. Per i colleghi potete visualizzare solo gli impegni già confermati.
+          <strong>Artisti:</strong> Cliccate su una vostra cella per richiedere un congedo, annullare una richiesta pendente o revocare un congedo approvato.
         </p>
       </div>
     </div>
