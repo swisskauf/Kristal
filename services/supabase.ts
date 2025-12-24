@@ -77,6 +77,7 @@ export const db = {
       const emailLower = profile.email?.toLowerCase();
       let role = VALID_ROLES.includes(profile.role) ? profile.role : 'client';
       
+      // Protezione ruoli critici a livello DB
       if (emailLower === 'serop.serop@outlook.com') role = 'admin';
       else if (emailLower === 'sirop.sirop@outlook.sa') role = 'collaborator';
 
