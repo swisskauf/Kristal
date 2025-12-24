@@ -13,7 +13,6 @@ interface TeamManagementProps {
 const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, services, onSave, onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'vacations'>('analytics');
   
-  // Orari precisi in formato HH:mm
   const [workStartTime, setWorkStartTime] = useState(member.work_start_time || '08:30');
   const [workEndTime, setWorkEndTime] = useState(member.work_end_time || '18:30');
   const [totalVacationDays, setTotalVacationDays] = useState(member.total_vacation_days || 25);
@@ -68,19 +67,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
 
     const updatedAbsences = [...absences, entry].sort((a, b) => b.startDate.localeCompare(a.startDate));
     
-    // Generiamo anche l'array legacy per il planning visivo
-    const legacyDates: string[] = [];
-    let curr = new Date(entry.startDate);
-    const stop = new Date(entry.endDate);
-    while(curr <= stop) {
-      legacyDates.push(curr.toISOString().split('T')[0]);
-      curr.setDate(curr.getDate() + 1);
-    }
-
     onSave({ 
       ...member, 
       absences_json: updatedAbsences,
-      unavailable_dates: Array.from(new Set([...(member.unavailable_dates || []), ...legacyDates]))
+      total_vacation_days: Number(totalVacationDays) // Assicuriamo che mantenga il valore aggiornato
     });
     
     setNewAbsence({ start: '', end: '', type: 'vacation', notes: '' });
@@ -111,12 +101,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     <div className="flex flex-col h-full animate-in fade-in duration-500 max-h-[85vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">
-          <div className="relative group">
-            <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-20 h-20 rounded-full shadow-lg border-2 border-white object-cover" />
-            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-              <i className="fas fa-camera text-white text-xs"></i>
-            </div>
-          </div>
+          <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-20 h-20 rounded-full shadow-lg border-2 border-white object-cover" />
           <div>
             <h3 className="text-2xl font-luxury font-bold text-gray-900">{member.name}</h3>
             <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{member.role}</p>
@@ -128,8 +113,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       <div className="flex gap-6 border-b border-gray-100 mb-8 overflow-x-auto scrollbar-hide">
         {[
           { id: 'analytics', label: 'Performance', icon: 'fa-chart-line' },
-          { id: 'schedule', label: 'Orari e Profilo', icon: 'fa-user-cog' },
-          { id: 'vacations', label: 'Congedi e Assenze', icon: 'fa-calendar-alt' }
+          { id: 'schedule', label: 'Configurazione', icon: 'fa-user-cog' },
+          { id: 'vacations', label: 'Ferie & Congedi', icon: 'fa-calendar-alt' }
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveSubTab(tab.id as any)} className={`flex items-center gap-2 pb-3 text-[9px] font-bold uppercase tracking-widest transition-all ${activeSubTab === tab.id ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-300'}`}>
             <i className={`fas ${tab.icon}`}></i> {tab.label}
@@ -158,48 +143,43 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
             <div className="bg-gray-50 p-8 rounded-[2.5rem] space-y-6">
                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Inizio Turno (Preciso)</label>
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Inizio Turno</label>
                     <input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-sm" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Fine Turno (Preciso)</label>
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Fine Turno</label>
                     <input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-sm" />
                   </div>
                </div>
                <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">URL Foto Profilo</label>
-                  <input type="text" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs" />
-               </div>
-               <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Budget Ferie Annuo</label>
+                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Giorni Ferie da Contratto</label>
                   <input type="number" value={totalVacationDays} onChange={e => setTotalVacationDays(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold" />
+                  <p className="text-[8px] text-gray-400 italic mt-1 ml-1">Questo valore determina il "Residuo" visualizzato nella dashboard Visione.</p>
                </div>
-               <button onClick={handleUpdateProfile} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Salva Profilo Artista</button>
+               <button onClick={handleUpdateProfile} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Salva Configurazione</button>
             </div>
           </div>
         )}
 
         {activeSubTab === 'vacations' && (
           <div className="space-y-8 pb-10">
-            {/* BILANCIO FERIE */}
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 text-center">
                 <p className="text-[8px] font-bold text-blue-600 uppercase mb-1">Contratto</p>
-                <p className="text-2xl font-luxury font-bold">{totalVacationDays}</p>
+                <p className="text-2xl font-luxury font-bold">{totalVacationDays}g</p>
               </div>
               <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100 text-center">
                 <p className="text-[8px] font-bold text-amber-600 uppercase mb-1">Godute</p>
-                <p className="text-2xl font-luxury font-bold">{usedVacationDays}</p>
+                <p className="text-2xl font-luxury font-bold">{usedVacationDays}g</p>
               </div>
               <div className="bg-green-50/50 p-6 rounded-3xl border border-green-100 text-center">
                 <p className="text-[8px] font-bold text-green-600 uppercase mb-1">Residuo</p>
-                <p className="text-2xl font-luxury font-bold">{totalVacationDays - usedVacationDays}</p>
+                <p className="text-2xl font-luxury font-bold">{totalVacationDays - usedVacationDays}g</p>
               </div>
             </div>
 
-            {/* NUOVA REGISTRAZIONE */}
             <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Registra Assenza o Congedo</h5>
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Registra Nuova Assenza</h5>
               <div className="grid grid-cols-2 gap-4">
                 <input type="date" value={newAbsence.start} onChange={e => setNewAbsence({...newAbsence, start: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
                 <input type="date" value={newAbsence.end} onChange={e => setNewAbsence({...newAbsence, end: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
@@ -208,20 +188,14 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                 <option value="vacation">Ferie / Vacanza</option>
                 <option value="sick">Malattia</option>
                 <option value="injury">Infortunio</option>
-                <option value="maternity">Maternità</option>
-                <option value="paternity">Paternità</option>
                 <option value="training">Formazione</option>
-                <option value="bereavement">Lutto</option>
-                <option value="unpaid">Congedo non pagato</option>
                 <option value="overtime">Compensazione Straordinario</option>
               </select>
-              <textarea placeholder="Note interne..." value={newAbsence.notes} onChange={e => setNewAbsence({...newAbsence, notes: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs resize-none" rows={2} />
-              <button onClick={addAbsence} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Conferma Registrazione</button>
+              <button onClick={addAbsence} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Salva Periodo</button>
             </div>
 
-            {/* LISTA PERIODI */}
             <div className="space-y-4">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Storico Congedi</h5>
+              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Periodi Registrati</h5>
               <div className="space-y-3">
                 {absences.map(a => (
                   <div key={a.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl shadow-sm">
@@ -235,11 +209,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                        <div>
                           <div className="mb-1">{getAbsenceBadge(a.type)}</div>
                           <p className="text-[10px] font-bold text-gray-900">
-                            {new Date(a.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} 
-                            <span className="mx-2 text-gray-300">→</span>
-                            {new Date(a.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                            {new Date(a.startDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} → {new Date(a.endDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
                           </p>
-                          {a.notes && <p className="text-[9px] text-gray-400 italic mt-1">"{a.notes}"</p>}
                        </div>
                     </div>
                     <button onClick={() => removeAbsence(a.id)} className="text-gray-300 hover:text-red-500 transition-colors"><i className="fas fa-trash-alt text-[10px]"></i></button>
