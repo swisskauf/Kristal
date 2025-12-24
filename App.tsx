@@ -11,7 +11,7 @@ import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import QuickRequestModal from './components/QuickRequestModal';
 import { supabase, db } from './services/supabase';
-import { Service, User, TeamMember, Appointment, TechnicalSheet, LeaveRequest, AbsenceType } from './types';
+import { Service, User, TeamMember, Appointment, LeaveRequest, AbsenceType } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
 const App: React.FC = () => {
@@ -28,10 +28,9 @@ const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [viewingGuest, setViewingGuest] = useState<any | null>(null);
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
   const [clientSearch, setClientSearch] = useState('');
-  const [newSheet, setNewSheet] = useState({ category: 'Colore', content: '' });
 
   const [quickRequestData, setQuickRequestData] = useState<{ date: string, memberName: string } | null>(null);
 
@@ -79,12 +78,10 @@ const App: React.FC = () => {
           name: m.name,
           avatar: m.avatar,
           daily: getRevenue(mAppts.filter(a => a.date.startsWith(todayStr))),
-          weekly: getRevenue(mAppts.filter(a => new Date(a.date) >= startOfWeek)),
           monthly: getRevenue(mAppts.filter(a => {
             const d = new Date(a.date);
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
           })),
-          yearly: getRevenue(mAppts.filter(a => new Date(a.date).getFullYear() === now.getFullYear())),
           vacationRemaining: (m.total_vacation_days || 25) - vacationUsed,
           totalVacation: m.total_vacation_days || 25
         };
@@ -146,19 +143,18 @@ const App: React.FC = () => {
 
   const refreshData = async () => {
     try {
-      const [svcs, tm, appts, reqs] = await Promise.all([
+      const [svcs, tm, appts, reqs, profs] = await Promise.all([
         db.services.getAll().catch(() => []),
         db.team.getAll().catch(() => []),
         db.appointments.getAll().catch(() => []),
-        db.requests.getAll().catch(() => [])
+        db.requests.getAll().catch(() => []),
+        db.profiles.getAll().catch(() => [])
       ]);
       
-      if (svcs.length) setServices(svcs);
-      if (tm.length) setTeam(tm);
+      setServices(svcs.length ? svcs : DEFAULT_SERVICES);
+      setTeam(tm.length ? tm : DEFAULT_TEAM);
       setAppointments(appts);
       setRequests(reqs);
-
-      const profs = await db.profiles.getAll().catch(() => []);
       setProfiles(profs);
     } catch (e) {
       console.error("Refresh Data error", e);
@@ -225,26 +221,13 @@ const App: React.FC = () => {
       } else if (action === 'cancel') {
         const reqToCancel = requests.find(r => r.member_name === memberName && r.start_date === date && r.status === 'pending');
         if (reqToCancel) {
-          // Eliminiamo fisicamente la richiesta per pulire l'agenda immediatamente
           await db.requests.delete(reqToCancel.id);
-          alert("Richiesta annullata. Lo slot è tornato disponibile.");
+          alert("Richiesta annullata.");
         }
-      } else if (action === 'revoke' && data) {
-        await db.requests.create({
-          member_name: memberName,
-          type: 'availability_change',
-          start_date: date,
-          end_date: date,
-          is_full_day: true,
-          status: 'pending',
-          notes: `Richiesta di REVOCA per congedo confermato il ${date}. Motivazione: ${data.notes || 'Non specificata'}`
-        });
-        alert("Richiesta di revoca inviata.");
       }
       await refreshData();
     } catch (e: any) {
-      console.error("QuickRequest Error:", e);
-      alert("Errore: " + (e.message || "Operazione fallita. Riprovare."));
+      alert("Errore: " + (e.message || "Operazione fallita."));
     } finally {
       setQuickRequestData(null);
     }
@@ -281,7 +264,6 @@ const App: React.FC = () => {
               curr.setDate(curr.getDate() + 1);
             }
           }
-          
           await db.team.upsert({ ...member, absences_json: absences, unavailable_dates: dates });
         }
       }
@@ -332,41 +314,6 @@ const App: React.FC = () => {
                     </div>
                   ))}
                 </div>
-
-                <div className="bg-white p-8 md:p-10 rounded-[3.5rem] border border-gray-50 shadow-sm overflow-hidden">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Performance Artisti</h3>
-                  <div className="overflow-x-auto scrollbar-hide">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="border-b border-gray-50">
-                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest">Artista</th>
-                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Oggi</th>
-                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-center">Mese</th>
-                          <th className="pb-6 text-[9px] font-bold uppercase text-gray-400 tracking-widest text-right">Ferie Residue</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {businessStats.team.map(m => (
-                          <tr key={m.name} className="group hover:bg-gray-50/50 transition-colors">
-                            <td className="py-6">
-                              <div className="flex items-center gap-3">
-                                <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-8 h-8 rounded-full shadow-sm grayscale group-hover:grayscale-0 transition-all" />
-                                <span className="font-bold text-sm">{m.name}</span>
-                              </div>
-                            </td>
-                            <td className="py-6 text-center font-luxury font-bold text-sm">CHF {m.daily}</td>
-                            <td className="py-6 text-center font-luxury font-bold text-sm text-amber-600">CHF {m.monthly}</td>
-                            <td className="py-6 text-right font-bold text-[10px]">
-                              <span className={m.vacationRemaining < 5 ? 'text-red-500' : 'text-gray-900'}>
-                                {m.vacationRemaining} / {m.totalVacation} gg
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -394,6 +341,55 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* TAB OSPITI (ADMIN) */}
+        {activeTab === 'clients' && isAdmin && (
+          <div className="space-y-8 animate-in fade-in">
+            <h2 className="text-4xl font-luxury font-bold">Gestione Ospiti</h2>
+            <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm">
+              <input type="text" placeholder="Cerca ospite per nome o email..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl mb-8 outline-none border-none text-sm font-bold" />
+              <div className="grid gap-4">
+                {profiles.filter(p => p.full_name?.toLowerCase().includes(clientSearch.toLowerCase())).map(p => (
+                  <div key={p.id} className="p-6 bg-gray-50 rounded-2xl flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                    <div className="flex items-center gap-4">
+                      <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-12 h-12 rounded-full" />
+                      <div>
+                        <h4 className="font-bold text-sm">{p.full_name}</h4>
+                        <p className="text-[9px] text-gray-400 uppercase tracking-widest">{p.email}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-600 uppercase">{p.role}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB SERVIZI (ADMIN) */}
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-8 animate-in fade-in">
+            <div className="flex justify-between items-center">
+              <h2 className="text-4xl font-luxury font-bold">Menu Ritual</h2>
+              <button onClick={() => { setEditingService(null); setIsServiceFormOpen(true); }} className="px-6 py-3 bg-black text-white rounded-xl text-[10px] font-bold uppercase tracking-widest">Aggiungi Servizio</button>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {services.map(s => (
+                <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex justify-between items-center group shadow-sm hover:shadow-lg transition-all">
+                  <div>
+                    <p className="text-amber-600 text-[8px] font-bold uppercase mb-1">{s.category}</p>
+                    <h4 className="font-bold text-lg">{s.name}</h4>
+                    <p className="text-xs text-gray-400">{s.duration} min • CHF {s.price}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setEditingService(s); setIsServiceFormOpen(true); }} className="p-3 bg-gray-50 rounded-full hover:bg-black hover:text-white transition-all"><i className="fas fa-edit text-xs"></i></button>
+                    <button onClick={async () => { if(confirm('Eliminare questo servizio?')) { await db.services.delete(s.id); refreshData(); } }} className="p-3 bg-gray-50 rounded-full hover:bg-red-500 hover:text-white transition-all text-red-400"><i className="fas fa-trash-alt text-xs"></i></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* COLLABORATOR DASHBOARD */}
         {(activeTab === 'collab_dashboard' || (activeTab === 'dashboard' && isCollaborator)) && isCollaborator && (
           <div className="animate-in fade-in duration-700">
@@ -417,7 +413,11 @@ const App: React.FC = () => {
             ) : (
               <div className="bg-white p-12 rounded-[3rem] text-center border border-dashed border-gray-100">
                  <h2 className="text-2xl font-luxury font-bold mb-4 text-gray-900">Workspace in fase di attivazione...</h2>
-                 <p className="text-sm text-gray-400 leading-relaxed">Il vostro profilo artista non è ancora collegato. Contattare l'amministrazione comunicando l'ID: {user?.id}</p>
+                 <p className="text-sm text-gray-400 leading-relaxed italic mb-6">Il vostro profilo artista non è ancora collegato correttamente.</p>
+                 <div className="p-6 bg-amber-50 rounded-2xl inline-block">
+                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-2">Comunica questo ID all'amministratore:</p>
+                    <code className="text-xs font-mono font-bold text-amber-900 bg-white px-4 py-2 rounded-lg">{user?.id}</code>
+                 </div>
               </div>
             )}
           </div>
@@ -427,17 +427,8 @@ const App: React.FC = () => {
         {(activeTab === 'team_schedule') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Planning Atelier</h2>
-            
             {isAdmin && <RequestManagement requests={requests} onAction={handleRequestAction} />}
-
-            <TeamPlanning 
-              team={team} 
-              appointments={appointments} 
-              onToggleVacation={handleToggleVacation} 
-              currentUserMemberName={currentMember?.name}
-              requests={requests}
-            />
-
+            <TeamPlanning team={team} appointments={appointments} onToggleVacation={handleToggleVacation} currentUserMemberName={currentMember?.name} requests={requests} />
             {isAdmin && (
               <div className="grid md:grid-cols-3 gap-6">
                 {team.map(m => (
@@ -456,12 +447,20 @@ const App: React.FC = () => {
       </Layout>
 
       {/* MODAL SYSTEMS */}
-      {isAuthOpen && !user && (
-        <div className="fixed inset-0 z-[1000] bg-white overflow-y-auto animate-in slide-in-from-bottom duration-500">
-          <button onClick={() => setIsAuthOpen(false)} className="absolute top-10 right-10 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center z-10">
-            <i className="fas fa-times text-gray-400"></i>
-          </button>
-          <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); }} />
+      {editingMember && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
+             <TeamManagement profiles={profiles} member={editingMember} appointments={appointments} services={services} onSave={async (m) => { await db.team.upsert(m); setEditingMember(null); refreshData(); }} onClose={() => setEditingMember(null)} />
+          </div>
+        </div>
+      )}
+
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-[3rem] p-10 shadow-2xl">
+             <h3 className="text-2xl font-luxury font-bold mb-8">{editingService ? 'Modifica Ritual' : 'Nuovo Ritual'}</h3>
+             <ServiceForm initialData={editingService || undefined} onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); }} onCancel={() => setIsServiceFormOpen(false)} />
+          </div>
         </div>
       )}
 
