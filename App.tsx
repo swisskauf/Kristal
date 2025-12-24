@@ -67,11 +67,11 @@ const App: React.FC = () => {
   }, []);
 
   /**
-   * Sincronizzazione Aggressiva Ruoli Critici
-   * Admin: serop.serop@outlook.com
-   * Collaborator: sirop.sirop@outlook.sa
+   * Sincronizzazione Critica:
+   * 1. Forza i ruoli per le email specifiche.
+   * 2. Collega Maurizio alla mail sirop.sirop@outlook.sa.
    */
-  const syncCriticalRoles = async (loadedProfiles: any[]) => {
+  const syncCriticalRoles = async (loadedProfiles: any[], loadedTeam: TeamMember[]) => {
     const CRITICAL_ROLES: Record<string, 'admin' | 'collaborator'> = {
       'serop.serop@outlook.com': 'admin',
       'sirop.sirop@outlook.sa': 'collaborator'
@@ -79,34 +79,45 @@ const App: React.FC = () => {
 
     let needsLocalUpdate = false;
     const updatedProfiles = [...loadedProfiles];
+    const updatedTeam = [...loadedTeam];
 
     for (const emailKey in CRITICAL_ROLES) {
       const targetRole = CRITICAL_ROLES[emailKey];
       const profile = updatedProfiles.find(p => p.email?.toLowerCase() === emailKey.toLowerCase());
       
-      if (profile && profile.role !== targetRole) {
-        console.log(`[Kristal Sync] Correzione ruolo per ${emailKey} -> ${targetRole}`);
-        try {
-          const updated = await db.profiles.upsert({ ...profile, role: targetRole });
-          
-          // Aggiorna la lista locale dei profili per riflettere il cambiamento immediatamente
-          const idx = updatedProfiles.findIndex(p => p.id === profile.id);
-          if (idx !== -1) updatedProfiles[idx] = updated;
+      if (profile) {
+        // Forza Ruolo
+        if (profile.role !== targetRole) {
+          console.log(`[Kristal Sync] Forza Ruolo: ${emailKey} -> ${targetRole}`);
+          try {
+            const updated = await db.profiles.upsert({ ...profile, role: targetRole });
+            const idx = updatedProfiles.findIndex(p => p.id === profile.id);
+            if (idx !== -1) updatedProfiles[idx] = updated;
+            if (user?.id === profile.id) {
+              setUser(prev => prev ? { ...prev, role: targetRole } : null);
+              needsLocalUpdate = true;
+            }
+          } catch (e) { console.error(e); }
+        }
 
-          // Se l'utente correntemente loggato è quello aggiornato, forziamo il refresh locale
-          if (user && user.email.toLowerCase() === emailKey.toLowerCase()) {
-            setUser(prev => prev ? { ...prev, role: targetRole } : null);
-            needsLocalUpdate = true;
+        // Collega Maurizio a sirop.sirop@outlook.sa
+        if (emailKey === 'sirop.sirop@outlook.sa') {
+          const maurizio = updatedTeam.find(m => m.name === 'Maurizio');
+          if (maurizio && maurizio.profile_id !== profile.id) {
+            console.log(`[Kristal Sync] Collegamento Maurizio all'ID: ${profile.id}`);
+            try {
+              const updatedM = await db.team.upsert({ ...maurizio, profile_id: profile.id });
+              const mIdx = updatedTeam.findIndex(m => m.name === 'Maurizio');
+              if (mIdx !== -1) updatedTeam[mIdx] = updatedM;
+              setTeam(updatedTeam);
+            } catch (e) { console.error(e); }
           }
-        } catch (e) {
-          console.error(`[Kristal Sync] Errore sincronizzazione ${emailKey}`, e);
         }
       }
     }
 
     if (needsLocalUpdate) {
       setProfiles(updatedProfiles);
-      console.log("[Kristal] Ruoli locali e DB allineati.");
     }
   };
 
@@ -120,14 +131,16 @@ const App: React.FC = () => {
         db.profiles.getAll().catch(() => [])
       ]);
       
-      setServices(svcs.length ? svcs : DEFAULT_SERVICES);
-      setTeam(tm.length ? tm : DEFAULT_TEAM);
+      const currentServices = svcs.length ? svcs : DEFAULT_SERVICES;
+      const currentTeam = tm.length ? tm : DEFAULT_TEAM;
+      
+      setServices(currentServices);
+      setTeam(currentTeam);
       setAppointments(appts);
       setRequests(reqs);
       setProfiles(profs);
 
-      // Sincronizzazione ruoli basata sulle email fornite
-      await syncCriticalRoles(profs);
+      await syncCriticalRoles(profs, currentTeam);
     } catch (e) {
       console.error("Refresh Data error", e);
     }
@@ -141,7 +154,6 @@ const App: React.FC = () => {
           const profile = await db.profiles.get(session.user.id);
           const email = session.user.email?.toLowerCase();
           
-          // Calcolo ruolo prioritario basato su email
           let role: 'admin' | 'collaborator' | 'client' = profile?.role || 'client';
           if (email === 'serop.serop@outlook.com') role = 'admin';
           else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
@@ -210,21 +222,18 @@ const App: React.FC = () => {
       }
 
       await db.profiles.upsert({ ...profile, role: newRole });
-      alert(`Ruolo aggiornato con successo.`);
+      alert(`Ruolo aggiornato.`);
       await refreshData();
     } catch (e: any) {
       alert("Errore: " + e.message);
     }
   };
 
-  // Funzioni per ferie e planning rimosse per brevità, mantengono la logica esistente
   const handleToggleVacation = async (memberName: string, date: string) => {
     const member = team.find(m => m.name === memberName);
     if (!member) return;
     if (isCollaborator && member.profile_id !== user?.id) { alert("Azione non consentita."); return; }
-    if (isAdmin || (isCollaborator && member.profile_id === user?.id)) {
-      setQuickRequestData({ date, memberName });
-    }
+    setQuickRequestData({ date, memberName });
   };
 
   const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
@@ -237,6 +246,8 @@ const App: React.FC = () => {
           start_date: quickRequestData.date,
           end_date: quickRequestData.date,
           is_full_day: data.isFullDay,
+          start_time: data.startTime,
+          end_time: data.endTime,
           status: 'pending',
           notes: data.notes || 'Richiesta rapida.'
         });
@@ -413,7 +424,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ALTRI TAB... (Servizi, Planning, etc.) */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold text-gray-900">Menu Ritual</h2>
@@ -432,7 +442,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {(activeTab === 'team_schedule') && (isAdmin || isCollaborator) && (
+        {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
             {isAdmin && <RequestManagement requests={requests} onAction={handleRequestAction} />}
@@ -460,6 +470,17 @@ const App: React.FC = () => {
              <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdmin={isAdmin} profiles={profiles} initialData={selectedAppointment} />
           </div>
         </div>
+      )}
+
+      {quickRequestData && (
+        <QuickRequestModal 
+          date={quickRequestData.date} 
+          memberName={quickRequestData.memberName} 
+          onClose={() => setQuickRequestData(null)}
+          onAction={handleQuickRequestAction}
+          existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending')}
+          existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
+        />
       )}
 
       <AIAssistant user={user} />
