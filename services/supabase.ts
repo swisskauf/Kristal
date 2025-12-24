@@ -69,7 +69,7 @@ const VALID_ROLES = ['client', 'admin', 'collaborator'];
 const handleError = (error: any) => {
   console.error('Supabase Error:', error);
   if (error.code === '42703' || error.message?.includes('column')) {
-    return new Error("Schema database non aggiornato: la colonna 'is_full_day' manca.");
+    return new Error("Schema database non aggiornato. Per favore verificate il database.");
   }
   return error;
 };
@@ -85,7 +85,7 @@ export const db = {
     get: async (id: string) => {
       if (useMock) {
         const mockUser = supabaseMock.auth.getUser();
-        if (mockUser && mockUser.id === id) return mockUser;
+        if (mockUser && mockUser.id === id) return { ...mockUser, full_name: mockUser.fullName };
         return null;
       }
       const { data, error } = await realClient!.from('profiles').select('*').eq('id', id).maybeSingle();
