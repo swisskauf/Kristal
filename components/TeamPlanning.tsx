@@ -44,11 +44,22 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
     permit: { bg: 'bg-purple-600', text: 'text-white', icon: 'fa-clock', label: 'Permesso' },
     overtime: { bg: 'bg-amber-600', text: 'text-white', icon: 'fa-history', label: 'Recupero' },
     bereavement: { bg: 'bg-slate-900', text: 'text-white', icon: 'fa-ribbon', label: 'Lutto' },
+    availability_change: { bg: 'bg-amber-500', text: 'text-white', icon: 'fa-exchange-alt', label: 'Revoca' },
     default: { bg: 'bg-gray-800', text: 'text-white', icon: 'fa-plane', label: 'Assenza' }
   };
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
+      <style>{`
+        @keyframes pulse-amber {
+          0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        .animate-pulse-amber {
+          animation: pulse-amber 2s infinite;
+        }
+      `}</style>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <button onClick={() => moveWeek(-1)} className="w-12 h-12 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all text-gray-400">
@@ -116,6 +127,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                       const pendingReq = requests?.find(r => r.member_name === m.name && r.start_date === date && r.status === 'pending');
 
                       const style = typeStyles[approvedAbsence?.type || pendingReq?.type || 'default'];
+                      const isRevocation = pendingReq?.type === 'availability_change';
 
                       return (
                         <td key={m.name} className={`p-3 ${isMe ? 'bg-amber-50/5' : ''}`}>
@@ -125,7 +137,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                               approvedAbsence 
                                 ? `${style.bg} border-transparent ${style.text} shadow-lg scale-[1.02]` 
                                 : pendingReq 
-                                  ? 'bg-white border-amber-500 border-dashed animate-pulse text-amber-600'
+                                  ? `bg-white border-amber-500 border-dashed ${isRevocation ? 'animate-pulse-amber border-2' : 'animate-pulse'} text-amber-600`
                                   : dayAppts.length > 0 
                                     ? 'bg-white border-amber-100 shadow-sm' 
                                     : 'bg-white border-gray-50 hover:border-amber-500 border-dashed'
@@ -146,13 +158,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                             ) : pendingReq ? (
                               <div className="flex flex-col justify-center h-full">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping"></div>
-                                  <span className="text-[10px] font-bold uppercase tracking-widest">In Attesa</span>
+                                  <div className={`w-1.5 h-1.5 ${isRevocation ? 'bg-amber-600' : 'bg-amber-500'} rounded-full animate-ping`}></div>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest">{isRevocation ? 'REVOCA' : 'IN ATTESA'}</span>
                                 </div>
                                 <p className="text-[8px] text-gray-400 font-bold uppercase italic">{style.label}</p>
-                                {!pendingReq.is_full_day && (
-                                  <p className="text-[7px] text-amber-600 font-bold mt-0.5">{pendingReq.start_time}-{pendingReq.end_time}</p>
-                                )}
                               </div>
                             ) : dayAppts.length > 0 ? (
                               <div className="flex flex-col justify-center h-full">
@@ -160,15 +169,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                                   <i className="fas fa-calendar-check text-amber-600 text-[10px]"></i>
                                   <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{dayAppts.length} RITUALI</span>
                                 </div>
-                                <div className="mt-2 h-1.5 w-full bg-amber-100 rounded-full overflow-hidden">
-                                  <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(dayAppts.length * 20, 100)}%` }}></div>
-                                </div>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center mb-1">
-                                  <i className="fas fa-plus text-[10px] text-amber-600"></i>
-                                </div>
+                                <i className="fas fa-plus text-[10px] text-amber-600 mb-1"></i>
                                 <span className="text-[8px] text-amber-600 uppercase font-bold tracking-widest">
                                   {isMe ? 'Gestisci' : 'Disponibile'}
                                 </span>
@@ -183,19 +187,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
               })}
             </tbody>
           </table>
-        </div>
-      </div>
-      
-      <div className="flex flex-wrap gap-6 px-10 py-6 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-        {(Object.entries(typeStyles) as [string, any][]).slice(0, 7).map(([key, style]) => (
-          <div key={key} className="flex items-center gap-3">
-             <div className={`w-3 h-3 ${style.bg} rounded-full`}></div>
-             <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">{style.label}</span>
-          </div>
-        ))}
-        <div className="flex items-center gap-3">
-           <div className="w-3 h-3 border-2 border-amber-500 border-dashed rounded-full"></div>
-           <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">In Attesa</span>
         </div>
       </div>
     </div>
