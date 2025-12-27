@@ -30,7 +30,7 @@ if (isValidConfig) {
 
 export const useMock = !client;
 
-// Semplice sistema di bus eventi per il mock
+// Semplice sistema di bus eventi per il mock con trigger immediato
 const authListeners: Set<(event: string, session: any) => void> = new Set();
 
 const mockAuth = {
@@ -38,23 +38,29 @@ const mockAuth = {
   onAuthStateChange: (cb: any) => {
     authListeners.add(cb);
     const user = supabaseMock.auth.getUser();
-    if (user) setTimeout(() => cb('SIGNED_IN', { user }), 0);
+    if (user) {
+      // Trigger immediato per lo stato iniziale
+      cb('SIGNED_IN', { user, session: { user } });
+    }
     return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
   signInWithPassword: async ({ email }: any) => {
-    const user = { id: 'mock-user-' + Date.now(), email, fullName: 'Ospite Kristal', role: 'client' };
+    const user = { id: 'mock-user-' + Date.now(), email, fullName: 'Ospite Kristal', role: email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client') };
     supabaseMock.auth.signIn(user as any);
-    authListeners.forEach(cb => cb('SIGNED_IN', { user }));
-    return { data: { user, session: { user } }, error: null };
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
   },
   signUp: async (data: any) => {
-    const user = { id: 'mock-user-' + Date.now(), email: data.email, fullName: data.options.data.full_name, role: data.options.data.role };
+    const user = { id: 'mock-user-' + Date.now(), email: data.email, fullName: data.options.data.full_name, role: data.options.data.role || 'client' };
     supabaseMock.auth.signIn(user as any);
-    authListeners.forEach(cb => cb('SIGNED_IN', { user }));
-    return { data: { user, session: { user } }, error: null };
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
   },
   signOut: async () => { 
     supabaseMock.auth.signOut(); 
+    // Notifica immediata a tutti i listener per forzare il re-render di App.tsx
     authListeners.forEach(cb => cb('SIGNED_OUT', null));
     return { error: null }; 
   }
@@ -92,16 +98,23 @@ export const db = {
     upsert: async (m: any) => useMock ? supabaseMock.team.upsert(m) : (await client.from('team_members').upsert(m).select().single()).data
   },
   appointments: {
-    getAll: async () => useMock ? supabaseMock.appointments.getAll() : (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [],
+    getAll: async () => {
+      if (useMock) {
+        const appts = supabaseMock.appointments.getAll();
+        const svcs = supabaseMock.services.getAll();
+        const profs = supabaseMock.profiles.getAll();
+        // Arricchimento per visualizzazione immediata degli appuntamenti manuali
+        return appts.map(a => ({
+          ...a,
+          services: svcs.find(s => s.id === a.service_id),
+          profiles: profs.find(p => p.id === a.client_id)
+        }));
+      }
+      return (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [];
+    },
     upsert: async (a: any) => {
       if (useMock) {
-        // Arricchimento mock per visualizzazione immediata
-        const svcs = await db.services.getAll();
-        const profs = await db.profiles.getAll();
-        const service = svcs.find(s => s.id === a.service_id);
-        const profile = profs.find(p => p.id === a.client_id);
-        const enriched = { ...a, services: service, profiles: profile };
-        return supabaseMock.appointments.upsert(enriched);
+        return supabaseMock.appointments.upsert(a);
       }
       const { services, profiles, ...clean } = a;
       return (await client.from('appointments').upsert(clean).select().single()).data;
