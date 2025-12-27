@@ -69,6 +69,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
     
+    // Controllo giorni di chiusura/assenze full-day
+    const isOff = selectedMember.absences_json?.some(a => a.startDate === selectedDate && a.isFullDay);
+    if (isOff) return [];
+
     const startHour = selectedMember.work_start_time ? parseInt(selectedMember.work_start_time.split(':')[0], 10) : 8;
     const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 20;
     
@@ -79,20 +83,22 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       const slotStart = new Date(`${selectedDate}T${timeStr}:00.000Z`);
       const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60000);
 
-      // Check current time
+      // Controllo ora attuale se oggi
       if (selectedDate === todayStr && slotStart <= new Date()) return false;
       
-      // Check break time
+      // Controllo Pausa
       if (selectedMember.break_start_time && selectedMember.break_end_time) {
         const bStart = new Date(`${selectedDate}T${selectedMember.break_start_time}:00.000Z`);
         const bEnd = new Date(`${selectedDate}T${selectedMember.break_end_time}:00.000Z`);
+        // Se il servizio si sovrappone alla pausa
         if (slotStart < bEnd && slotEnd > bStart) return false;
       }
 
-      // Check working hours
+      // Controllo fine orario lavorativo
       const workEnd = new Date(`${selectedDate}T${selectedMember.work_end_time || '19:00'}:00.000Z`);
       if (slotEnd > workEnd) return false;
 
+      // Controllo collisione con altri appuntamenti (tenendo conto della durata)
       return !existingAppointments.some(app => {
         if (app.id === initialData?.id) return false;
         if (app.team_member_name !== teamMemberName) return false;
@@ -133,8 +139,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     <div className="animate-in fade-in zoom-in-95 duration-500">
       <form onSubmit={handleSubmit} className="space-y-10">
         <header className="mb-6">
-          <h3 className="text-2xl font-luxury font-bold text-gray-900">Rituale Manuale</h3>
-          <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mt-1">Configurazione Esperienza</p>
+          <h3 className="text-2xl font-luxury font-bold text-gray-900">Configurazione Ritual</h3>
+          <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mt-1">Prenotazione Diretta</p>
         </header>
 
         <div className="space-y-8">
@@ -215,7 +221,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         <div className="flex gap-4 pt-8 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="flex-1 py-5 text-gray-400 font-bold uppercase text-[10px] tracking-widest hover:text-gray-900 transition-colors">Annulla</button>
           <button type="submit" className="flex-[2] py-5 bg-black text-white font-bold rounded-3xl shadow-2xl hover:bg-amber-700 transition-all uppercase text-[10px] tracking-widest">
-            {initialData?.id ? 'Aggiorna Ritual' : 'Conferma'}
+            {initialData?.id ? 'Aggiorna Ritual' : 'Conferma Prenotazione'}
           </button>
         </div>
       </form>
