@@ -11,16 +11,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // Basic Fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  
-  // Extra Fields
   const [gender, setGender] = useState<'M' | 'F' | 'Other'>('F');
   const [dob, setDob] = useState('');
+  const [avatar, setAvatar] = useState('');
   
   const [errorMsg, setErrorMsg] = useState('');
   const [emailSent, setEmailSent] = useState(false);
@@ -38,11 +36,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
     try {
       if (isRegistering) {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: fullName, phone, role: 'client', gender, dob },
+            data: { 
+              full_name: fullName, 
+              phone, 
+              role: 'client', 
+              gender, 
+              dob, 
+              avatar 
+            },
           }
         });
         if (error) throw error;
@@ -70,51 +75,63 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   if (emailSent) {
     return (
-      <div className="w-full bg-white rounded-[3rem] p-10 text-center animate-in zoom-in-95">
-        <h2 className="text-3xl font-luxury font-bold mb-4">Verifica la tua Email</h2>
-        <p className="text-gray-500 text-xs mb-8">Abbiamo inviato un link di conferma a {email}.</p>
-        <button onClick={() => setEmailSent(false)} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest hover:underline">Torna al login</button>
+      <div className="w-full bg-white rounded-[4rem] p-12 text-center shadow-2xl border border-gray-50">
+        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-8">
+           <i className="fas fa-paper-plane text-amber-600 text-2xl"></i>
+        </div>
+        <h2 className="text-3xl font-luxury font-bold mb-4">Verifica Email</h2>
+        <p className="text-gray-500 text-xs mb-10 leading-relaxed">Abbiamo inviato un rituale di conferma a <strong>{email}</strong>. Seguite il link per attivare l'account.</p>
+        <button onClick={() => setEmailSent(false)} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest hover:underline border border-amber-600 px-8 py-3 rounded-full">Indietro</button>
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-white rounded-[3rem] border border-white/10 overflow-hidden animate-in fade-in zoom-in-95">
-      <div className="p-10 md:p-14">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-luxury font-bold text-gray-900 mb-2">KRISTAL</h1>
-          <p className="text-gray-400 text-[9px] uppercase tracking-[0.3em]">Atelier di Bellezza</p>
+    <div className="w-full bg-white rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden">
+      <div className="p-10 md:p-16">
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter mb-2">KRISTAL</h1>
+          <p className="text-amber-600 text-[10px] uppercase tracking-[0.4em] font-bold">L'Eccellenza è un Rituale</p>
         </div>
 
-        {errorMsg && <div className="mb-6 p-4 rounded-2xl bg-red-50 text-red-600 text-[10px] font-bold border border-red-100">{errorMsg}</div>}
+        {errorMsg && <div className="mb-8 p-4 rounded-2xl bg-red-50 text-red-600 text-[10px] font-bold border border-red-100">{errorMsg}</div>}
 
-        <form onSubmit={handleAuth} className="space-y-4">
+        <form onSubmit={handleAuth} className="space-y-5">
           {isRegistering && (
-            <div className="grid md:grid-cols-2 gap-4">
-              <input type="text" placeholder="Nome Completo" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold" />
-              <input type="tel" placeholder="Cellulare" required value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold" />
-              <select value={gender} onChange={e => setGender(e.target.value as any)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold">
-                <option value="F">Femmina</option>
-                <option value="M">Maschio</option>
-                <option value="Other">Altro</option>
-              </select>
-              <input type="date" placeholder="Data Nascita" required value={dob} onChange={(e) => setDob(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold" />
+            <div className="grid md:grid-cols-2 gap-4 animate-in slide-in-from-top-4">
+              <input type="text" placeholder="Nome & Cognome" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />
+              <input type="tel" placeholder="N. Cellulare" required value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />
+              <div className="space-y-1">
+                <label className="text-[8px] font-bold text-gray-400 uppercase ml-2">Genere</label>
+                <select value={gender} onChange={e => setGender(e.target.value as any)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner">
+                  <option value="F">Femmina</option>
+                  <option value="M">Maschio</option>
+                  <option value="Other">Altro</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[8px] font-bold text-gray-400 uppercase ml-2">Data di Nascita</label>
+                <input type="date" required value={dob} onChange={(e) => setDob(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />
+              </div>
+              <input type="text" placeholder="Foto URL (Opzionale)" value={avatar} onChange={(e) => setAvatar(e.target.value)} className="w-full md:col-span-2 p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />
             </div>
           )}
-          <input type="email" placeholder="Email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold" />
+          
+          <input type="email" placeholder="Indirizzo Email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />
+          
           <div className="grid md:grid-cols-2 gap-4">
-            <input type="password" placeholder="Password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold" />
-            {isRegistering && <input type="password" placeholder="Conferma Password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 outline-none text-xs font-bold" />}
+            <input type="password" placeholder="Password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />
+            {isRegistering && <input type="password" placeholder="Conferma Password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold shadow-inner" />}
           </div>
           
-          <button type="submit" disabled={loading} className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl shadow-xl hover:bg-black transition-all">
-            {loading ? <i className="fas fa-spinner animate-spin"></i> : (isRegistering ? 'Crea Account Kristal' : 'Entra in Atelier')}
+          <button type="submit" disabled={loading} className="w-full py-5 bg-black text-white font-bold rounded-3xl shadow-2xl hover:bg-amber-700 transition-all uppercase text-[10px] tracking-widest mt-6">
+            {loading ? <i className="fas fa-spinner animate-spin"></i> : (isRegistering ? 'Crea Account Kristal' : 'Accedi al Portale')}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-          <button onClick={() => setIsRegistering(!isRegistering)} className="text-[10px] font-bold text-gray-400 hover:text-amber-600 transition-colors uppercase tracking-widest">
-            {isRegistering ? 'Hai già un profilo? Accedi' : 'Nuovo in Atelier? Registrati'}
+        <div className="mt-10 text-center">
+          <button onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }} className="text-[9px] font-bold text-gray-400 hover:text-amber-600 transition-colors uppercase tracking-[0.2em]">
+            {isRegistering ? 'Hai già un account? Entra qui' : 'Nuovo Ospite? Registrati ora'}
           </button>
         </div>
       </div>
