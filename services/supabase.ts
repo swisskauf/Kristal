@@ -1,169 +1,124 @@
 
-import { Appointment, User, Service, TeamMember, LeaveRequest } from '../types';
-import { SERVICES as INITIAL_SERVICES, TEAM as INITIAL_TEAM } from '../constants';
+import { createClient } from '@supabase/supabase-js';
+import { supabaseMock } from './supabaseMock';
 
-const STORAGE_KEY_APPOINTMENTS = 'kristal_appointments';
-const STORAGE_KEY_USER = 'kristal_user';
-const STORAGE_KEY_SERVICES = 'kristal_services';
-const STORAGE_KEY_TEAM = 'kristal_team';
-const STORAGE_KEY_PROFILES = 'kristal_profiles';
-const STORAGE_KEY_REQUESTS = 'kristal_requests';
+const getEnv = (key: string): string => {
+  if (typeof window === 'undefined') return '';
+  // @ts-ignore
+  const v = (import.meta.env?.[key]) || (window.process?.env?.[key]) || '';
+  return String(v).trim();
+};
 
-export const supabaseMock = {
-  auth: {
-    getUser: () => {
-      const u = localStorage.getItem(STORAGE_KEY_USER);
-      return u ? JSON.parse(u) as User : null;
-    },
-    signIn: (user: User) => {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-      supabaseMock.profiles.upsert({
-        id: user.id,
-        full_name: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        avatar: user.avatar
-      });
-      return user;
-    },
-    signOut: () => {
-      localStorage.removeItem(STORAGE_KEY_USER);
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
+const isValidConfig = 
+  supabaseUrl && 
+  supabaseAnonKey && 
+  supabaseUrl.startsWith('https://') &&
+  supabaseUrl !== 'YOUR_SUPABASE_URL' &&
+  supabaseUrl !== 'undefined';
+
+let client: any = null;
+if (isValidConfig) {
+  try {
+    client = createClient(supabaseUrl, supabaseAnonKey);
+  } catch (e) {
+    console.error("Errore critico inizializzazione Supabase:", e);
+  }
+}
+
+export const useMock = !client;
+
+const authListeners: Set<(event: string, session: any) => void> = new Set();
+
+const mockAuth = {
+  getSession: async () => ({ data: { session: supabaseMock.auth.getUser() ? { user: supabaseMock.auth.getUser() } : null }, error: null }),
+  onAuthStateChange: (cb: any) => {
+    authListeners.add(cb);
+    const user = supabaseMock.auth.getUser();
+    if (user) {
+      cb('SIGNED_IN', { user, session: { user } });
     }
+    return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
+  signInWithPassword: async ({ email }: any) => {
+    const role = email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client');
+    const user = { id: 'mock-user-' + Date.now(), email, fullName: role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal'), role };
+    supabaseMock.auth.signIn(user as any);
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
+  },
+  signUp: async (data: any) => {
+    const user = { id: 'mock-user-' + Date.now(), email: data.email, fullName: data.options.data.full_name, role: data.options.data.role || 'client' };
+    supabaseMock.auth.signIn(user as any);
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
+  },
+  signOut: async () => { 
+    supabaseMock.auth.signOut(); 
+    authListeners.forEach(cb => cb('SIGNED_OUT', null));
+    return { error: null }; 
+  }
+};
+
+export const supabase = client || {
+  auth: mockAuth,
+  from: (table: string) => ({
+    select: () => ({
+      eq: () => ({ 
+        maybeSingle: async () => ({ data: null, error: null }), 
+        single: async () => ({ data: null, error: null }),
+        order: () => ({ data: [], error: null })
+      }),
+      order: () => ({ data: [], error: null })
+    })
+  })
+};
+
+export const db = {
   profiles: {
-    getAll: () => {
-      const data = localStorage.getItem(STORAGE_KEY_PROFILES);
-      if (!data) {
-        const initialProfiles = [
-          {
-            id: 'admin-id-123',
-            full_name: 'Direzione Kristal',
-            email: 'serop.serop@outlook.com',
-            role: 'admin',
-            avatar: 'https://ui-avatars.com/api/?name=Admin+Kristal&background=000&color=fff'
-          },
-          {
-            id: 'maurizio-id-456',
-            full_name: 'Maurizio Stylist',
-            email: 'sirop.sirop@outlook.sa',
-            role: 'collaborator',
-            avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&h=200&auto=format&fit=crop'
-          }
-        ];
-        localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(initialProfiles));
-        return initialProfiles;
-      }
-      return JSON.parse(data);
+    getAll: async () => useMock ? supabaseMock.profiles.getAll() : (await client.from('profiles').select('*').order('full_name')).data || [],
+    get: async (id: string) => {
+      if (useMock) return (supabaseMock.profiles.getAll() as any[]).find(p => p.id === id) || null;
+      return (await client.from('profiles').select('*').eq('id', id).maybeSingle()).data;
     },
-    upsert: (profile: any) => {
-      const current = supabaseMock.profiles.getAll();
-      const idx = current.findIndex((p: any) => p.id === profile.id || p.email?.toLowerCase() === profile.email?.toLowerCase());
-      const newProfile = {
-        ...profile,
-        id: profile.id || (idx > -1 ? current[idx].id : Math.random().toString(36).substr(2, 9))
-      };
-      if (idx > -1) current[idx] = { ...current[idx], ...newProfile };
-      else current.push(newProfile);
-      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(current));
-      return newProfile;
-    }
+    upsert: async (p: any) => useMock ? supabaseMock.profiles.upsert(p) : (await client.from('profiles').upsert(p).select().single()).data
   },
   services: {
-    getAll: (): Service[] => {
-      const data = localStorage.getItem(STORAGE_KEY_SERVICES);
-      if (!data) {
-        localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(INITIAL_SERVICES));
-        return INITIAL_SERVICES;
-      }
-      return JSON.parse(data);
-    },
-    upsert: (service: Service) => {
-      const current = supabaseMock.services.getAll();
-      const idx = current.findIndex(s => s.id === service.id);
-      if (idx > -1) current[idx] = service;
-      else current.push(service);
-      localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(current));
-      return service;
-    },
-    delete: (id: string) => {
-      const filtered = supabaseMock.services.getAll().filter(s => s.id !== id);
-      localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(filtered));
-    }
+    getAll: async () => useMock ? supabaseMock.services.getAll() : (await client.from('services').select('*').order('name')).data || [],
+    upsert: async (s: any) => useMock ? supabaseMock.services.upsert(s) : (await client.from('services').upsert(s).select().single()).data
   },
   team: {
-    getAll: (): TeamMember[] => {
-      const data = localStorage.getItem(STORAGE_KEY_TEAM);
-      if (!data) {
-        localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(INITIAL_TEAM));
-        return INITIAL_TEAM;
-      }
-      return JSON.parse(data);
-    },
-    upsert: (member: any) => {
-      const current = supabaseMock.team.getAll();
-      const idx = current.findIndex(m => m.name === member.name);
-      if (idx > -1) {
-        current[idx] = { ...current[idx], ...member };
-      } else {
-        current.push(member);
-      }
-      localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(current));
-      return idx > -1 ? current[idx] : member;
-    }
+    getAll: async () => useMock ? supabaseMock.team.getAll() : (await client.from('team_members').select('*')).data || [],
+    upsert: async (m: any) => useMock ? supabaseMock.team.upsert(m) : (await client.from('team_members').upsert(m).select().single()).data
   },
   appointments: {
-    getAll: (): Appointment[] => {
-      const data = localStorage.getItem(STORAGE_KEY_APPOINTMENTS);
-      return data ? JSON.parse(data) : [];
-    },
-    upsert: (app: Appointment) => {
-      const current = supabaseMock.appointments.getAll();
-      // Rimuoviamo campi circolari o pesanti prima di salvare
-      const { services, profiles, ...cleanApp } = app;
-      const existsIdx = current.findIndex(a => a.id === cleanApp.id);
-      
-      const appToSave = { 
-        ...cleanApp, 
-        id: cleanApp.id || Math.random().toString(36).substr(2, 9),
-        created_at: new Date().toISOString()
-      };
-
-      if (existsIdx > -1) {
-        current[existsIdx] = appToSave;
-      } else {
-        current.push(appToSave);
+    getAll: async () => {
+      const appts = useMock ? supabaseMock.appointments.getAll() : (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [];
+      if (useMock) {
+        const svcs = supabaseMock.services.getAll();
+        const profs = supabaseMock.profiles.getAll();
+        return appts.map((a: any) => ({
+          ...a,
+          services: svcs.find(s => s.id === a.service_id),
+          profiles: profs.find(p => p.id === a.client_id)
+        }));
       }
-      
-      localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(current));
-      return appToSave;
+      return appts;
+    },
+    upsert: async (a: any) => {
+      if (useMock) return supabaseMock.appointments.upsert(a);
+      const { services, profiles, ...clean } = a;
+      return (await client.from('appointments').upsert(clean).select().single()).data;
     }
   },
   requests: {
-    getAll: (): LeaveRequest[] => {
-      const data = localStorage.getItem(STORAGE_KEY_REQUESTS);
-      return data ? JSON.parse(data) : [];
-    },
-    create: (r: any) => {
-      const current = supabaseMock.requests.getAll();
-      const newReq = { ...r, id: Math.random().toString(36).substr(2, 9) };
-      current.push(newReq);
-      localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(current));
-      return newReq;
-    },
-    update: (id: string, updates: any) => {
-      const current = supabaseMock.requests.getAll();
-      const idx = current.findIndex(r => r.id === id);
-      if (idx > -1) {
-        current[idx] = { ...current[idx], ...updates };
-        localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(current));
-      }
-      return current[idx];
-    },
-    delete: (id: string) => {
-      const current = supabaseMock.requests.getAll();
-      const filtered = current.filter(r => r.id !== id);
-      localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(filtered));
-    }
+    getAll: async () => useMock ? supabaseMock.requests.getAll() : (await client.from('leave_requests').select('*')).data || [],
+    create: async (r: any) => useMock ? supabaseMock.requests.create(r) : (await client.from('leave_requests').insert(r)).data,
+    update: async (id: string, u: any) => useMock ? supabaseMock.requests.update(id, u) : (await client.from('leave_requests').update(u).eq('id', id)).data,
+    delete: async (id: string) => useMock ? supabaseMock.requests.delete(id) : (await client.from('leave_requests').delete().eq('id', id))
   }
 };
