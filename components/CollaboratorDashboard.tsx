@@ -26,7 +26,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
 
   const myAppointments = useMemo(() => 
     appointments.filter(a => a.team_member_name === member.name).sort((a,b) => a.date.localeCompare(b.date)),
-  [appointments, member]);
+  [appointments, member.name]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -45,7 +45,8 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
       start_date: newReq.start,
       end_date: newReq.end,
       notes: newReq.notes,
-      status: 'pending'
+      status: 'pending',
+      created_at: new Date().toISOString()
     });
     setIsRequestModalOpen(false);
     setNewReq({ type: 'vacation', start: '', end: '', notes: '' });
@@ -104,35 +105,29 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
                   <h5 className="font-bold text-sm">{app.profiles?.full_name || 'Ospite'}</h5>
                   <p className="text-[9px] text-gray-400 uppercase tracking-widest">{app.services?.name}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold">CHF {app.services?.price}</p>
-                </div>
+                <div className="text-right"><p className="text-xs font-bold">CHF {app.services?.price}</p></div>
               </div>
             ))}
           </div>
         </div>
 
         <div className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Registro Richieste</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Registro Richieste Personali</h3>
           <div className="space-y-4">
             {requests.filter(r => r.member_name === member.name).sort((a,b) => b.created_at.localeCompare(a.created_at)).slice(0, 5).map(req => {
               const isRevocation = req.type === 'availability_change';
               return (
                 <div key={req.id} className="p-6 border border-gray-50 rounded-3xl flex justify-between items-center bg-gray-50/50">
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 ${isRevocation ? 'bg-amber-600' : 'bg-gray-200'} rounded-2xl flex items-center justify-center text-white`}>
+                    <div className={`w-10 h-10 ${isRevocation ? 'bg-amber-600 text-white' : 'bg-gray-200 text-gray-500'} rounded-2xl flex items-center justify-center`}>
                       <i className={`fas ${isRevocation ? 'fa-undo' : 'fa-calendar'} text-xs`}></i>
                     </div>
                     <div>
-                      <p className={`text-[9px] font-bold uppercase tracking-widest ${isRevocation ? 'text-amber-600' : 'text-gray-400'}`}>
-                        {isRevocation ? 'Revoca' : req.type}
-                      </p>
+                      <p className={`text-[9px] font-bold uppercase tracking-widest ${isRevocation ? 'text-amber-600' : 'text-gray-400'}`}>{isRevocation ? 'Revoca' : req.type}</p>
                       <p className="text-[11px] font-bold">{new Date(req.start_date).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 text-amber-700' : req.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {req.status}
-                  </span>
+                  <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 text-amber-700' : req.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{req.status}</span>
                 </div>
               );
             })}
@@ -140,7 +135,6 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
         </div>
       </div>
 
-      {/* MODALE PROFILO */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
           <form onSubmit={handleUpdateProfileSubmit} className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl space-y-8">
@@ -148,15 +142,11 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
             <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Immagine Profilo (URL)</label>
-                <input type="text" value={editProfile.avatar} onChange={e => setEditProfile({...editProfile, avatar: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Nome Pubblico</label>
-                <input type="text" value={editProfile.fullName} onChange={e => setEditProfile({...editProfile, fullName: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+                <input type="text" value={editProfile.avatar} onChange={e => setEditProfile({...editProfile, avatar: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Biografia Artistica</label>
-                <textarea rows={3} value={editProfile.bio} onChange={e => setEditProfile({...editProfile, bio: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs resize-none" />
+                <textarea rows={3} value={editProfile.bio} onChange={e => setEditProfile({...editProfile, bio: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs resize-none shadow-inner" />
               </div>
             </div>
             <div className="flex gap-4">
@@ -167,7 +157,6 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
         </div>
       )}
 
-      {/* MODALE RICHIESTA */}
       {isRequestModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
           <form onSubmit={handleSubmitRequest} className="bg-white w-full max-w-lg rounded-[4rem] p-12 shadow-2xl space-y-8">
@@ -175,7 +164,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Tipo di Congedo</label>
-                <select value={newReq.type} onChange={e => setNewReq({...newReq, type: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs">
+                <select value={newReq.type} onChange={e => setNewReq({...newReq, type: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner">
                   <option value="vacation">Ferie / Vacanza</option>
                   <option value="sick">Malattia</option>
                   <option value="training">Formazione / Workshop</option>
@@ -185,19 +174,19 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Inizio</label>
-                  <input type="date" required value={newReq.start} onChange={e => setNewReq({...newReq, start: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+                  <input type="date" required value={newReq.start} onChange={e => setNewReq({...newReq, start: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Fine</label>
-                  <input type="date" required value={newReq.end} onChange={e => setNewReq({...newReq, end: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+                  <input type="date" required value={newReq.end} onChange={e => setNewReq({...newReq, end: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Messaggio alla Direzione</label>
-                <textarea value={newReq.notes} onChange={e => setNewReq({...newReq, notes: e.target.value})} rows={3} placeholder="Note opzionali..." className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs resize-none" />
+                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Note</label>
+                <textarea value={newReq.notes} onChange={e => setNewReq({...newReq, notes: e.target.value})} rows={3} placeholder="Note opzionali..." className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs resize-none shadow-inner" />
               </div>
             </div>
-            <button type="submit" className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Invia per Approvazione</button>
+            <button type="submit" className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Invia Richiesta</button>
           </form>
         </div>
       )}
