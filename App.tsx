@@ -25,8 +25,6 @@ const App: React.FC = () => {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any | undefined>();
   const [clientSearch, setClientSearch] = useState('');
@@ -149,7 +147,6 @@ const App: React.FC = () => {
 
   const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
     if (!quickRequestData) return;
-
     try {
       if (action === 'create') {
         await db.requests.create({
@@ -183,7 +180,42 @@ const App: React.FC = () => {
       setQuickRequestData(null);
     } catch (e) {
       console.error("Errore gestione congedo rapido:", e);
-      alert("Si è verificato un errore. Riprovare.");
+    }
+  };
+
+  const handleAdminRequestAction = async (id: string, action: 'approved' | 'rejected') => {
+    const req = requests.find(r => r.id === id);
+    if (!req) return;
+
+    try {
+      if (action === 'approved') {
+        const member = team.find(m => m.name === req.member_name);
+        if (member) {
+          if (req.type === 'availability_change') {
+            // Se è una revoca approvata, rimuoviamo l'assenza esistente per quel giorno
+            const updatedAbsences = (member.absences_json || []).filter(a => a.startDate !== req.start_date);
+            await db.team.upsert({ ...member, absences_json: updatedAbsences });
+          } else {
+            // Se è un nuovo congedo, aggiungiamolo
+            const newAbsence = {
+              id: Math.random().toString(36).substr(2, 9),
+              startDate: req.start_date,
+              endDate: req.end_date,
+              startTime: req.start_time,
+              endTime: req.end_time,
+              isFullDay: req.is_full_day,
+              type: req.type,
+              notes: req.notes
+            };
+            const updatedAbsences = [...(member.absences_json || []), newAbsence];
+            await db.team.upsert({ ...member, absences_json: updatedAbsences });
+          }
+        }
+      }
+      await db.requests.update(id, { status: action });
+      await refreshData();
+    } catch (e) {
+      console.error("Errore azione admin richiesta:", e);
     }
   };
 
@@ -208,18 +240,9 @@ const App: React.FC = () => {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">Database Simulato (Demo)</p>
-                <p className="text-[8px] text-amber-600 uppercase font-medium">Per attivare salonekristal.ch configura Supabase su Vercel</p>
+                <p className="text-[8px] text-amber-600 uppercase font-medium">Configura Supabase per abilitare la persistenza reale</p>
               </div>
             </div>
-            <a href="https://vercel.com" target="_blank" className="bg-amber-600 text-white px-5 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest hover:bg-black transition-all">Setup</a>
-          </div>
-        )}
-
-        {!useMock && isAdmin && (
-          <div className="mb-6 flex justify-end">
-            <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[7px] font-bold uppercase tracking-widest border border-green-100">
-              <i className="fas fa-shield-check mr-1"></i> Database Reale Connesso
-            </span>
           </div>
         )}
 
@@ -282,9 +305,6 @@ const App: React.FC = () => {
                   />
                 ) : (
                   <div className="p-16 bg-white rounded-[3rem] border border-dashed border-gray-200 text-center">
-                    <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <i className="fas fa-id-badge text-amber-600 text-2xl"></i>
-                    </div>
                     <p className="text-gray-900 font-bold uppercase text-xs tracking-widest mb-2">Profilo artista non collegato</p>
                     <p className="text-gray-400 text-[10px] max-w-xs mx-auto">La direzione deve collegare il tuo ID ({user?.id.slice(0,8)}...) a un membro del team.</p>
                   </div>
@@ -294,61 +314,12 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'clients' && isAdmin && (
-          <div className="space-y-8 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold text-gray-900">Registro Ospiti</h2>
-            <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm">
-              <div className="relative mb-10">
-                <i className="fas fa-search absolute left-6 top-1/2 -translate-y-1/2 text-gray-300"></i>
-                <input type="text" placeholder="Cerca ospite..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-5 pl-14 bg-gray-50 rounded-2xl outline-none border-none text-sm font-bold shadow-inner" />
-              </div>
-              <div className="grid gap-4">
-                {profiles
-                  .filter(p => !clientSearch || p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()))
-                  .map(p => (
-                    <div key={p.id} className="p-6 bg-gray-50 rounded-3xl flex items-center justify-between group hover:bg-white hover:shadow-xl transition-all duration-300">
-                      <div className="flex items-center gap-6">
-                        <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-14 h-14 rounded-2xl shadow-md object-cover" />
-                        <div>
-                          <h4 className="font-bold text-sm text-gray-900">{p.full_name}</h4>
-                          <p className="text-[10px] text-gray-400 font-medium">{p.email}</p>
-                        </div>
-                      </div>
-                      <span className="px-3 py-1 bg-white border border-gray-100 rounded-full text-[8px] font-bold uppercase text-amber-600">{p.role}</span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-10">
               <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
               {isAdmin && (
-                <RequestManagement requests={requests} onAction={async (id, action) => {
-                  const req = requests.find(r => r.id === id);
-                  if (req && action === 'approved') {
-                    const member = team.find(m => m.name === req.member_name);
-                    if (member) {
-                      const newAbsence = {
-                        id: Math.random().toString(36).substr(2, 9),
-                        startDate: req.start_date,
-                        endDate: req.end_date,
-                        startTime: req.start_time,
-                        endTime: req.end_time,
-                        isFullDay: req.is_full_day,
-                        type: req.type,
-                        notes: req.notes
-                      };
-                      const updatedAbsences = [...(member.absences_json || []), newAbsence];
-                      await db.team.upsert({ ...member, absences_json: updatedAbsences });
-                    }
-                  }
-                  await db.requests.update(id, { status: action });
-                  refreshData();
-                }} />
+                <RequestManagement requests={requests} onAction={handleAdminRequestAction} />
               )}
             </div>
             <TeamPlanning 
@@ -361,11 +332,33 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'team_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+            <h2 className="text-4xl font-luxury font-bold text-gray-900">Gestione Staff</h2>
+            <div className="grid md:grid-cols-3 gap-8">
+              {team.map(m => (
+                <button 
+                  key={m.name} 
+                  onClick={() => setSelectedMemberToManage(m)}
+                  className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm flex flex-col items-center gap-4 hover:shadow-xl hover:scale-[1.02] transition-all group"
+                >
+                  <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-full object-cover shadow-lg border-2 border-white group-hover:border-amber-500 transition-colors" />
+                  <div className="text-center">
+                    <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
+                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{m.role}</p>
+                  </div>
+                  <span className="mt-4 px-6 py-2 bg-gray-50 rounded-full text-[8px] font-bold uppercase text-gray-400 group-hover:bg-black group-hover:text-white transition-all">Configura</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold text-gray-900">Menu Ritual</h2>
-              <button onClick={() => { setEditingService(null); setIsServiceFormOpen(true); }} className="px-6 py-3 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all">Nuovo Ritual</button>
+              <button onClick={() => { setSelectedAppointment(null); setIsFormOpen(true); }} className="px-6 py-3 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all">Nuovo Ritual</button>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               {services.map(s => (
@@ -375,13 +368,11 @@ const App: React.FC = () => {
                     <h4 className="font-bold text-lg">{s.name}</h4>
                     <p className="text-xs text-gray-400">{s.duration} min • CHF {s.price}</p>
                   </div>
-                  <button onClick={() => { setEditingService(s); setIsServiceFormOpen(true); }} className="p-4 bg-gray-50 rounded-full hover:bg-black hover:text-white transition-all text-gray-400 shadow-sm"><i className="fas fa-edit text-xs"></i></button>
                 </div>
               ))}
             </div>
           </div>
         )}
-
       </Layout>
 
       {/* MODALI */}
@@ -396,10 +387,17 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[800] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
-             <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdmin={isAdmin} profiles={profiles} initialData={selectedAppointment} />
+      {selectedMemberToManage && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative">
+            <TeamManagement 
+              member={selectedMemberToManage} 
+              appointments={appointments} 
+              services={services} 
+              profiles={profiles} 
+              onSave={async (m) => { await db.team.upsert(m); setSelectedMemberToManage(null); refreshData(); }} 
+              onClose={() => setSelectedMemberToManage(null)} 
+            />
           </div>
         </div>
       )}
