@@ -24,6 +24,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   profiles = [] 
 }) => {
   const [clientId, setClientId] = useState(initialData?.client_id || '');
+  const [clientSearch, setClientSearch] = useState('');
   const [serviceId, setServiceId] = useState(initialData?.service_id || services[0]?.id || '');
   const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || team[0]?.name || '');
   
@@ -36,7 +37,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     initialData?.date ? new Date(initialData.date).toISOString().substring(11, 16) : ''
   );
 
-  // Sync with initialData changes (if any)
   useEffect(() => {
     if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
     if (initialData?.date) {
@@ -47,6 +47,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
   const selectedService = useMemo(() => services.find(s => s.id === serviceId), [services, serviceId]);
   const selectedMember = useMemo(() => team.find(t => t.name === teamMemberName), [team, teamMemberName]);
+
+  const filteredProfiles = useMemo(() => {
+    return profiles.filter(p => 
+      p.full_name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      p.email?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      p.phone?.includes(clientSearch)
+    ).sort((a,b) => a.full_name.localeCompare(b.full_name));
+  }, [profiles, clientSearch]);
 
   const next14Days = useMemo(() => {
     const days = [];
@@ -61,25 +69,29 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
     
-    // Parse working hours
     const startHour = selectedMember.work_start_time ? parseInt(selectedMember.work_start_time.split(':')[0], 10) : 8;
     const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 20;
     
     const slots = [];
     const durationMinutes = selectedService.duration;
-    const now = new Date();
 
     const isIntervalFree = (timeStr: string) => {
       const slotStart = new Date(`${selectedDate}T${timeStr}:00.000Z`);
       const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60000);
 
-      // Check current time if same day
-      const nowZ = new Date();
-      if (selectedDate === todayStr && slotStart <= nowZ) return false;
+      // Check current time
+      if (selectedDate === todayStr && slotStart <= new Date()) return false;
       
-      // Basic bounds check
-      const endLimit = new Date(`${selectedDate}T21:00:00.000Z`);
-      if (slotEnd > endLimit) return false;
+      // Check break time
+      if (selectedMember.break_start_time && selectedMember.break_end_time) {
+        const bStart = new Date(`${selectedDate}T${selectedMember.break_start_time}:00.000Z`);
+        const bEnd = new Date(`${selectedDate}T${selectedMember.break_end_time}:00.000Z`);
+        if (slotStart < bEnd && slotEnd > bStart) return false;
+      }
+
+      // Check working hours
+      const workEnd = new Date(`${selectedDate}T${selectedMember.work_end_time || '19:00'}:00.000Z`);
+      if (slotEnd > workEnd) return false;
 
       return !existingAppointments.some(app => {
         if (app.id === initialData?.id) return false;
@@ -104,8 +116,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isAdminOrStaff && !clientId) { alert("Per favore, selezionate l'ospite destinatario del Ritual."); return; }
-    if (!selectedTime) { alert("Scegliete un orario per il momento Kristal."); return; }
+    if (isAdminOrStaff && !clientId) { alert("Per favore, selezionate un Destinatario Ritual."); return; }
+    if (!selectedTime) { alert("Scegliete un orario."); return; }
 
     const finalDate = new Date(`${selectedDate}T${selectedTime}:00.000Z`).toISOString();
     onSave({
@@ -127,19 +139,29 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
         <div className="space-y-8">
           {isAdminOrStaff && (
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Destinatario Ritual</label>
-              <select 
-                value={clientId} 
-                onChange={(e) => setClientId(e.target.value)} 
-                required
-                className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all"
-              >
-                <option value="">Selezionate l'account (Ospite, Staff o Admin)...</option>
-                {profiles.sort((a,b) => a.full_name.localeCompare(b.full_name)).map(p => (
-                  <option key={p.id} value={p.id}>{p.full_name} — ({p.role.toUpperCase()})</option>
-                ))}
-              </select>
+            <div className="space-y-4">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Cerca Destinatario Ritual</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="Cerca per nome, email o telefono..."
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all mb-2"
+                />
+                <select 
+                  size={5}
+                  value={clientId} 
+                  onChange={(e) => setClientId(e.target.value)} 
+                  required
+                  className="w-full p-4 rounded-3xl bg-white border border-gray-100 outline-none font-medium text-sm shadow-sm transition-all scrollbar-hide"
+                >
+                  <option value="" disabled>Seleziona tra i risultati...</option>
+                  {filteredProfiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -175,7 +197,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
 
           <div className="space-y-4">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Fascia Oraria Selezionata: <span className="text-gray-900">{selectedTime || 'Nessuna'}</span></label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Fascia Oraria: <span className="text-gray-900">{selectedTime || 'Seleziona'}</span></label>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
               {availableSlots.length > 0 ? availableSlots.map(slot => (
                 <button key={slot} type="button" onClick={() => setSelectedTime(slot)} className={`py-4 rounded-2xl text-[11px] font-bold transition-all border-2 ${selectedTime === slot ? 'bg-amber-600 text-white border-amber-600 shadow-xl' : 'bg-white border-gray-50 text-gray-500 hover:border-black hover:text-black'}`}>
@@ -183,7 +205,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 </button>
               )) : (
                 <div className="col-span-full py-10 bg-gray-50 rounded-[2rem] text-center border border-dashed border-gray-200">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità in questo giorno.</p>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità.</p>
                 </div>
               )}
             </div>
@@ -193,7 +215,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         <div className="flex gap-4 pt-8 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="flex-1 py-5 text-gray-400 font-bold uppercase text-[10px] tracking-widest hover:text-gray-900 transition-colors">Annulla</button>
           <button type="submit" className="flex-[2] py-5 bg-black text-white font-bold rounded-3xl shadow-2xl hover:bg-amber-700 transition-all uppercase text-[10px] tracking-widest">
-            {initialData?.id ? 'Aggiorna Ritual' : 'Conferma Inserimento'}
+            {initialData?.id ? 'Aggiorna Ritual' : 'Conferma'}
           </button>
         </div>
       </form>
