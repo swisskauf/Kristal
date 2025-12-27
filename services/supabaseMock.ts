@@ -1,5 +1,5 @@
 
-import { Appointment, User, Service, TeamMember } from '../types';
+import { Appointment, User, Service, TeamMember, LeaveRequest } from '../types';
 import { SERVICES as INITIAL_SERVICES, TEAM as INITIAL_TEAM } from '../constants';
 
 const STORAGE_KEY_APPOINTMENTS = 'kristal_appointments';
@@ -7,6 +7,7 @@ const STORAGE_KEY_USER = 'kristal_user';
 const STORAGE_KEY_SERVICES = 'kristal_services';
 const STORAGE_KEY_TEAM = 'kristal_team';
 const STORAGE_KEY_PROFILES = 'kristal_profiles';
+const STORAGE_KEY_REQUESTS = 'kristal_requests';
 
 export const supabaseMock = {
   auth: {
@@ -16,7 +17,6 @@ export const supabaseMock = {
     },
     signIn: (user: User) => {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-      // Quando un utente fa il login, assicuriamoci che esista nel registro profili
       supabaseMock.profiles.upsert({
         id: user.id,
         full_name: user.fullName,
@@ -35,7 +35,6 @@ export const supabaseMock = {
     getAll: () => {
       const data = localStorage.getItem(STORAGE_KEY_PROFILES);
       if (!data) {
-        // Pre-popolamento account di sistema per facilitare il test
         const initialProfiles = [
           {
             id: 'admin-id-123',
@@ -60,15 +59,12 @@ export const supabaseMock = {
     upsert: (profile: any) => {
       const current = supabaseMock.profiles.getAll();
       const idx = current.findIndex((p: any) => p.id === profile.id || p.email?.toLowerCase() === profile.email?.toLowerCase());
-      
       const newProfile = {
         ...profile,
         id: profile.id || (idx > -1 ? current[idx].id : Math.random().toString(36).substr(2, 9))
       };
-
       if (idx > -1) current[idx] = { ...current[idx], ...newProfile };
       else current.push(newProfile);
-      
       localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(current));
       return newProfile;
     }
@@ -107,14 +103,13 @@ export const supabaseMock = {
     upsert: (member: any) => {
       const current = supabaseMock.team.getAll();
       const idx = current.findIndex(m => m.name === member.name);
-      if (idx > -1) current[idx] = { ...current[idx], ...member };
-      else current.push(member);
+      if (idx > -1) {
+        current[idx] = { ...current[idx], ...member };
+      } else {
+        current.push(member);
+      }
       localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(current));
       return idx > -1 ? current[idx] : member;
-    },
-    delete: (name: string) => {
-      const filtered = supabaseMock.team.getAll().filter(m => m.name !== name);
-      localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(filtered));
     }
   },
   appointments: {
@@ -126,14 +121,36 @@ export const supabaseMock = {
       const current = supabaseMock.appointments.getAll();
       const exists = current.findIndex(a => a.id === app.id);
       if (exists > -1) current[exists] = app;
-      else current.push(app);
+      else current.push({ ...app, id: app.id || Math.random().toString(36).substr(2, 9) });
       localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(current));
       return app;
+    }
+  },
+  requests: {
+    getAll: (): LeaveRequest[] => {
+      const data = localStorage.getItem(STORAGE_KEY_REQUESTS);
+      return data ? JSON.parse(data) : [];
+    },
+    create: (r: any) => {
+      const current = supabaseMock.requests.getAll();
+      const newReq = { ...r, id: Math.random().toString(36).substr(2, 9) };
+      current.push(newReq);
+      localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(current));
+      return newReq;
+    },
+    update: (id: string, updates: any) => {
+      const current = supabaseMock.requests.getAll();
+      const idx = current.findIndex(r => r.id === id);
+      if (idx > -1) {
+        current[idx] = { ...current[idx], ...updates };
+        localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(current));
+      }
+      return current[idx];
     },
     delete: (id: string) => {
-      const current = supabaseMock.appointments.getAll();
-      const filtered = current.filter(a => a.id !== id);
-      localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(filtered));
+      const current = supabaseMock.requests.getAll();
+      const filtered = current.filter(r => r.id !== id);
+      localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(filtered));
     }
   }
 };
