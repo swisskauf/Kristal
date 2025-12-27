@@ -147,6 +147,46 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
+  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
+    if (!quickRequestData) return;
+
+    try {
+      if (action === 'create') {
+        await db.requests.create({
+          member_name: quickRequestData.memberName,
+          type: data.type,
+          start_date: quickRequestData.date,
+          end_date: quickRequestData.date,
+          start_time: data.startTime,
+          end_time: data.endTime,
+          is_full_day: data.isFullDay,
+          notes: data.notes,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      } else if (action === 'cancel') {
+        const req = requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending');
+        if (req) await db.requests.delete(req.id);
+      } else if (action === 'revoke') {
+        await db.requests.create({
+          member_name: quickRequestData.memberName,
+          type: 'availability_change',
+          start_date: quickRequestData.date,
+          end_date: quickRequestData.date,
+          is_full_day: true,
+          notes: `Richiesta revoca: ${data.notes || 'Nessuna nota'}`,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      }
+      await refreshData();
+      setQuickRequestData(null);
+    } catch (e) {
+      console.error("Errore gestione congedo rapido:", e);
+      alert("Si è verificato un errore. Riprovare.");
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-4">
@@ -284,8 +324,40 @@ const App: React.FC = () => {
 
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
-            <TeamPlanning team={team} appointments={appointments} onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} currentUserMemberName={currentMember?.name} requests={requests} />
+            <div className="flex justify-between items-center">
+              <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
+              {isAdmin && (
+                <RequestManagement requests={requests} onAction={async (id, action) => {
+                  const req = requests.find(r => r.id === id);
+                  if (req && action === 'approved') {
+                    const member = team.find(m => m.name === req.member_name);
+                    if (member) {
+                      const newAbsence = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        startDate: req.start_date,
+                        endDate: req.end_date,
+                        startTime: req.start_time,
+                        endTime: req.end_time,
+                        isFullDay: req.is_full_day,
+                        type: req.type,
+                        notes: req.notes
+                      };
+                      const updatedAbsences = [...(member.absences_json || []), newAbsence];
+                      await db.team.upsert({ ...member, absences_json: updatedAbsences });
+                    }
+                  }
+                  await db.requests.update(id, { status: action });
+                  refreshData();
+                }} />
+              )}
+            </div>
+            <TeamPlanning 
+              team={team} 
+              appointments={appointments} 
+              onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} 
+              currentUserMemberName={currentMember?.name} 
+              requests={requests} 
+            />
           </div>
         )}
 
@@ -330,6 +402,17 @@ const App: React.FC = () => {
              <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdmin={isAdmin} profiles={profiles} initialData={selectedAppointment} />
           </div>
         </div>
+      )}
+
+      {quickRequestData && (
+        <QuickRequestModal 
+          date={quickRequestData.date}
+          memberName={quickRequestData.memberName}
+          existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending')}
+          existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
+          onClose={() => setQuickRequestData(null)}
+          onAction={handleQuickRequestAction}
+        />
       )}
     </>
   );
