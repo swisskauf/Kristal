@@ -12,36 +12,20 @@ interface TeamManagementProps {
 }
 
 const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, services, profiles, onSave, onClose }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'vacations'>('analytics');
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'admin' | 'vacations'>('analytics');
   
   const [workStartTime, setWorkStartTime] = useState(member.work_start_time || '08:30');
   const [workEndTime, setWorkEndTime] = useState(member.work_end_time || '18:30');
   const [totalVacationDays, setTotalVacationDays] = useState(member.total_vacation_days || 25);
-  const [avatarUrl, setAvatarUrl] = useState(member.avatar || '');
   const [profileId, setProfileId] = useState(member.profile_id || '');
   
-  const [newAbsence, setNewAbsence] = useState<{start: string, end: string, type: AbsenceType, notes: string}>({
-    start: '',
-    end: '',
-    type: 'vacation',
-    notes: ''
-  });
-
-  const absences = useMemo(() => member.absences_json || [], [member.absences_json]);
-
-  const usedVacationDays = useMemo(() => {
-    return absences
-      .filter(a => a.type === 'vacation')
-      .reduce((acc, a) => {
-        const start = new Date(a.startDate);
-        const end = new Date(a.endDate);
-        const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return acc + diff;
-      }, 0);
-  }, [absences]);
+  // Nuovi Campi Sensibili
+  const [address, setAddress] = useState(member.address || '');
+  const [avsNumber, setAvsNumber] = useState(member.avs_number || '');
+  const [iban, setIban] = useState(member.iban || '');
 
   const stats = useMemo(() => {
-    const memberAppts = appointments.filter(a => a.team_member_name === member.name);
+    const memberAppts = appointments.filter(a => a.team_member_name === member.name && a.status === 'confirmed');
     const revenue = memberAppts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
     return { revenue, count: memberAppts.length };
   }, [appointments, member.name]);
@@ -52,64 +36,30 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       work_start_time: workStartTime,
       work_end_time: workEndTime,
       total_vacation_days: Number(totalVacationDays),
-      avatar: avatarUrl,
-      profile_id: profileId || undefined
+      profile_id: profileId || undefined,
+      address,
+      avs_number: avsNumber,
+      iban
     });
   };
 
-  const addAbsence = () => {
-    if (!newAbsence.start || !newAbsence.end) return;
-    
-    // Fix: Add missing isFullDay property required by AbsenceEntry interface
-    const entry: AbsenceEntry = {
-      id: Math.random().toString(36).substr(2, 9),
-      startDate: newAbsence.start,
-      endDate: newAbsence.end,
-      isFullDay: true,
-      type: newAbsence.type,
-      notes: newAbsence.notes
-    };
-
-    const updatedAbsences = [...absences, entry].sort((a, b) => b.startDate.localeCompare(a.startDate));
-    onSave({ ...member, absences_json: updatedAbsences });
-    setNewAbsence({ start: '', end: '', type: 'vacation', notes: '' });
-  };
-
-  const removeAbsence = (id: string) => {
-    const updatedAbsences = absences.filter(a => a.id !== id);
-    onSave({ ...member, absences_json: updatedAbsences });
-  };
-
-  const getAbsenceBadge = (type: AbsenceType) => {
-    const config: Record<string, {label: string, color: string}> = {
-      vacation: { label: 'Ferie', color: 'bg-blue-50 text-blue-600' },
-      sick: { label: 'Malattia', color: 'bg-red-50 text-red-600' },
-      injury: { label: 'Infortunio', color: 'bg-orange-50 text-orange-600' },
-      training: { label: 'Formazione', color: 'bg-green-50 text-green-600' },
-      overtime: { label: 'Straordinario', color: 'bg-amber-100 text-amber-700' }
-    };
-    const c = config[type] || { label: 'Altro', color: 'bg-gray-100 text-gray-500' };
-    return <span className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase ${c.color}`}>{c.label}</span>;
-  };
-
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 max-h-[85vh]">
+    <div className="flex flex-col animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">
-          <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-20 h-20 rounded-full shadow-lg border-2 border-white object-cover" />
+          <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-20 h-20 rounded-2xl shadow-lg border-2 border-white object-cover" />
           <div>
             <h3 className="text-2xl font-luxury font-bold text-gray-900">{member.name}</h3>
             <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{member.role}</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-300 hover:text-black"><i className="fas fa-times text-xl"></i></button>
       </div>
 
-      <div className="flex gap-6 border-b border-gray-100 mb-8 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-6 border-b border-gray-100 mb-8">
         {[
           { id: 'analytics', label: 'Performance', icon: 'fa-chart-line' },
-          { id: 'schedule', label: 'Configurazione', icon: 'fa-user-cog' },
-          { id: 'vacations', label: 'Ferie & Congedi', icon: 'fa-calendar-alt' }
+          { id: 'admin', label: 'Contratto & Dati', icon: 'fa-user-shield' },
+          { id: 'vacations', label: 'Assenze', icon: 'fa-calendar-alt' }
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveSubTab(tab.id as any)} className={`flex items-center gap-2 pb-3 text-[9px] font-bold uppercase tracking-widest transition-all ${activeSubTab === tab.id ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-300'}`}>
             <i className={`fas ${tab.icon}`}></i> {tab.label}
@@ -117,109 +67,54 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
+      <div className="space-y-6">
         {activeSubTab === 'analytics' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 p-6 rounded-3xl">
-                <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Fatturato Personale</p>
-                <h4 className="text-2xl font-luxury font-bold">CHF {stats.revenue}</h4>
-              </div>
-              <div className="bg-gray-50 p-6 rounded-3xl">
-                <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Rituali Eseguiti</p>
-                <h4 className="text-2xl font-luxury font-bold">{stats.count}</h4>
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
+              <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Ricavi Generati</p>
+              <h4 className="text-2xl font-luxury font-bold">CHF {stats.revenue}</h4>
+            </div>
+            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
+              <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Rituali Totali</p>
+              <h4 className="text-2xl font-luxury font-bold">{stats.count}</h4>
             </div>
           </div>
         )}
 
-        {activeSubTab === 'schedule' && (
-          <div className="space-y-6">
-            <div className="bg-gray-50 p-8 rounded-[2.5rem] space-y-6">
-               <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Account Collegato</label>
-                  <select value={profileId} onChange={e => setProfileId(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-xs outline-none">
-                    <option value="">Seleziona Collaboratore...</option>
-                    {profiles.filter(p => p.role === 'collaborator' || p.role === 'admin').map(p => (
-                      <option key={p.id} value={p.id}>{p.full_name} ({p.email})</option>
-                    ))}
-                  </select>
-                  <p className="text-[7px] text-gray-400 italic mt-1 ml-1">Collega questo artista a un utente registrato per abilitare il workspace personale.</p>
-               </div>
+        {activeSubTab === 'admin' && (
+          <div className="bg-gray-50 p-8 rounded-[3rem] space-y-6">
                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Inizio Turno</label>
-                    <input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-sm" />
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Account Portale</label>
+                    <select value={profileId} onChange={e => setProfileId(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold outline-none">
+                      <option value="">Collega Profilo...</option>
+                      {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>)}
+                    </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Fine Turno</label>
-                    <input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-sm" />
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Ferie Annuali (gg)</label>
+                    <input type="number" value={totalVacationDays} onChange={e => setTotalVacationDays(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-xs" />
                   </div>
                </div>
-               <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Giorni Ferie da Contratto</label>
-                  <input type="number" value={totalVacationDays} onChange={e => setTotalVacationDays(Number(e.target.value))} className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold" />
-               </div>
-               <button onClick={handleUpdateProfile} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl hover:bg-amber-600 transition-all">Salva Configurazione</button>
-            </div>
-          </div>
-        )}
-
-        {activeSubTab === 'vacations' && (
-          <div className="space-y-8 pb-10">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 text-center">
-                <p className="text-[8px] font-bold text-blue-600 uppercase mb-1">Contratto</p>
-                <p className="text-2xl font-luxury font-bold">{totalVacationDays}g</p>
-              </div>
-              <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100 text-center">
-                <p className="text-[8px] font-bold text-amber-600 uppercase mb-1">Godute</p>
-                <p className="text-2xl font-luxury font-bold">{usedVacationDays}g</p>
-              </div>
-              <div className="bg-green-50/50 p-6 rounded-3xl border border-green-100 text-center">
-                <p className="text-[8px] font-bold text-green-600 uppercase mb-1">Residuo</p>
-                <p className="text-2xl font-luxury font-bold">{totalVacationDays - usedVacationDays}g</p>
-              </div>
-            </div>
-
-            <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Registra Nuova Assenza Forzata</h5>
-              <div className="grid grid-cols-2 gap-4">
-                <input type="date" value={newAbsence.start} onChange={e => setNewAbsence({...newAbsence, start: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
-                <input type="date" value={newAbsence.end} onChange={e => setNewAbsence({...newAbsence, end: e.target.value})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold" />
-              </div>
-              <select value={newAbsence.type} onChange={e => setNewAbsence({...newAbsence, type: e.target.value as AbsenceType})} className="w-full p-4 rounded-2xl bg-white border border-gray-200 text-xs font-bold">
-                <option value="vacation">Ferie / Vacanza</option>
-                <option value="sick">Malattia</option>
-                <option value="training">Formazione</option>
-              </select>
-              <button onClick={addAbsence} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Forza Periodo</button>
-            </div>
-
-            <div className="space-y-4">
-              <h5 className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Periodi Approvati</h5>
-              <div className="space-y-3">
-                {absences.map(a => (
-                  <div key={a.id} className="flex items-center justify-between p-6 bg-white border border-gray-50 rounded-3xl shadow-sm">
-                    <div className="flex items-center gap-6">
-                       <div className="text-center min-w-[50px] border-r border-gray-50 pr-6">
-                          <p className="text-lg font-luxury font-bold">
-                            {Math.ceil((new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1}
-                          </p>
-                          <p className="text-[7px] text-gray-400 font-bold uppercase">Giorni</p>
-                       </div>
-                       <div>
-                          <div className="mb-1">{getAbsenceBadge(a.type)}</div>
-                          <p className="text-[10px] font-bold text-gray-900">
-                            {new Date(a.startDate).toLocaleDateString()} → {new Date(a.endDate).toLocaleDateString()}
-                          </p>
-                       </div>
+               
+               <div className="space-y-4 pt-4 border-t border-gray-200">
+                  <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Dati Sensibili Staff</p>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Indirizzo Residenza</label>
+                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Via, Città, CAP" className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-xs" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">Numero AVS</label>
+                      <input type="text" value={avsNumber} onChange={e => setAvsNumber(e.target.value)} placeholder="756.xxxx.xxxx.xx" className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-xs" />
                     </div>
-                    <button onClick={() => removeAbsence(a.id)} className="text-gray-300 hover:text-red-500 transition-colors"><i className="fas fa-trash-alt text-[10px]"></i></button>
+                    <div className="space-y-2">
+                      <label className="text-[8px] font-bold text-gray-400 uppercase ml-1">IBAN Bancario</label>
+                      <input type="text" value={iban} onChange={e => setIban(e.target.value)} placeholder="CHxx xxxx xxxx xxxx xxxx x" className="w-full p-4 rounded-2xl bg-white border border-gray-200 font-bold text-xs" />
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
+               </div>
+               <button onClick={handleUpdateProfile} className="w-full py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Salva Dati Staff</button>
           </div>
         )}
       </div>
