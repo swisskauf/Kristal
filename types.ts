@@ -75,7 +75,8 @@ export interface TeamMember {
   avatar?: string;
   profile_id?: string; 
   absences_json?: AbsenceEntry[];
-  unavailable_dates?: string[];
+  unavailable_dates?: string[]; // Date specifiche (vacanze)
+  weekly_closures?: number[]; // 0-6 (0=Domenica, 1=Lunedì, ecc.)
   total_vacation_days?: number;
   work_start_time?: string; 
   work_end_time?: string;
@@ -98,9 +99,6 @@ export interface User {
   dob?: string;
   technical_sheets?: TechnicalSheet[];
   treatment_history?: { service: string; date?: string }[];
-  address?: string;
-  avs_number?: string;
-  iban?: string;
 }
 
 export interface ChatMessage {
