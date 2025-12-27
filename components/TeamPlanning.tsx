@@ -22,7 +22,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   isCollaborator = false 
 }) => {
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
-  const [selectedMembers, setSelectedMembers] = useState<string[]>(isCollaborator && currentUserMemberName ? [currentUserMemberName] : team.map(m => m.name));
   const [viewDate, setViewDate] = useState(new Date());
 
   const filteredTeam = useMemo(() => {
@@ -69,10 +68,23 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     setViewDate(d);
   };
 
-  const isWorkingHour = (member: TeamMember, hourStr: string) => {
-    const start = member.work_start_time || '08:30';
-    const end = member.work_end_time || '18:30';
-    return hourStr >= start && hourStr <= end;
+  const getAppointmentStatus = (memberName: string, date: string, hour: string) => {
+    const target = new Date(`${date}T${hour}:00.000Z`);
+    const appt = appointments.find(a => {
+      if (a.team_member_name !== memberName) return false;
+      const appStart = new Date(a.date);
+      const appDuration = a.services?.duration || 30;
+      const appEnd = new Date(appStart.getTime() + appDuration * 60000);
+      return target >= appStart && target < appEnd;
+    });
+
+    if (!appt) return null;
+
+    const appStartTime = new Date(appt.date).toISOString().substring(11, 16);
+    return {
+      appt,
+      isStart: appStartTime === hour
+    };
   };
 
   const isBreakHour = (member: TeamMember, hourStr: string) => {
@@ -80,14 +92,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     return hourStr >= member.break_start_time && hourStr < member.break_end_time;
   };
 
-  const getAppointmentAt = (memberName: string, date: string, hour: string) => {
-    const target = new Date(`${date}T${hour}:00.000Z`);
-    return appointments.find(a => {
-      if (a.team_member_name !== memberName) return false;
-      const appStart = new Date(a.date);
-      const appEnd = new Date(appStart.getTime() + (a.services?.duration || 30) * 60000);
-      return target >= appStart && target < appEnd;
-    });
+  const isWorkingHour = (member: TeamMember, hourStr: string) => {
+    const start = member.work_start_time || '08:30';
+    const end = member.work_end_time || '18:30';
+    return hourStr >= start && hourStr < end;
   };
 
   return (
@@ -97,7 +105,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.02) 20px);
         }
         .break-pattern {
-          background-image: repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(251, 191, 36, 0.1) 8px, rgba(251, 191, 36, 0.1) 16px);
+          background-image: repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(251, 191, 36, 0.05) 8px, rgba(251, 191, 36, 0.05) 16px);
           background-color: #fffbeb;
         }
       `}</style>
@@ -108,7 +116,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
             <i className="fas fa-chevron-left text-xs"></i>
           </button>
           <div className="text-center min-w-[200px]">
-            <h4 className="font-luxury font-bold text-xl uppercase tracking-tighter">Agenda {isCollaborator ? 'Personale' : 'Atelier'}</h4>
+            <h4 className="font-luxury font-bold text-xl uppercase tracking-tighter">Planning Atelier</h4>
             <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">
               {viewMode === 'weekly' 
                 ? `${new Date(weekDays[0]).getDate()} - ${new Date(weekDays[6]).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}`
@@ -121,25 +129,28 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
-           <div className="flex bg-gray-50/50 p-1 rounded-2xl border border-gray-100">
-              <button onClick={() => setViewMode('weekly')} className={`px-5 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Settimanale</button>
-              <button onClick={() => setViewMode('daily')} className={`px-5 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Giornaliera</button>
-           </div>
+        <div className="flex bg-gray-50/50 p-1 rounded-2xl border border-gray-100">
+          <button onClick={() => setViewMode('weekly')} className={`px-5 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Settimanale</button>
+          <button onClick={() => setViewMode('daily')} className={`px-5 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Giornaliera</button>
         </div>
       </div>
 
       <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-4 md:p-10 overflow-x-auto scrollbar-hide">
-         <div className="min-w-[800px]">
-           <div className="grid grid-cols-[100px_repeat(auto-fit,minmax(180px,1fr))] gap-4">
+         <div className="min-w-[900px]">
+           <div className={`grid gap-3 ${viewMode === 'daily' ? `grid-cols-[80px_repeat(${filteredTeam.length},1fr)]` : 'grid-cols-[80px_repeat(7,1fr)]'}`}>
               <div className="sticky left-0 bg-white z-20"></div>
-              {filteredTeam.filter(m => selectedMembers.includes(m.name)).map(m => (
-                <div key={m.name} className="flex items-center gap-3 pb-6 border-b border-gray-50">
-                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full object-cover shadow-md" />
+              {viewMode === 'daily' ? filteredTeam.map(m => (
+                <div key={m.name} className="flex items-center gap-3 pb-6 border-b border-gray-50 justify-center">
+                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full object-cover shadow-md border-2 border-white" />
                    <div>
                       <h5 className="font-luxury font-bold text-sm text-gray-900">{m.name}</h5>
                       <p className="text-[7px] font-bold text-amber-600 uppercase tracking-widest">{m.role}</p>
                    </div>
+                </div>
+              )) : weekDays.map(date => (
+                <div key={date} className="text-center pb-6 border-b border-gray-50">
+                  <p className="text-[9px] font-bold text-amber-600 uppercase">{new Date(date).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
+                  <p className="text-lg font-luxury font-bold text-gray-900">{new Date(date).getDate()}</p>
                 </div>
               ))}
 
@@ -147,44 +158,41 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                 const dateStr = weekDays[0];
                 return (
                   <React.Fragment key={hour}>
-                    <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-6 h-16">
-                       <span className="text-[9px] font-bold text-gray-300 uppercase">{hour}</span>
+                    <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-6 h-14">
+                       <span className="text-[8px] font-bold text-gray-300 uppercase">{hour}</span>
                     </div>
-                    {filteredTeam.filter(m => selectedMembers.includes(m.name)).map(m => {
+                    {viewMode === 'daily' ? filteredTeam.map(m => {
+                      // Fix: renamed undefined getAppointmentAt to getAppointmentStatus
+                      const status = getAppointmentStatus(m.name, dateStr, hour);
                       const isWork = isWorkingHour(m, hour);
                       const isBreak = isBreakHour(m, hour);
-                      const appt = getAppointmentAt(m.name, dateStr, hour);
-                      
-                      const isStartOfAppt = appt && new Date(appt.date).toISOString().substring(11, 16) === hour;
 
                       return (
                         <div 
-                          key={`${m.name}-${hour}`} 
-                          onClick={() => !appt && !isBreak && isWork && onSlotClick && onSlotClick(m.name, dateStr, hour)}
-                          className={`h-16 rounded-2xl border transition-all flex flex-col items-center justify-center relative ${
-                            appt ? 'bg-gray-900 border-black text-white shadow-md z-10' : 
-                            isBreak ? 'break-pattern border-amber-100 opacity-80 cursor-not-allowed' :
-                            isWork ? 'bg-white border-gray-100 hover:border-amber-200 hover:bg-amber-50/20 cursor-pointer' : 'bg-gray-50 border-gray-50 opacity-40 non-work-pattern cursor-not-allowed'
+                          key={`${m.name}-${hour}`}
+                          onClick={() => !status && !isBreak && isWork && onSlotClick && onSlotClick(m.name, dateStr, hour)}
+                          className={`h-14 rounded-2xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
+                            status ? 'bg-black border-black text-white shadow-md z-10' : 
+                            isBreak ? 'break-pattern border-amber-50 opacity-60' :
+                            isWork ? 'bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/20' : 'bg-gray-50 border-gray-50 opacity-30 non-work-pattern'
                           }`}
                         >
-                           {appt ? (
-                             <div className="text-center p-1 w-full truncate">
-                                {isStartOfAppt && (
-                                  <>
-                                    <p className="text-[8px] font-bold uppercase truncate">{appt.profiles?.full_name || 'Ospite'}</p>
-                                    <p className="text-[6px] opacity-60 uppercase">{appt.services?.name}</p>
-                                  </>
-                                )}
+                           {status?.isStart && (
+                             <div className="text-center p-1 w-full truncate px-4">
+                                <p className="text-[8px] font-bold uppercase truncate">{status.appt.profiles?.full_name || 'Ospite'}</p>
+                                <p className="text-[6px] opacity-60 uppercase">{status.appt.services?.name}</p>
                              </div>
-                           ) : isBreak ? (
-                             <span className="text-[7px] font-bold text-amber-600 uppercase tracking-widest">Pausa</span>
-                           ) : isWork ? (
-                             <div className="opacity-0 group-hover:opacity-100 flex items-center justify-center">
-                               <i className="fas fa-plus text-[8px] text-amber-300"></i>
-                             </div>
-                           ) : null}
+                           )}
+                           {isBreak && !status && <span className="text-[7px] font-bold text-amber-400 uppercase">Break</span>}
                         </div>
                       );
+                    }) : weekDays.map(date => {
+                      const appts = appointments.filter(a => a.date.includes(`${date}T${hour}`));
+                      return (
+                        <div key={`${date}-${hour}`} className="h-14 rounded-2xl border border-gray-50 bg-gray-50/20 flex items-center justify-center">
+                          {appts.length > 0 && <span className="text-[10px] font-bold text-amber-600">{appts.length} R.</span>}
+                        </div>
+                      )
                     })}
                   </React.Fragment>
                 );
