@@ -18,14 +18,14 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // States
+  // Data States
   const [appointments, setAppointments] = useState<any[]>([]);
   const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
   const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   
-  // UI States
+  // UI Control States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
@@ -53,9 +53,55 @@ const App: React.FC = () => {
       setRequests(reqs || []);
       setProfiles(profs || []);
     } catch (e) {
-      console.error("Refresh Data hanging or error", e);
+      console.error("Data Refresh Error", e);
     }
   }, []);
+
+  // Added missing handleQuickRequestAction to process actions from the QuickRequestModal
+  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
+    if (!quickRequestData) return;
+    
+    try {
+      if (action === 'create' && data) {
+        await db.requests.create({
+          member_name: quickRequestData.memberName,
+          type: data.type,
+          start_date: quickRequestData.date,
+          end_date: quickRequestData.date,
+          notes: data.notes,
+          is_full_day: data.isFullDay,
+          start_time: data.startTime,
+          end_time: data.endTime,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      } else if (action === 'cancel') {
+        const req = requests.find(r => 
+          r.member_name === quickRequestData.memberName && 
+          r.start_date === quickRequestData.date && 
+          r.status === 'pending'
+        );
+        if (req) {
+          await db.requests.delete(req.id);
+        }
+      } else if (action === 'revoke' && data) {
+        await db.requests.create({
+          member_name: quickRequestData.memberName,
+          type: 'availability_change',
+          start_date: quickRequestData.date,
+          end_date: quickRequestData.date,
+          notes: data.notes,
+          is_full_day: true,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      }
+      setQuickRequestData(null);
+      await refreshData();
+    } catch (e) {
+      console.error("Error handling quick request action", e);
+    }
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -95,14 +141,7 @@ const App: React.FC = () => {
         let role: any = profile?.role || 'client';
         if (email === 'serop.serop@outlook.com') role = 'admin';
         else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
-        setUser({ 
-          id: session.user.id, 
-          email: session.user.email!, 
-          fullName: profile?.full_name || 'Ospite', 
-          phone: profile?.phone || '', 
-          role, 
-          avatar: profile?.avatar 
-        });
+        setUser({ id: session.user.id, email: session.user.email!, fullName: profile?.full_name || 'Ospite', phone: profile?.phone || '', role, avatar: profile?.avatar });
       } else {
         setUser(null);
       }
@@ -113,47 +152,17 @@ const App: React.FC = () => {
   useEffect(() => { if (!loading) refreshData(); }, [loading, refreshData]);
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setAppointments([]);
-      setRequests([]);
-      setActiveTab('dashboard');
-    } catch (e) {
-      console.error("Logout error", e);
-      // Fallback for mock/ui
-      setUser(null);
-      setActiveTab('dashboard');
-    }
+    setIsAuthOpen(false);
+    await supabase.auth.signOut();
+    setUser(null);
+    setAppointments([]);
+    setActiveTab('dashboard');
   };
 
   const currentMember = useMemo(() => {
     if (!user) return null;
     return team.find(m => m.profile_id === user.id);
   }, [user, team]);
-
-  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
-    if (!quickRequestData) return;
-    try {
-      if (isAdmin && action === 'create') {
-        const member = team.find(m => m.name === quickRequestData.memberName);
-        if (member) {
-          const newAbsence = { id: Math.random().toString(36).substr(2, 9), startDate: quickRequestData.date, endDate: quickRequestData.date, type: data.type, notes: data.notes, isFullDay: data.isFullDay };
-          const updatedAbsences = [...(member.absences_json || []), newAbsence];
-          await db.team.upsert({ ...member, absences_json: updatedAbsences });
-        }
-      } else if (action === 'create') {
-        await db.requests.create({ member_name: quickRequestData.memberName, type: data.type, start_date: quickRequestData.date, end_date: quickRequestData.date, notes: data.notes, is_full_day: data.isFullDay, status: 'pending', created_at: new Date().toISOString() });
-      } else if (action === 'cancel') {
-        const req = requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending');
-        if (req) await db.requests.delete(req.id);
-      } else if (action === 'revoke') {
-        await db.requests.create({ member_name: quickRequestData.memberName, type: 'availability_change', start_date: quickRequestData.date, end_date: quickRequestData.date, notes: data.notes, is_full_day: true, status: 'pending', created_at: new Date().toISOString() });
-      }
-      await refreshData();
-      setQuickRequestData(null);
-    } catch (e) { console.error("QuickRequest Error:", e); }
-  };
 
   const visionAnalytics = useMemo(() => {
     if (!isAdmin) return null;
@@ -173,8 +182,6 @@ const App: React.FC = () => {
     return { stats, totalRev };
   }, [team, appointments, isAdmin]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white"><div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div></div>;
-
   return (
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
@@ -183,12 +190,12 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Atelier</p>
-                <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">Visione Globale</h2>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Analytics</p>
+                <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">Atelier Overview</h2>
               </div>
               {isAdmin && visionAnalytics && (
                 <div className="bg-black text-white p-8 rounded-[2.5rem] shadow-2xl">
-                  <p className="text-[9px] text-amber-500 font-bold uppercase mb-1">Fatturato Atelier</p>
+                  <p className="text-[9px] text-amber-500 font-bold uppercase mb-1">Entrate Totali</p>
                   <p className="text-2xl font-luxury font-bold">CHF {visionAnalytics.totalRev}</p>
                 </div>
               )}
@@ -197,16 +204,16 @@ const App: React.FC = () => {
             {isAdmin && visionAnalytics && (
               <div className="grid md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-5">
                 {visionAnalytics.stats.map(s => (
-                  <div key={s.name} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all">
-                    <h4 className="font-luxury font-bold text-xl mb-4">{s.name}</h4>
+                  <div key={s.name} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all group">
+                    <h4 className="font-luxury font-bold text-xl mb-4 group-hover:text-amber-600 transition-colors">{s.name}</h4>
                     <div className="space-y-3">
                       <div className="flex justify-between text-[10px] font-bold uppercase">
-                        <span className="text-gray-400">Ricavi</span>
+                        <span className="text-gray-400">Valore Ritual</span>
                         <span className="text-gray-900">CHF {s.revenue}</span>
                       </div>
                       <div className="flex justify-between text-[10px] font-bold uppercase">
-                        <span className="text-gray-400">Assenze</span>
-                        <span className="text-red-600">{s.vacation + s.sick + s.injury} gg</span>
+                        <span className="text-gray-400">Assenze Totali</span>
+                        <span className="text-amber-700">{s.vacation + s.sick + s.injury} giorni</span>
                       </div>
                     </div>
                   </div>
@@ -225,19 +232,20 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'services_management' && isAdmin && (
-          <div className="space-y-8 animate-in fade-in">
+          <div className="space-y-10 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Menu Ritual</h2>
-              <button onClick={() => setIsServiceFormOpen(true)} className="px-6 py-3 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Nuovo Ritual</button>
+              <button onClick={() => setIsServiceFormOpen(true)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Nuovo Servizio</button>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               {services.map(s => (
-                <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex justify-between items-center shadow-sm">
+                <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex justify-between items-center shadow-sm hover:shadow-lg transition-all">
                   <div>
                     <p className="text-amber-600 text-[8px] font-bold uppercase mb-1">{s.category}</p>
                     <h4 className="font-bold text-lg">{s.name}</h4>
-                    <p className="text-xs text-gray-400">{s.duration} min • CHF {s.price}</p>
+                    <p className="text-xs text-gray-400 font-medium">{s.duration} min • CHF {s.price}</p>
                   </div>
+                  <button className="w-10 h-10 rounded-full bg-gray-50 text-gray-300 hover:text-black transition-colors"><i className="fas fa-edit"></i></button>
                 </div>
               ))}
             </div>
@@ -246,7 +254,7 @@ const App: React.FC = () => {
 
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Planning Atelier</h2>
+            <h2 className="text-4xl font-luxury font-bold">Planning {isCollaborator ? 'Personale' : 'Atelier'}</h2>
             {isAdmin && <RequestManagement requests={requests} onAction={async (id, action) => {
               const req = requests.find(r => r.id === id);
               if (req && action === 'approved') {
@@ -261,7 +269,13 @@ const App: React.FC = () => {
               await db.requests.update(id, { status: action });
               refreshData();
             }} />}
-            <TeamPlanning team={team} appointments={appointments} onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} currentUserMemberName={currentMember?.name} requests={requests} />
+            <TeamPlanning 
+              team={isCollaborator && currentMember ? [currentMember] : team} 
+              appointments={appointments} 
+              onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} 
+              currentUserMemberName={currentMember?.name} 
+              requests={requests} 
+            />
           </div>
         )}
 
@@ -269,10 +283,10 @@ const App: React.FC = () => {
           <div className="space-y-10 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
-              <button onClick={() => setIsAuthOpen(true)} className="px-6 py-3 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Aggiungi Ospite</button>
+              <button onClick={() => setIsAuthOpen(true)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Registra Ospite</button>
             </div>
             <div className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm">
-               <input type="text" placeholder="Cerca ospite per nome..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-5 bg-gray-50 rounded-2xl mb-8 outline-none border-none text-sm font-bold shadow-inner" />
+               <input type="text" placeholder="Cerca ospite..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-5 bg-gray-50 rounded-2xl mb-8 outline-none border-none text-sm font-bold shadow-inner" />
                <div className="grid gap-4">
                   {profiles.filter(p => p.role === 'client' && (!clientSearch || p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()))).map(p => {
                     const clientAppts = appointments.filter(a => a.client_id === p.id);
@@ -282,7 +296,7 @@ const App: React.FC = () => {
                           <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-14 h-14 rounded-2xl object-cover shadow-md" />
                           <div>
                             <h5 className="font-bold text-sm text-gray-900 group-hover:text-amber-600 transition-colors">{p.full_name}</h5>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase">{clientAppts.length} Appuntamenti</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{clientAppts.length} Ritual Totali</p>
                           </div>
                         </div>
                         <i className="fas fa-chevron-right text-gray-200 group-hover:text-amber-500 transition-all"></i>
@@ -298,14 +312,14 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Gestione Staff</h2>
-              <button onClick={() => setSelectedMemberToManage({ name: 'Nuovo', role: 'Artist' } as any)} className="px-6 py-3 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Registra Collaboratore</button>
+              <button onClick={() => setSelectedMemberToManage({ name: 'Nuovo', role: 'Artist' } as any)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Registra Staff</button>
             </div>
             <div className="grid md:grid-cols-3 gap-8">
               {team.map(m => (
                 <button key={m.name} onClick={() => setSelectedMemberToManage(m)} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm flex flex-col items-center gap-6 hover:shadow-2xl transition-all group">
                   <div className="relative">
                     <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-28 h-28 rounded-full object-cover shadow-2xl border-4 border-white group-hover:border-amber-500 transition-all" />
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-4 py-1 bg-black text-white rounded-full text-[7px] font-bold uppercase tracking-widest">Configura</div>
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-4 py-1 bg-black text-white rounded-full text-[7px] font-bold uppercase tracking-widest">Setup</div>
                   </div>
                   <div className="text-center">
                     <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
@@ -318,53 +332,61 @@ const App: React.FC = () => {
         )}
       </Layout>
 
-      {/* MODALI */}
+      {/* MODALS WITH CLOSE BUTTONS */}
       {isAuthOpen && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
-          <div className="w-full max-w-md relative">
-            <button onClick={() => setIsAuthOpen(false)} className="absolute top-8 right-8 text-white/50 hover:text-white transition-transform hover:rotate-90"><i className="fas fa-times text-2xl"></i></button>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
+          <div className="w-full max-w-lg relative">
+            <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white transition-all transform hover:rotate-90">
+              <i className="fas fa-times text-2xl"></i>
+            </button>
             <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
           </div>
         </div>
       )}
 
       {selectedMemberToManage && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black transition-all">
+              <i className="fas fa-times text-2xl"></i>
+            </button>
             <TeamManagement member={selectedMemberToManage} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); setSelectedMemberToManage(null); refreshData(); }} onClose={() => setSelectedMemberToManage(null)} />
           </div>
         </div>
       )}
 
       {selectedClientToManage && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between mb-10">
-              <div className="flex items-center gap-6">
-                 <img src={selectedClientToManage.avatar || `https://ui-avatars.com/api/?name=${selectedClientToManage.full_name}`} className="w-20 h-20 rounded-2xl shadow-lg object-cover" />
-                 <div>
-                    <h3 className="text-3xl font-luxury font-bold">{selectedClientToManage.full_name}</h3>
-                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Gestione Ospite</p>
-                 </div>
-              </div>
-              <button onClick={() => setSelectedClientToManage(null)} className="text-gray-300 hover:text-black"><i className="fas fa-times text-2xl"></i></button>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+            <button onClick={() => setSelectedClientToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black transition-all">
+              <i className="fas fa-times text-2xl"></i>
+            </button>
+            <div className="flex items-center gap-8 mb-12 border-b border-gray-50 pb-8">
+               <img src={selectedClientToManage.avatar || `https://ui-avatars.com/api/?name=${selectedClientToManage.full_name}`} className="w-24 h-24 rounded-3xl shadow-xl object-cover" />
+               <div>
+                  <h3 className="text-4xl font-luxury font-bold text-gray-900">{selectedClientToManage.full_name}</h3>
+                  <div className="flex gap-4 mt-2">
+                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Ospite Premium</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{selectedClientToManage.gender === 'F' ? 'Donna' : 'Uomo'}</span>
+                  </div>
+               </div>
             </div>
             
             <div className="grid md:grid-cols-2 gap-10">
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Scheda Tecnica Formula</h4>
-                <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 italic text-[11px] leading-relaxed">
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Technical Heritage</h4>
+                <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 italic text-xs leading-relaxed text-gray-600">
                   {selectedClientToManage.technical_sheets?.length > 0 
                     ? selectedClientToManage.technical_sheets.slice(-1)[0].content 
-                    : "Nessuna formula registrata. Aggiungi i dettagli del servizio."}
+                    : "Ancora nessun rituale tecnico registrato per questo ospite."}
                 </div>
-                <button className="w-full py-4 bg-gray-50 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all">Nuova Nota Tecnica</button>
+                <button className="w-full py-4 bg-gray-900 text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all">Aggiungi Formula</button>
               </div>
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Analisi Frequenza</h4>
-                <div className="p-8 bg-black text-white rounded-[2.5rem] shadow-xl text-center">
-                  <p className="text-[8px] font-bold text-amber-500 uppercase mb-2">Media Appuntamenti</p>
-                  <p className="text-3xl font-luxury font-bold">1.2 / mese</p>
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Retention Analytics</h4>
+                <div className="p-8 bg-amber-50 rounded-[3rem] border border-amber-100 text-center shadow-inner">
+                  <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">Frequenza Mensile</p>
+                  <p className="text-4xl font-luxury font-bold text-amber-900">1.4 Ritual</p>
                 </div>
               </div>
             </div>
@@ -373,8 +395,11 @@ const App: React.FC = () => {
       )}
 
       {isServiceFormOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-           <div className="bg-white w-full max-w-xl rounded-[3rem] p-12 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+           <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative animate-in zoom-in-95">
+              <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+                <i className="fas fa-times text-2xl"></i>
+              </button>
               <ServiceForm onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); }} onCancel={() => setIsServiceFormOpen(false)} />
            </div>
         </div>
@@ -385,13 +410,19 @@ const App: React.FC = () => {
           date={quickRequestData.date} memberName={quickRequestData.memberName} 
           existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending')}
           existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
-          onClose={() => setQuickRequestData(null)} onAction={handleQuickRequestAction}
+          onClose={() => setQuickRequestData(null)} 
+          onAction={async (action, data) => {
+            await handleQuickRequestAction(action, data);
+          }}
         />
       )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[800] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[800] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+             <button onClick={() => setIsFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+               <i className="fas fa-times text-2xl"></i>
+             </button>
              <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdmin={isAdmin} profiles={profiles} />
           </div>
         </div>
