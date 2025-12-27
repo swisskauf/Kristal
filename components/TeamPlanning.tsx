@@ -51,15 +51,17 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
       <style>{`
-        @keyframes pulse-amber {
-          0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        @keyframes revocation-glow {
+          0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); transform: scale(1.02); }
+          50% { box-shadow: 0 0 20px 5px rgba(245, 158, 11, 0.2); transform: scale(1.04); }
+          100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); transform: scale(1.02); }
         }
-        .animate-pulse-amber {
-          animation: pulse-amber 2s infinite;
+        .revocation-pulse {
+          animation: revocation-glow 2s infinite ease-in-out;
+          border: 2px solid #f59e0b !important;
         }
       `}</style>
+      
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <button onClick={() => moveWeek(-1)} className="w-12 h-12 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all text-gray-400">
@@ -76,17 +78,16 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
           </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide max-w-full">
           {team.map(m => (
             <button 
               key={m.name}
               onClick={() => setSelectedMembers(prev => prev.includes(m.name) ? prev.filter(n => n !== m.name) : [...prev, m.name])}
               className={`px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 whitespace-nowrap ${
-                selectedMembers.includes(m.name) ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-100 hover:border-amber-200'
+                selectedMembers.includes(m.name) ? 'bg-black text-white border-black shadow-lg' : 'bg-white text-gray-300 border-gray-100'
               }`}
             >
-              <div className={`w-1.5 h-1.5 rounded-full ${selectedMembers.includes(m.name) ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
-              {m.name === currentUserMemberName ? 'Io' : m.name}
+              {m.name}
             </button>
           ))}
         </div>
@@ -96,16 +97,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
         <div className="overflow-x-auto scrollbar-hide">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="border-b border-gray-50">
-                <th className="p-6 text-left text-[9px] font-bold text-gray-300 uppercase tracking-widest min-w-[120px]">Data</th>
+              <tr className="border-b border-gray-50 bg-gray-50/30">
+                <th className="p-6 text-left text-[9px] font-bold text-gray-400 uppercase tracking-widest min-w-[100px]">Data</th>
                 {team.filter(m => selectedMembers.includes(m.name)).map(m => (
-                  <th key={m.name} className={`p-6 text-center min-w-[180px] ${m.name === currentUserMemberName ? 'bg-amber-50/30' : ''}`}>
-                    <div className="flex flex-col items-center gap-2">
-                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full shadow-md object-cover border-2 border-white" alt={m.name} />
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${m.name === currentUserMemberName ? 'text-amber-600' : ''}`}>
-                        {m.name === currentUserMemberName ? 'Mio Workspace' : m.name}
-                      </span>
-                    </div>
+                  <th key={m.name} className="p-6 text-center min-w-[160px]">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-900">{m.name}</span>
                   </th>
                 ))}
               </tr>
@@ -118,64 +114,47 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                   <tr key={date} className={`border-b border-gray-50 hover:bg-gray-50/20 transition-colors ${isToday ? 'bg-amber-50/10' : ''}`}>
                     <td className="p-6">
                       <p className="text-[9px] font-bold text-amber-600 uppercase mb-1">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</p>
-                      <p className="text-xl font-luxury font-bold text-gray-900">{d.getDate()}</p>
+                      <p className="text-lg font-luxury font-bold text-gray-900">{d.getDate()}</p>
                     </td>
                     {team.filter(m => selectedMembers.includes(m.name)).map(m => {
-                      const isMe = m.name === currentUserMemberName;
                       const dayAppts = appointments.filter(a => a.team_member_name === m.name && a.date.includes(date));
                       const approvedAbsence = m.absences_json?.find(a => a.startDate === date);
                       const pendingReq = requests?.find(r => r.member_name === m.name && r.start_date === date && r.status === 'pending');
-
-                      const style = typeStyles[approvedAbsence?.type || pendingReq?.type || 'default'];
                       const isRevocation = pendingReq?.type === 'availability_change';
+                      const style = typeStyles[approvedAbsence?.type || pendingReq?.type || 'default'];
 
                       return (
-                        <td key={m.name} className={`p-3 ${isMe ? 'bg-amber-50/5' : ''}`}>
+                        <td key={m.name} className="p-2">
                           <button 
                             onClick={() => onToggleVacation(m.name, date)}
-                            className={`w-full min-h-[80px] p-4 rounded-2xl border transition-all text-left relative group overflow-hidden ${
+                            className={`w-full min-h-[70px] p-4 rounded-2xl border transition-all text-left relative group ${
                               approvedAbsence 
-                                ? `${style.bg} border-transparent ${style.text} shadow-lg scale-[1.02]` 
+                                ? `${style.bg} border-transparent shadow-lg text-white` 
                                 : pendingReq 
-                                  ? `bg-white border-amber-500 border-dashed ${isRevocation ? 'animate-pulse-amber border-2' : 'animate-pulse'} text-amber-600`
+                                  ? `bg-white border-amber-500 border-dashed ${isRevocation ? 'revocation-pulse' : 'animate-pulse'} text-amber-600`
                                   : dayAppts.length > 0 
-                                    ? 'bg-white border-amber-100 shadow-sm' 
-                                    : 'bg-white border-gray-50 hover:border-amber-500 border-dashed'
+                                    ? 'bg-amber-50/30 border-amber-100 shadow-sm' 
+                                    : 'bg-white border-gray-50 hover:border-amber-200 border-dashed'
                             }`}
                           >
                             {approvedAbsence ? (
-                              <div className="flex flex-col justify-center h-full">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <i className={`fas ${style.icon} text-[11px]`}></i>
-                                  <span className="text-[10px] font-bold uppercase tracking-widest">{style.label}</span>
-                                </div>
-                                {!approvedAbsence.isFullDay && (
-                                  <div className="mt-1 px-2 py-0.5 bg-black/20 rounded-md inline-block">
-                                    <p className="text-[8px] font-bold uppercase">{approvedAbsence.startTime} - {approvedAbsence.endTime}</p>
-                                  </div>
-                                )}
+                              <div className="flex items-center gap-2">
+                                <i className={`fas ${style.icon} text-[10px]`}></i>
+                                <span className="text-[8px] font-bold uppercase tracking-widest">{style.label}</span>
                               </div>
                             ) : pendingReq ? (
-                              <div className="flex flex-col justify-center h-full">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className={`w-1.5 h-1.5 ${isRevocation ? 'bg-amber-600' : 'bg-amber-500'} rounded-full animate-ping`}></div>
-                                  <span className="text-[10px] font-bold uppercase tracking-widest">{isRevocation ? 'REVOCA' : 'IN ATTESA'}</span>
-                                </div>
-                                <p className="text-[8px] text-gray-400 font-bold uppercase italic">{style.label}</p>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[8px] font-bold uppercase tracking-widest">{isRevocation ? 'REVOCA' : 'ATTESA'}</span>
+                                <span className="text-[7px] opacity-70 uppercase">{style.label}</span>
                               </div>
                             ) : dayAppts.length > 0 ? (
-                              <div className="flex flex-col justify-center h-full">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <i className="fas fa-calendar-check text-amber-600 text-[10px]"></i>
-                                  <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{dayAppts.length} RITUALI</span>
-                                </div>
+                              <div className="flex items-center gap-2 text-amber-700">
+                                <i className="fas fa-calendar-check text-[10px]"></i>
+                                <span className="text-[8px] font-bold uppercase">{dayAppts.length} RITUALI</span>
                               </div>
                             ) : (
-                              <div className="flex flex-col items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i className="fas fa-plus text-[10px] text-amber-600 mb-1"></i>
-                                <span className="text-[8px] text-amber-600 uppercase font-bold tracking-widest">
-                                  {isMe ? 'Gestisci' : 'Disponibile'}
-                                </span>
+                              <div className="opacity-0 group-hover:opacity-100 text-center">
+                                <i className="fas fa-plus text-[10px] text-amber-600"></i>
                               </div>
                             )}
                           </button>
