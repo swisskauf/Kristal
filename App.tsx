@@ -61,7 +61,13 @@ const App: React.FC = () => {
       if (user) {
         const myProfile = profs.find((p: any) => p.id === user.id);
         if (myProfile) {
-          setUser(prev => prev ? { ...prev, fullName: myProfile.full_name, avatar: myProfile.avatar, phone: myProfile.phone, technical_sheets: myProfile.technical_sheets } : null);
+          setUser(prev => prev ? { 
+            ...prev, 
+            fullName: myProfile.full_name, 
+            avatar: myProfile.avatar, 
+            phone: myProfile.phone, 
+            technical_sheets: myProfile.technical_sheets 
+          } : null);
         }
       }
     } catch (e) {
@@ -170,7 +176,6 @@ const App: React.FC = () => {
               <>
                 <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                   <div>
-                    <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Salone Atelier</p>
                     <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
                       {isGuest ? 'Salone' : isCollaborator ? 'Mio Workspace' : `Benvenuta, ${user?.fullName.split(' ')[0]}`}
                     </h2>
@@ -266,10 +271,11 @@ const App: React.FC = () => {
                team={team} 
                existingAppointments={appointments} 
                onSave={async (a) => { 
-                 await db.appointments.upsert({ ...a, client_id: (isAdmin || isCollaborator) ? a.client_id : user?.id }); 
+                 const finalData = { ...a, client_id: (isAdmin || isCollaborator) ? a.client_id : user?.id };
+                 await db.appointments.upsert(finalData); 
                  setIsFormOpen(false); 
                  setFormInitialData(null);
-                 refreshData(); 
+                 await refreshData(); 
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} 
