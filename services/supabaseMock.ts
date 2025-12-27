@@ -119,11 +119,24 @@ export const supabaseMock = {
     },
     upsert: (app: Appointment) => {
       const current = supabaseMock.appointments.getAll();
-      const exists = current.findIndex(a => a.id === app.id);
-      if (exists > -1) current[exists] = app;
-      else current.push({ ...app, id: app.id || Math.random().toString(36).substr(2, 9) });
+      // Rimuoviamo campi circolari o pesanti prima di salvare
+      const { services, profiles, ...cleanApp } = app;
+      const existsIdx = current.findIndex(a => a.id === cleanApp.id);
+      
+      const appToSave = { 
+        ...cleanApp, 
+        id: cleanApp.id || Math.random().toString(36).substr(2, 9),
+        created_at: new Date().toISOString()
+      };
+
+      if (existsIdx > -1) {
+        current[existsIdx] = appToSave;
+      } else {
+        current.push(appToSave);
+      }
+      
       localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(current));
-      return app;
+      return appToSave;
     }
   },
   requests: {
