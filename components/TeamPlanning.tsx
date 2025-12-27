@@ -40,28 +40,25 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
     sick: { bg: 'bg-red-600', text: 'text-white', icon: 'fa-briefcase-medical', label: 'Malattia' },
     injury: { bg: 'bg-orange-600', text: 'text-white', icon: 'fa-crutch', label: 'Infortunio' },
     training: { bg: 'bg-emerald-600', text: 'text-white', icon: 'fa-graduation-cap', label: 'Formazione' },
-    unpaid: { bg: 'bg-gray-500', text: 'text-white', icon: 'fa-leaf', label: 'Libero' },
-    permit: { bg: 'bg-purple-600', text: 'text-white', icon: 'fa-clock', label: 'Permesso' },
-    overtime: { bg: 'bg-amber-600', text: 'text-white', icon: 'fa-history', label: 'Recupero' },
-    bereavement: { bg: 'bg-slate-900', text: 'text-white', icon: 'fa-ribbon', label: 'Lutto' },
-    availability_change: { bg: 'bg-amber-500', text: 'text-white', icon: 'fa-exchange-alt', label: 'Revoca' },
-    default: { bg: 'bg-gray-800', text: 'text-white', icon: 'fa-plane', label: 'Assenza' }
+    availability_change: { bg: 'bg-amber-500', text: 'text-white', icon: 'fa-undo-alt', label: 'Revoca' },
+    default: { bg: 'bg-gray-800', text: 'text-white', icon: 'fa-calendar', label: 'Assenza' }
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in">
       <style>{`
-        @keyframes revocation-glow {
-          0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); transform: scale(1.02); }
-          50% { box-shadow: 0 0 20px 5px rgba(245, 158, 11, 0.2); transform: scale(1.04); }
-          100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); transform: scale(1.02); }
+        @keyframes pulse-revocation {
+          0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); transform: scale(1.02); }
+          50% { box-shadow: 0 0 25px 10px rgba(245, 158, 11, 0.3); transform: scale(1.05); }
+          100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); transform: scale(1.02); }
         }
-        .revocation-pulse {
-          animation: revocation-glow 2s infinite ease-in-out;
+        .revocation-glow {
+          animation: pulse-revocation 2s infinite ease-in-out;
           border: 2px solid #f59e0b !important;
+          z-index: 10;
         }
       `}</style>
-      
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <button onClick={() => moveWeek(-1)} className="w-12 h-12 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all text-gray-400">
@@ -84,7 +81,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
               key={m.name}
               onClick={() => setSelectedMembers(prev => prev.includes(m.name) ? prev.filter(n => n !== m.name) : [...prev, m.name])}
               className={`px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 whitespace-nowrap ${
-                selectedMembers.includes(m.name) ? 'bg-black text-white border-black shadow-lg' : 'bg-white text-gray-300 border-gray-100'
+                selectedMembers.includes(m.name) ? 'bg-black text-white border-black' : 'bg-white text-gray-300 border-gray-100'
               }`}
             >
               {m.name}
@@ -98,9 +95,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-gray-50 bg-gray-50/30">
-                <th className="p-6 text-left text-[9px] font-bold text-gray-400 uppercase tracking-widest min-w-[100px]">Data</th>
+                <th className="p-6 text-left text-[9px] font-bold text-gray-400 uppercase tracking-widest min-w-[100px]">Giorno</th>
                 {team.filter(m => selectedMembers.includes(m.name)).map(m => (
-                  <th key={m.name} className="p-6 text-center min-w-[160px]">
+                  <th key={m.name} className="p-6 text-center min-w-[180px]">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-900">{m.name}</span>
                   </th>
                 ))}
@@ -109,12 +106,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
             <tbody>
               {weekDays.map(date => {
                 const d = new Date(date);
-                const isToday = date === new Date().toISOString().split('T')[0];
                 return (
-                  <tr key={date} className={`border-b border-gray-50 hover:bg-gray-50/20 transition-colors ${isToday ? 'bg-amber-50/10' : ''}`}>
+                  <tr key={date} className="border-b border-gray-50 hover:bg-gray-50/20 transition-colors">
                     <td className="p-6">
                       <p className="text-[9px] font-bold text-amber-600 uppercase mb-1">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</p>
-                      <p className="text-lg font-luxury font-bold text-gray-900">{d.getDate()}</p>
+                      <p className="text-xl font-luxury font-bold text-gray-900">{d.getDate()}</p>
                     </td>
                     {team.filter(m => selectedMembers.includes(m.name)).map(m => {
                       const dayAppts = appointments.filter(a => a.team_member_name === m.name && a.date.includes(date));
@@ -127,34 +123,34 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({ team, appointments, onToggl
                         <td key={m.name} className="p-2">
                           <button 
                             onClick={() => onToggleVacation(m.name, date)}
-                            className={`w-full min-h-[70px] p-4 rounded-2xl border transition-all text-left relative group ${
+                            className={`w-full min-h-[80px] p-4 rounded-2xl border transition-all text-left relative group ${
                               approvedAbsence 
-                                ? `${style.bg} border-transparent shadow-lg text-white` 
+                                ? `${style.bg} border-transparent text-white shadow-lg` 
                                 : pendingReq 
-                                  ? `bg-white border-amber-500 border-dashed ${isRevocation ? 'revocation-pulse' : 'animate-pulse'} text-amber-600`
+                                  ? `bg-white border-amber-500 border-dashed ${isRevocation ? 'revocation-glow shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'animate-pulse'} text-amber-600`
                                   : dayAppts.length > 0 
-                                    ? 'bg-amber-50/30 border-amber-100 shadow-sm' 
-                                    : 'bg-white border-gray-50 hover:border-amber-200 border-dashed'
+                                    ? 'bg-amber-50/40 border-amber-100 shadow-inner' 
+                                    : 'bg-white border-gray-100 hover:border-amber-200 border-dashed'
                             }`}
                           >
                             {approvedAbsence ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-col gap-1">
                                 <i className={`fas ${style.icon} text-[10px]`}></i>
                                 <span className="text-[8px] font-bold uppercase tracking-widest">{style.label}</span>
                               </div>
                             ) : pendingReq ? (
                               <div className="flex flex-col gap-1">
-                                <span className="text-[8px] font-bold uppercase tracking-widest">{isRevocation ? 'REVOCA' : 'ATTESA'}</span>
-                                <span className="text-[7px] opacity-70 uppercase">{style.label}</span>
+                                <span className="text-[9px] font-bold uppercase">{isRevocation ? 'REVOCA' : 'IN ATTESA'}</span>
+                                <span className="text-[7px] opacity-70 italic">{style.label}</span>
                               </div>
                             ) : dayAppts.length > 0 ? (
                               <div className="flex items-center gap-2 text-amber-700">
                                 <i className="fas fa-calendar-check text-[10px]"></i>
-                                <span className="text-[8px] font-bold uppercase">{dayAppts.length} RITUALI</span>
+                                <span className="text-[9px] font-bold">{dayAppts.length} RITUALI</span>
                               </div>
                             ) : (
-                              <div className="opacity-0 group-hover:opacity-100 text-center">
-                                <i className="fas fa-plus text-[10px] text-amber-600"></i>
+                              <div className="opacity-0 group-hover:opacity-100 flex items-center justify-center">
+                                <i className="fas fa-plus text-[10px] text-amber-500"></i>
                               </div>
                             )}
                           </button>
