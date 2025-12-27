@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
-import AIAssistant from './components/AIAssistant';
 import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
 import TeamManagement from './components/TeamManagement';
@@ -332,8 +331,6 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-
-      <AIAssistant user={user} />
     </>
   );
 };
