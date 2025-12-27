@@ -9,6 +9,7 @@ import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import QuickRequestModal from './components/QuickRequestModal';
+import NewGuestForm from './components/NewGuestForm';
 import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -29,6 +30,7 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<any>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isNewGuestOpen, setIsNewGuestOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
   const [selectedClientToManage, setSelectedClientToManage] = useState<any | null>(null);
@@ -197,12 +199,14 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Analytics</p>
-                <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">Atelier Overview</h2>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Vision</p>
+                <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
+                  {isAdmin ? 'Amministrazione' : isCollaborator ? 'Mio Workspace' : 'Il Tuo Rituale'}
+                </h2>
               </div>
               {isAdmin && visionAnalytics && (
                 <div className="bg-black text-white p-8 rounded-[2.5rem] shadow-2xl">
-                  <p className="text-[9px] text-amber-500 font-bold uppercase mb-1">Entrate Totali</p>
+                  <p className="text-[9px] text-amber-500 font-bold uppercase mb-1">Entrate Atelier</p>
                   <p className="text-2xl font-luxury font-bold">CHF {visionAnalytics.totalRev}</p>
                 </div>
               )}
@@ -219,8 +223,8 @@ const App: React.FC = () => {
                         <span className="text-gray-900">CHF {s.revenue}</span>
                       </div>
                       <div className="flex justify-between text-[10px] font-bold uppercase">
-                        <span className="text-gray-400">Assenze Totali</span>
-                        <span className="text-amber-700">{s.vacation + s.sick + s.injury} giorni</span>
+                        <span className="text-gray-400">Assenze</span>
+                        <span className="text-amber-700">{s.vacation + s.sick + s.injury} gg</span>
                       </div>
                     </div>
                   </div>
@@ -238,8 +242,9 @@ const App: React.FC = () => {
             )}
             
             {(isAdmin || isCollaborator) && (
-              <div className="flex justify-end pt-10">
-                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Inserimento Manuale Ritual</button>
+              <div className="flex flex-col md:flex-row justify-end gap-4 pt-10">
+                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-gray-50 transition-all">Nuovo Ospite</button>
+                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Rituale Manuale</button>
               </div>
             )}
           </div>
@@ -299,7 +304,7 @@ const App: React.FC = () => {
           <div className="space-y-10 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
-              <button onClick={() => setIsAuthOpen(true)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Registra Ospite</button>
+              <button onClick={() => setIsNewGuestOpen(true)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Registra Ospite</button>
             </div>
             <div className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm">
                <input type="text" placeholder="Cerca ospite..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full p-5 bg-gray-50 rounded-2xl mb-8 outline-none border-none text-sm font-bold shadow-inner" />
@@ -328,7 +333,7 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Gestione Staff</h2>
-              <button onClick={() => setSelectedMemberToManage({ name: 'Nuovo', role: 'Artist' } as any)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Registra Staff</button>
+              <button onClick={() => setSelectedMemberToManage({ name: 'Nuovo', role: 'Artist' } as any)} className="px-6 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Nuovo Collaboratore</button>
             </div>
             <div className="grid md:grid-cols-3 gap-8">
               {team.map(m => (
@@ -348,7 +353,7 @@ const App: React.FC = () => {
         )}
       </Layout>
 
-      {/* MODALS WITH CLOSE BUTTONS */}
+      {/* MODALS */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -356,6 +361,21 @@ const App: React.FC = () => {
               <i className="fas fa-times text-2xl"></i>
             </button>
             <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
+          </div>
+        </div>
+      )}
+
+      {isNewGuestOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+            <button onClick={() => setIsNewGuestOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+              <i className="fas fa-times text-2xl"></i>
+            </button>
+            <NewGuestForm onSave={async (guest) => {
+              await db.profiles.upsert({ ...guest, role: 'client' });
+              setIsNewGuestOpen(false);
+              refreshData();
+            }} onCancel={() => setIsNewGuestOpen(false)} />
           </div>
         </div>
       )}
@@ -382,7 +402,7 @@ const App: React.FC = () => {
                <div>
                   <h3 className="text-4xl font-luxury font-bold text-gray-900">{selectedClientToManage.full_name}</h3>
                   <div className="flex gap-4 mt-2">
-                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Ospite Kristal</span>
+                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Ospite Premium</span>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{selectedClientToManage.gender === 'F' ? 'Donna' : 'Uomo'}</span>
                   </div>
                </div>
@@ -390,18 +410,18 @@ const App: React.FC = () => {
             
             <div className="grid md:grid-cols-2 gap-10">
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Dati Amministrativi</h4>
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Contatti</h4>
                 <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-4">
                   <div className="flex justify-between text-[10px] font-bold uppercase"><span>Email</span><span className="text-gray-400">{selectedClientToManage.email}</span></div>
                   <div className="flex justify-between text-[10px] font-bold uppercase"><span>Telefono</span><span className="text-gray-400">{selectedClientToManage.phone}</span></div>
-                  <div className="flex justify-between text-[10px] font-bold uppercase"><span>Compleanno</span><span className="text-gray-400">{new Date(selectedClientToManage.dob).toLocaleDateString()}</span></div>
+                  <div className="flex justify-between text-[10px] font-bold uppercase"><span>Nato il</span><span className="text-gray-400">{selectedClientToManage.dob}</span></div>
                 </div>
               </div>
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Heritage Tecnico</h4>
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Rituali Eseguiti</h4>
                 <div className="p-8 bg-amber-50 rounded-[3rem] border border-amber-100 text-center shadow-inner">
-                  <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">Note Tecnici Formula</p>
-                  <p className="text-xs leading-relaxed italic text-amber-900">Nessuna formula registrata. Aggiungi i dettagli del servizio per creare uno storico.</p>
+                  <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">Totale Ritual</p>
+                  <p className="text-3xl font-luxury font-bold text-amber-900">{appointments.filter(a => a.client_id === selectedClientToManage.id).length}</p>
                 </div>
               </div>
             </div>
