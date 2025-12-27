@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface LayoutProps {
@@ -47,7 +48,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-gray-50 sticky top-0 h-screen z-40">
         <div className="p-12">
           <h1 className="text-3xl font-luxury font-bold text-gray-900 tracking-tighter cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-            KRISTAL<span className="text-amber-600 text-[8px] font-normal uppercase block tracking-[0.4em] mt-1">Beauty Atelier</span>
+            SALONE<span className="text-amber-600 text-[8px] font-normal uppercase block tracking-[0.4em] mt-1">Beauty Atelier</span>
           </h1>
         </div>
         
@@ -101,7 +102,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
       {/* MOBILE HEADER */}
       <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full">
-        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
+        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>SALONE</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
         )}
