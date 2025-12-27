@@ -75,7 +75,6 @@ export interface TeamMember {
   avatar?: string;
   profile_id?: string; 
   absences_json?: AbsenceEntry[];
-  // Added to fix TypeScript errors where unavailable_dates is expected (e.g., in constants.ts)
   unavailable_dates?: string[];
   total_vacation_days?: number;
   work_start_time?: string; 
@@ -96,8 +95,10 @@ export interface User {
   gender?: 'M' | 'F' | 'Other';
   dob?: string;
   technical_sheets?: TechnicalSheet[];
-  // Added to fix TypeScript errors in geminiService.ts where treatment_history is accessed
   treatment_history?: { service: string; date?: string }[];
+  address?: string;
+  avs_number?: string;
+  iban?: string;
 }
 
 export interface ChatMessage {
