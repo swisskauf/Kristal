@@ -71,20 +71,16 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   const getAppointmentStatus = (memberName: string, date: string, hour: string) => {
     const target = new Date(`${date}T${hour}:00.000Z`);
     
-    // Cerchiamo l'appuntamento che copre questo slot
     const appt = appointments.find(a => {
       if (a.team_member_name !== memberName) return false;
       const appStart = new Date(a.date);
-      // Fallback a 30 min se i dati del servizio mancano (arricchimento nel db service)
       const duration = a.services?.duration || 30;
       const appEnd = new Date(appStart.getTime() + duration * 60000);
-      
       return target >= appStart && target < appEnd;
     });
 
     if (!appt) return null;
 
-    // Determiniamo se questo slot è l'inizio effettivo per mostrare l'etichetta
     const appStartStr = new Date(appt.date).toISOString().substring(11, 16);
     return {
       appt,
@@ -103,8 +99,17 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     return hourStr >= start && hourStr < end;
   };
 
-  const isUnavailableDay = (member: TeamMember, date: string) => {
-    return member.unavailable_dates?.includes(date);
+  const getClosureType = (member: TeamMember, date: string) => {
+    const d = new Date(date);
+    const dayOfWeek = d.getDay();
+    
+    // 1. Chiusura settimanale (es: Lunedì)
+    if (member.weekly_closures?.includes(dayOfWeek)) return 'Chiusura Settimanale';
+    
+    // 2. Vacanza specifica (da date assenza o unavailable_dates)
+    if (member.unavailable_dates?.includes(date)) return 'Vacanza/Congedo';
+    
+    return null;
   };
 
   return (
@@ -117,9 +122,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           background-image: repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(251, 191, 36, 0.05) 8px, rgba(251, 191, 36, 0.05) 16px);
           background-color: #fffbeb;
         }
-        .unavailable-pattern {
-          background-image: repeating-linear-gradient(45deg, #fef2f2, #fef2f2 10px, #fee2e2 10px, #fee2e2 20px);
-          opacity: 0.6;
+        .closure-pattern {
+          background-image: repeating-linear-gradient(45deg, #f9fafb, #f9fafb 10px, #f3f4f6 10px, #f3f4f6 20px);
+          opacity: 0.8;
+        }
+        .vacation-pattern {
+          background-image: repeating-linear-gradient(45deg, #fffbeb, #fffbeb 10px, #fef3c7 10px, #fef3c7 20px);
+          opacity: 0.8;
         }
       `}</style>
 
@@ -178,15 +187,16 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       const status = getAppointmentStatus(m.name, dateStr, hour);
                       const isWork = isWorkingHour(m, hour);
                       const isBreak = isBreakHour(m, hour);
-                      const isClosed = isUnavailableDay(m, dateStr);
+                      const closureType = getClosureType(m, dateStr);
 
                       return (
                         <div 
                           key={`${m.name}-${hour}`}
-                          onClick={() => !status && !isBreak && isWork && !isClosed && onSlotClick && onSlotClick(m.name, dateStr, hour)}
+                          onClick={() => !status && !isBreak && isWork && !closureType && onSlotClick && onSlotClick(m.name, dateStr, hour)}
                           className={`h-14 rounded-2xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
                             status ? 'bg-black border-black text-white shadow-md z-10' : 
-                            isClosed ? 'unavailable-pattern border-red-50' :
+                            closureType === 'Chiusura Settimanale' ? 'closure-pattern border-gray-100 text-gray-300' :
+                            closureType === 'Vacanza/Congedo' ? 'vacation-pattern border-amber-100 text-amber-400' :
                             isBreak ? 'break-pattern border-amber-50 opacity-60' :
                             isWork ? 'bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/20' : 'bg-gray-50 border-gray-50 opacity-30 non-work-pattern'
                           }`}
@@ -197,20 +207,20 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                                 <p className="text-[6px] opacity-60 uppercase">{status.appt.services?.name || 'Ritual'}</p>
                              </div>
                            )}
-                           {isBreak && !status && <span className="text-[7px] font-bold text-amber-400 uppercase">Pausa</span>}
-                           {isClosed && !status && <span className="text-[7px] font-bold text-red-400 uppercase">Chiuso</span>}
+                           {closureType && !status && <span className="text-[6px] font-bold uppercase text-center px-1">{closureType}</span>}
+                           {isBreak && !status && !closureType && <span className="text-[7px] font-bold text-amber-400 uppercase">Pausa</span>}
                         </div>
                       );
                     }) : weekDays.map(date => {
-                      const apptsAtHour = appointments.filter(a => {
-                        const appDate = new Date(a.date).toISOString().split('T')[0];
-                        const appHour = new Date(a.date).toISOString().substring(11, 16);
-                        return appDate === date && appHour === hour;
-                      });
+                      const apptsCount = appointments.filter(a => {
+                        const d = new Date(a.date).toISOString().split('T')[0];
+                        const h = new Date(a.date).toISOString().substring(11, 16);
+                        return d === date && h === hour;
+                      }).length;
                       
                       return (
                         <div key={`${date}-${hour}`} className="h-14 rounded-2xl border border-gray-50 bg-gray-50/20 flex items-center justify-center">
-                          {apptsAtHour.length > 0 && <span className="text-[10px] font-bold text-amber-600">{apptsAtHour.length} R.</span>}
+                          {apptsCount > 0 && <span className="text-[10px] font-bold text-amber-600">{apptsCount} R.</span>}
                         </div>
                       )
                     })}
