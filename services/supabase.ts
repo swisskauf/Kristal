@@ -2,7 +2,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 
-// Estrazione sicura delle variabili d'ambiente (Vite + Vercel)
 const getEnv = (key: string): string => {
   if (typeof window === 'undefined') return '';
   // @ts-ignore
@@ -13,7 +12,6 @@ const getEnv = (key: string): string => {
 const supabaseUrl = getEnv('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-// Verifica se le chiavi sono autentiche (non segnaposto o undefined)
 const isValidConfig = 
   supabaseUrl && 
   supabaseAnonKey && 
@@ -21,7 +19,6 @@ const isValidConfig =
   supabaseUrl !== 'YOUR_SUPABASE_URL' &&
   supabaseUrl !== 'undefined';
 
-// Inizializzazione condizionale
 let client: any = null;
 if (isValidConfig) {
   try {
@@ -33,9 +30,6 @@ if (isValidConfig) {
 
 export const useMock = !client;
 
-/**
- * Fallback Auth: garantisce che ogni metodo esista sempre
- */
 const mockAuth = {
   getSession: async () => ({ data: { session: supabaseMock.auth.getUser() ? { user: supabaseMock.auth.getUser() } : null }, error: null }),
   onAuthStateChange: (cb: any) => {
@@ -50,39 +44,21 @@ const mockAuth = {
   },
   signUp: async () => ({ 
     data: { user: null, session: null }, 
-    error: { message: "Database non configurato. Configura le variabili VITE_SUPABASE su Vercel per abilitare le registrazioni reali." } 
+    error: { message: "Database non configurato." } 
   }),
-  signInWithOAuth: async () => ({ data: { url: null }, error: { message: "OAuth non disponibile in modalità Demo." } }),
   signOut: async () => { supabaseMock.auth.signOut(); return { error: null }; }
 };
 
-/**
- * Export unificato del client
- */
 export const supabase = client || {
   auth: mockAuth,
   from: (table: string) => ({
     select: () => ({
       eq: () => ({ maybeSingle: async () => ({ data: null, error: null }), single: async () => ({ data: null, error: null }) }),
       order: () => ({ data: [], error: null })
-    }),
-    insert: async () => ({ data: null, error: null }),
-    upsert: async () => ({ data: null, error: null }),
-    delete: async () => ({ data: null, error: null }),
-    update: async () => ({ data: null, error: null })
+    })
   })
 };
 
-// Log di stato per il debug in console
-if (useMock) {
-  console.warn("💎 KRISTAL: Modalità DEMO attiva (Database locale).");
-} else {
-  console.log("💎 KRISTAL: Database REALE connesso.");
-}
-
-/**
- * Wrapper Database per astrazione tabelle
- */
 export const db = {
   profiles: {
     getAll: async () => useMock ? supabaseMock.profiles.getAll() : (await client.from('profiles').select('*').order('full_name')).data || [],
@@ -109,9 +85,9 @@ export const db = {
     }
   },
   requests: {
-    getAll: async () => useMock ? [] : (await client.from('leave_requests').select('*')).data || [],
-    create: async (r: any) => useMock ? r : (await client.from('leave_requests').insert(r)).data,
-    update: async (id: string, u: any) => useMock ? u : (await client.from('leave_requests').update(u).eq('id', id)).data,
-    delete: async (id: string) => !useMock && await client.from('leave_requests').delete().eq('id', id)
+    getAll: async () => useMock ? supabaseMock.requests.getAll() : (await client.from('leave_requests').select('*')).data || [],
+    create: async (r: any) => useMock ? supabaseMock.requests.create(r) : (await client.from('leave_requests').insert(r)).data,
+    update: async (id: string, u: any) => useMock ? supabaseMock.requests.update(id, u) : (await client.from('leave_requests').update(u).eq('id', id)).data,
+    delete: async (id: string) => useMock ? supabaseMock.requests.delete(id) : (await client.from('leave_requests').delete().eq('id', id))
   }
 };
