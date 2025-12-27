@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface LayoutProps {
@@ -43,7 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   else if (user) navItems = clientNav;
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#fcfcfc]">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#fcfcfc] overflow-x-hidden">
       {/* SIDEBAR DESKTOP */}
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-gray-50 sticky top-0 h-screen z-40">
         <div className="p-12">
@@ -101,37 +100,42 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       </aside>
 
       {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center justify-between p-6 bg-white border-b border-gray-50">
+      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full">
         <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
         )}
+        {!isGuest && (
+          <div className="flex items-center gap-3">
+             <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full border border-gray-100" />
+          </div>
+        )}
       </div>
 
-      <main className="flex-1 p-6 md:p-16 overflow-y-auto pb-32 md:pb-16 bg-[#fcfcfc]">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 p-4 md:p-16 overflow-y-auto pb-32 md:pb-16 bg-[#fcfcfc] w-full">
+        <div className="max-w-6xl mx-auto w-full">
           {children}
         </div>
       </main>
 
       {/* BOTTOM NAV MOBILE */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex justify-around items-center z-50 shadow-2xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-2 py-3 flex justify-around items-center z-[500] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`flex flex-col items-center space-y-1 transition-all ${
-              activeTab === item.id ? 'text-black' : 'text-gray-300'
+            className={`flex flex-col items-center space-y-1 transition-all flex-1 ${
+              activeTab === item.id ? 'text-black scale-110' : 'text-gray-300'
             }`}
           >
             <i className={`fas ${item.icon} text-lg`}></i>
-            <span className="text-[7px] font-bold uppercase tracking-widest">{item.label}</span>
+            <span className="text-[6px] font-bold uppercase tracking-widest">{item.label}</span>
           </button>
         ))}
         {!isGuest && (
-          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300 hover:text-red-500">
+          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300 hover:text-red-500 flex-1">
             <i className="fas fa-sign-out-alt text-lg"></i>
-            <span className="text-[7px] font-bold uppercase tracking-widest">Esci</span>
+            <span className="text-[6px] font-bold uppercase tracking-widest">Esci</span>
           </button>
         )}
       </nav>
