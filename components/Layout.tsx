@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const collaboratorNav = [
     { id: 'dashboard', label: 'Agenda', icon: 'fa-user-clock' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
+    { id: 'clients', label: 'Ospiti', icon: 'fa-heart' },
   ];
 
   const adminNav = [
