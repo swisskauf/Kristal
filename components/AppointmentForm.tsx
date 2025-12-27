@@ -28,12 +28,22 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || team[0]?.name || '');
   
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  
   const [selectedDate, setSelectedDate] = useState<string>(
     initialData?.date ? initialData.date.split('T')[0] : todayStr
   );
   const [selectedTime, setSelectedTime] = useState<string>(
-    initialData?.date ? new Date(initialData.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : ''
+    initialData?.date ? new Date(initialData.date).toISOString().substring(11, 16) : ''
   );
+
+  // Sync with initialData changes (if any)
+  useEffect(() => {
+    if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
+    if (initialData?.date) {
+      setSelectedDate(initialData.date.split('T')[0]);
+      setSelectedTime(new Date(initialData.date).toISOString().substring(11, 16));
+    }
+  }, [initialData]);
 
   const selectedService = useMemo(() => services.find(s => s.id === serviceId), [services, serviceId]);
   const selectedMember = useMemo(() => team.find(t => t.name === teamMemberName), [team, teamMemberName]);
@@ -53,18 +63,23 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     
     // Parse working hours
     const startHour = selectedMember.work_start_time ? parseInt(selectedMember.work_start_time.split(':')[0], 10) : 8;
-    const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 19;
+    const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 20;
     
     const slots = [];
     const durationMinutes = selectedService.duration;
     const now = new Date();
 
     const isIntervalFree = (timeStr: string) => {
-      const slotStart = new Date(`${selectedDate}T${timeStr}:00`);
+      const slotStart = new Date(`${selectedDate}T${timeStr}:00.000Z`);
       const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60000);
 
-      if (selectedDate === todayStr && slotStart <= now) return false;
-      if (slotEnd.getHours() > endHour || (slotEnd.getHours() === endHour && slotEnd.getMinutes() > 0)) return false;
+      // Check current time if same day
+      const nowZ = new Date();
+      if (selectedDate === todayStr && slotStart <= nowZ) return false;
+      
+      // Basic bounds check
+      const endLimit = new Date(`${selectedDate}T21:00:00.000Z`);
+      if (slotEnd > endLimit) return false;
 
       return !existingAppointments.some(app => {
         if (app.id === initialData?.id) return false;
@@ -92,7 +107,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (isAdminOrStaff && !clientId) { alert("Per favore, selezionate l'ospite destinatario del Ritual."); return; }
     if (!selectedTime) { alert("Scegliete un orario per il momento Kristal."); return; }
 
-    const finalDate = new Date(`${selectedDate}T${selectedTime}:00`).toISOString();
+    const finalDate = new Date(`${selectedDate}T${selectedTime}:00.000Z`).toISOString();
     onSave({
       client_id: isAdminOrStaff ? clientId : undefined,
       service_id: serviceId,
@@ -114,7 +129,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           {isAdminOrStaff && (
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Destinatario Ritual</label>
-              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
+              <select 
+                value={clientId} 
+                onChange={(e) => setClientId(e.target.value)} 
+                required
+                className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all"
+              >
                 <option value="">Selezionate l'account (Ospite, Staff o Admin)...</option>
                 {profiles.sort((a,b) => a.full_name.localeCompare(b.full_name)).map(p => (
                   <option key={p.id} value={p.id}>{p.full_name} — ({p.role.toUpperCase()})</option>
@@ -126,13 +146,13 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Esperienza</label>
-              <select value={serviceId} onChange={(e) => { setServiceId(e.target.value); setSelectedTime(''); }} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
+              <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
                 {services.map(s => <option key={s.id} value={s.id}>{s.name} — {s.duration} min</option>)}
               </select>
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Artista</label>
-              <select value={teamMemberName} onChange={(e) => { setTeamMemberName(e.target.value); setSelectedTime(''); }} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
+              <select value={teamMemberName} onChange={(e) => setTeamMemberName(e.target.value)} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
                 {team.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
               </select>
             </div>
@@ -145,7 +165,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 const d = new Date(day);
                 const isSelected = selectedDate === day;
                 return (
-                  <button key={day} type="button" onClick={() => { setSelectedDate(day); setSelectedTime(''); }} className={`flex-shrink-0 w-20 h-24 rounded-[2rem] border-2 flex flex-col items-center justify-center transition-all duration-300 ${isSelected ? 'border-black bg-black text-white shadow-lg' : 'border-gray-50 bg-white hover:border-amber-200'}`}>
+                  <button key={day} type="button" onClick={() => setSelectedDate(day)} className={`flex-shrink-0 w-20 h-24 rounded-[2rem] border-2 flex flex-col items-center justify-center transition-all duration-300 ${isSelected ? 'border-black bg-black text-white shadow-lg' : 'border-gray-50 bg-white hover:border-amber-200'}`}>
                     <span className={`text-[8px] font-bold uppercase mb-1 ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
                     <span className="text-2xl font-luxury font-bold">{d.getDate()}</span>
                   </button>
@@ -155,7 +175,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
 
           <div className="space-y-4">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Fascia Oraria</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Fascia Oraria Selezionata: <span className="text-gray-900">{selectedTime || 'Nessuna'}</span></label>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
               {availableSlots.length > 0 ? availableSlots.map(slot => (
                 <button key={slot} type="button" onClick={() => setSelectedTime(slot)} className={`py-4 rounded-2xl text-[11px] font-bold transition-all border-2 ${selectedTime === slot ? 'bg-amber-600 text-white border-amber-600 shadow-xl' : 'bg-white border-gray-50 text-gray-500 hover:border-black hover:text-black'}`}>
