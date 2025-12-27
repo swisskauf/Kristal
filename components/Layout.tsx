@@ -16,11 +16,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const isGuest = !user;
 
   const guestNav = [
-    { id: 'dashboard', label: "I Nostri Ritual", icon: 'fa-concierge-bell' },
+    { id: 'dashboard', label: "Kristal", icon: 'fa-concierge-bell' },
   ];
 
   const clientNav = [
-    { id: 'dashboard', label: 'Prenota Ritual', icon: 'fa-calendar-plus' },
+    { id: 'dashboard', label: 'Kristal', icon: 'fa-calendar-plus' },
   ];
 
   const collaboratorNav = [
