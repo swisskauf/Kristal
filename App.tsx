@@ -11,6 +11,7 @@ import CollaboratorDashboard from './components/CollaboratorDashboard';
 import QuickRequestModal from './components/QuickRequestModal';
 import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
+import AIAssistant from './components/AIAssistant';
 import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, TechnicalSheet } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -45,6 +46,7 @@ const App: React.FC = () => {
 
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
+  const isGuest = !user;
 
   const refreshData = useCallback(async () => {
     try {
@@ -62,11 +64,10 @@ const App: React.FC = () => {
       setRequests(reqs || []);
       setProfiles(profs || []);
 
-      // Se l'utente loggato ha aggiornato il proprio profilo, sincronizza lo stato 'user'
       if (user) {
         const myProfile = profs.find((p: any) => p.id === user.id);
         if (myProfile) {
-          setUser(prev => prev ? { ...prev, fullName: myProfile.full_name, avatar: myProfile.avatar, phone: myProfile.phone } : null);
+          setUser(prev => prev ? { ...prev, fullName: myProfile.full_name, avatar: myProfile.avatar, phone: myProfile.phone, technical_sheets: myProfile.technical_sheets } : null);
         }
       }
     } catch (e) {
@@ -75,37 +76,8 @@ const App: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const profile = await db.profiles.get(session.user.id);
-          const email = session.user.email?.toLowerCase();
-          let role: any = profile?.role || 'client';
-          if (email === 'serop.serop@outlook.com') role = 'admin';
-          else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
-
-          setUser({
-            id: session.user.id,
-            email: session.user.email!,
-            fullName: profile?.full_name || 'Ospite Kristal',
-            phone: profile?.phone || '',
-            role,
-            avatar: profile?.avatar,
-            gender: profile?.gender,
-            dob: profile?.dob,
-            technical_sheets: profile?.technical_sheets || []
-          });
-        }
-      } catch (e) {
-        console.error("Auth init error", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initAuth();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth Event:", event);
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setActiveTab('dashboard');
@@ -115,8 +87,17 @@ const App: React.FC = () => {
         let role: any = profile?.role || 'client';
         if (email === 'serop.serop@outlook.com') role = 'admin';
         else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
-        setUser({ id: session.user.id, email: session.user.email!, fullName: profile?.full_name || 'Ospite', phone: profile?.phone || '', role, avatar: profile?.avatar });
+        setUser({ 
+          id: session.user.id, 
+          email: session.user.email!, 
+          fullName: profile?.full_name || 'Ospite', 
+          phone: profile?.phone || '', 
+          role, 
+          avatar: profile?.avatar,
+          technical_sheets: profile?.technical_sheets || []
+        });
       }
+      setLoading(false);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -124,11 +105,7 @@ const App: React.FC = () => {
   useEffect(() => { if (!loading) refreshData(); }, [loading, refreshData]);
 
   const handleLogout = async () => {
-    setIsAuthOpen(false);
     await supabase.auth.signOut();
-    setUser(null);
-    setAppointments([]);
-    setActiveTab('dashboard');
   };
 
   const currentMember = useMemo(() => {
@@ -136,62 +113,37 @@ const App: React.FC = () => {
     return team.find(m => m.profile_id === user.id);
   }, [user, team]);
 
-  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
-    if (!quickRequestData) return;
-    try {
-      if (action === 'create' && data) {
-        await db.requests.create({
-          member_name: quickRequestData.memberName,
-          type: data.type,
-          start_date: quickRequestData.date,
-          end_date: quickRequestData.date,
-          notes: data.notes,
-          is_full_day: data.isFullDay,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        });
-      } else if (action === 'cancel') {
-        const req = requests.find(r => 
-          r.member_name === quickRequestData.memberName && 
-          r.start_date === quickRequestData.date && 
-          r.status === 'pending'
-        );
-        if (req) await db.requests.delete(req.id);
-      }
-      setQuickRequestData(null);
-      await refreshData();
-    } catch (e) {
-      console.error("Error handling quick request", e);
-    }
-  };
-
-  const handleAddTechnicalSheet = async () => {
-    if (!selectedClientToManage || !newSheetContent.trim()) return;
-    const newSheet: TechnicalSheet = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      category: 'Generale',
-      content: newSheetContent,
-      author: user?.fullName || 'Staff'
-    };
-    const updatedSheets = [...(selectedClientToManage.technical_sheets || []), newSheet];
-    await db.profiles.upsert({ ...selectedClientToManage, technical_sheets: updatedSheets });
-    
-    // Refresh locale immediato per la modale aperta
-    const updatedClient = await db.profiles.get(selectedClientToManage.id);
-    setSelectedClientToManage(updatedClient);
-    
-    setNewSheetContent('');
-    setIsAddingSheet(false);
-    refreshData();
-  };
-
+  // Fix: added missing handleOpenSlotForm function
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
       team_member_name: memberName,
-      date: `${date}T${hour}:00.000Z`,
+      date: `${date}T${hour}:00.000Z`
     });
     setIsFormOpen(true);
+  };
+
+  // Fix: added missing handleAddTechnicalSheet function
+  const handleAddTechnicalSheet = async () => {
+    if (!newSheetContent.trim() || !selectedClientToManage) return;
+
+    const newSheet: TechnicalSheet = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      category: 'Ritual',
+      content: newSheetContent,
+      author: user?.fullName || 'Staff Kristal'
+    };
+
+    const updatedProfile = {
+      ...selectedClientToManage,
+      technical_sheets: [...(selectedClientToManage.technical_sheets || []), newSheet]
+    };
+
+    await db.profiles.upsert(updatedProfile);
+    setNewSheetContent('');
+    setIsAddingSheet(false);
+    setSelectedClientToManage(updatedProfile);
+    refreshData();
   };
 
   return (
@@ -202,6 +154,35 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             {isAdmin ? (
                <VisionAnalytics team={team} appointments={appointments} services={services} />
+            ) : isGuest ? (
+              <div className="space-y-16">
+                <header className="text-center space-y-4">
+                  <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">I Nostri Ritual</h2>
+                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Benvenuti nell'Atelier Kristal</p>
+                </header>
+                
+                <div className="grid md:grid-cols-2 gap-10">
+                   {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
+                     <div key={cat} className="space-y-6">
+                        <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">{cat}</h4>
+                        <div className="space-y-4">
+                          {services.filter(s => s.category === cat).map(s => (
+                            <div key={s.id} className="group p-6 bg-white rounded-[2.5rem] border border-gray-50 hover:shadow-xl transition-all flex justify-between items-center cursor-pointer" onClick={() => setIsAuthOpen(true)}>
+                              <div className="flex-1">
+                                <h5 className="font-bold text-lg text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
+                                <p className="text-[10px] text-gray-400 font-medium">{s.duration} minuti di benessere</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xl font-luxury font-bold text-gray-900">CHF {s.price}</p>
+                                <p className="text-[8px] font-bold text-amber-600 uppercase tracking-widest mt-1">Prenota</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                     </div>
+                   ))}
+                </div>
+              </div>
             ) : (
               <>
                 <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -226,7 +207,7 @@ const App: React.FC = () => {
             
             {(isAdmin || isCollaborator) && (
               <div className="flex flex-col md:flex-row justify-end gap-4 pt-10">
-                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-gray-50 transition-all">Nuovo Ospite</button>
+                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-gray-50 transition-all">Registra Nuovo Ospite</button>
                  <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Nuovo Ritual</button>
               </div>
             )}
@@ -330,6 +311,8 @@ const App: React.FC = () => {
         )}
       </Layout>
 
+      <AIAssistant user={user} />
+
       {/* MODALS */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
@@ -342,6 +325,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* ... Altre modali immutate ... */}
       {(isNewGuestOpen || editingGuest) && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
