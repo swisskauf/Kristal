@@ -57,52 +57,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Added missing handleQuickRequestAction to process actions from the QuickRequestModal
-  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
-    if (!quickRequestData) return;
-    
-    try {
-      if (action === 'create' && data) {
-        await db.requests.create({
-          member_name: quickRequestData.memberName,
-          type: data.type,
-          start_date: quickRequestData.date,
-          end_date: quickRequestData.date,
-          notes: data.notes,
-          is_full_day: data.isFullDay,
-          start_time: data.startTime,
-          end_time: data.endTime,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        });
-      } else if (action === 'cancel') {
-        const req = requests.find(r => 
-          r.member_name === quickRequestData.memberName && 
-          r.start_date === quickRequestData.date && 
-          r.status === 'pending'
-        );
-        if (req) {
-          await db.requests.delete(req.id);
-        }
-      } else if (action === 'revoke' && data) {
-        await db.requests.create({
-          member_name: quickRequestData.memberName,
-          type: 'availability_change',
-          start_date: quickRequestData.date,
-          end_date: quickRequestData.date,
-          notes: data.notes,
-          is_full_day: true,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        });
-      }
-      setQuickRequestData(null);
-      await refreshData();
-    } catch (e) {
-      console.error("Error handling quick request action", e);
-    }
-  };
-
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -163,6 +117,50 @@ const App: React.FC = () => {
     if (!user) return null;
     return team.find(m => m.profile_id === user.id);
   }, [user, team]);
+
+  const handleQuickRequestAction = async (action: 'create' | 'cancel' | 'revoke', data?: any) => {
+    if (!quickRequestData) return;
+    try {
+      if (action === 'create' && data) {
+        await db.requests.create({
+          member_name: quickRequestData.memberName,
+          type: data.type,
+          start_date: quickRequestData.date,
+          end_date: quickRequestData.date,
+          notes: data.notes,
+          is_full_day: data.isFullDay,
+          start_time: data.startTime,
+          end_time: data.endTime,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      } else if (action === 'cancel') {
+        const req = requests.find(r => 
+          r.member_name === quickRequestData.memberName && 
+          r.start_date === quickRequestData.date && 
+          r.status === 'pending'
+        );
+        if (req) {
+          await db.requests.delete(req.id);
+        }
+      } else if (action === 'revoke' && data) {
+        await db.requests.create({
+          member_name: quickRequestData.memberName,
+          type: 'availability_change',
+          start_date: quickRequestData.date,
+          end_date: quickRequestData.date,
+          notes: data.notes,
+          is_full_day: true,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+      }
+      setQuickRequestData(null);
+      await refreshData();
+    } catch (e) {
+      console.error("Error handling quick request action", e);
+    }
+  };
 
   const visionAnalytics = useMemo(() => {
     if (!isAdmin) return null;
@@ -226,7 +224,14 @@ const App: React.FC = () => {
                 member={currentMember} appointments={appointments} requests={requests} user={user!} 
                 onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
                 onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(); }}
+                onAddManualAppointment={() => setIsFormOpen(true)}
               />
+            )}
+            
+            {isAdmin && (
+              <div className="flex justify-end pt-10">
+                 <button onClick={() => setIsFormOpen(true)} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Inserimento Manuale Ritual</button>
+              </div>
             )}
           </div>
         )}
@@ -270,11 +275,12 @@ const App: React.FC = () => {
               refreshData();
             }} />}
             <TeamPlanning 
-              team={isCollaborator && currentMember ? [currentMember] : team} 
+              team={team} 
               appointments={appointments} 
               onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} 
               currentUserMemberName={currentMember?.name} 
               requests={requests} 
+              isCollaborator={isCollaborator}
             />
           </div>
         )}
@@ -335,7 +341,7 @@ const App: React.FC = () => {
       {/* MODALS WITH CLOSE BUTTONS */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
-          <div className="w-full max-w-lg relative">
+          <div className="w-full max-w-lg relative animate-in zoom-in-95">
             <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white transition-all transform hover:rotate-90">
               <i className="fas fa-times text-2xl"></i>
             </button>
@@ -366,7 +372,7 @@ const App: React.FC = () => {
                <div>
                   <h3 className="text-4xl font-luxury font-bold text-gray-900">{selectedClientToManage.full_name}</h3>
                   <div className="flex gap-4 mt-2">
-                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Ospite Premium</span>
+                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Ospite Kristal</span>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{selectedClientToManage.gender === 'F' ? 'Donna' : 'Uomo'}</span>
                   </div>
                </div>
@@ -374,19 +380,18 @@ const App: React.FC = () => {
             
             <div className="grid md:grid-cols-2 gap-10">
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Technical Heritage</h4>
-                <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 italic text-xs leading-relaxed text-gray-600">
-                  {selectedClientToManage.technical_sheets?.length > 0 
-                    ? selectedClientToManage.technical_sheets.slice(-1)[0].content 
-                    : "Ancora nessun rituale tecnico registrato per questo ospite."}
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Dati Amministrativi</h4>
+                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-4">
+                  <div className="flex justify-between text-[10px] font-bold uppercase"><span>Email</span><span className="text-gray-400">{selectedClientToManage.email}</span></div>
+                  <div className="flex justify-between text-[10px] font-bold uppercase"><span>Telefono</span><span className="text-gray-400">{selectedClientToManage.phone}</span></div>
+                  <div className="flex justify-between text-[10px] font-bold uppercase"><span>Compleanno</span><span className="text-gray-400">{new Date(selectedClientToManage.dob).toLocaleDateString()}</span></div>
                 </div>
-                <button className="w-full py-4 bg-gray-900 text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all">Aggiungi Formula</button>
               </div>
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Retention Analytics</h4>
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Heritage Tecnico</h4>
                 <div className="p-8 bg-amber-50 rounded-[3rem] border border-amber-100 text-center shadow-inner">
-                  <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">Frequenza Mensile</p>
-                  <p className="text-4xl font-luxury font-bold text-amber-900">1.4 Ritual</p>
+                  <p className="text-[9px] font-bold text-amber-600 uppercase mb-2">Note Tecnici Formula</p>
+                  <p className="text-xs leading-relaxed italic text-amber-900">Nessuna formula registrata. Aggiungi i dettagli del servizio per creare uno storico.</p>
                 </div>
               </div>
             </div>
@@ -406,15 +411,17 @@ const App: React.FC = () => {
       )}
 
       {quickRequestData && (
-        <QuickRequestModal 
-          date={quickRequestData.date} memberName={quickRequestData.memberName} 
-          existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending')}
-          existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
-          onClose={() => setQuickRequestData(null)} 
-          onAction={async (action, data) => {
-            await handleQuickRequestAction(action, data);
-          }}
-        />
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1100] flex items-center justify-center p-4 animate-in zoom-in-95">
+          <QuickRequestModal 
+            date={quickRequestData.date} memberName={quickRequestData.memberName} 
+            existingRequest={requests.find(r => r.member_name === quickRequestData.memberName && r.start_date === quickRequestData.date && r.status === 'pending')}
+            existingAbsence={team.find(m => m.name === quickRequestData.memberName)?.absences_json?.find(a => a.startDate === quickRequestData.date)}
+            onClose={() => setQuickRequestData(null)} 
+            onAction={async (action, data) => {
+              await handleQuickRequestAction(action, data);
+            }}
+          />
+        </div>
       )}
 
       {isFormOpen && (
@@ -423,7 +430,7 @@ const App: React.FC = () => {
              <button onClick={() => setIsFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
                <i className="fas fa-times text-2xl"></i>
              </button>
-             <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdmin={isAdmin} profiles={profiles} />
+             <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin || isCollaborator ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} />
           </div>
         </div>
       )}
