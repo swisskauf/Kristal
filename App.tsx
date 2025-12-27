@@ -27,6 +27,7 @@ const App: React.FC = () => {
   
   // UI Control States
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formInitialData, setFormInitialData] = useState<any>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
@@ -162,6 +163,14 @@ const App: React.FC = () => {
     }
   };
 
+  const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
+    setFormInitialData({
+      team_member_name: memberName,
+      date: `${date}T${hour}:00.000Z`,
+    });
+    setIsFormOpen(true);
+  };
+
   const visionAnalytics = useMemo(() => {
     if (!isAdmin) return null;
     const stats = team.map(m => {
@@ -224,13 +233,13 @@ const App: React.FC = () => {
                 member={currentMember} appointments={appointments} requests={requests} user={user!} 
                 onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
                 onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(); }}
-                onAddManualAppointment={() => setIsFormOpen(true)}
+                onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
               />
             )}
             
-            {isAdmin && (
+            {(isAdmin || isCollaborator) && (
               <div className="flex justify-end pt-10">
-                 <button onClick={() => setIsFormOpen(true)} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Inserimento Manuale Ritual</button>
+                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Inserimento Manuale Ritual</button>
               </div>
             )}
           </div>
@@ -278,6 +287,7 @@ const App: React.FC = () => {
               team={team} 
               appointments={appointments} 
               onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} 
+              onSlotClick={handleOpenSlotForm}
               currentUserMemberName={currentMember?.name} 
               requests={requests} 
               isCollaborator={isCollaborator}
@@ -285,7 +295,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'clients' && isAdmin && (
+        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="space-y-10 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
@@ -427,10 +437,24 @@ const App: React.FC = () => {
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
-             <button onClick={() => setIsFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+             <button onClick={() => { setIsFormOpen(false); setFormInitialData(null); }} className="absolute top-8 right-10 text-gray-300 hover:text-black">
                <i className="fas fa-times text-2xl"></i>
              </button>
-             <AppointmentForm services={services} team={team} existingAppointments={appointments} onSave={async (a) => { await db.appointments.upsert({ ...a, client_id: isAdmin || isCollaborator ? a.client_id : user?.id }); setIsFormOpen(false); refreshData(); }} onCancel={() => setIsFormOpen(false)} isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} />
+             <AppointmentForm 
+               services={services} 
+               team={team} 
+               existingAppointments={appointments} 
+               onSave={async (a) => { 
+                 await db.appointments.upsert({ ...a, client_id: isAdmin || isCollaborator ? a.client_id : user?.id }); 
+                 setIsFormOpen(false); 
+                 setFormInitialData(null);
+                 refreshData(); 
+               }} 
+               onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
+               isAdminOrStaff={isAdmin || isCollaborator} 
+               profiles={profiles}
+               initialData={formInitialData}
+             />
           </div>
         </div>
       )}
