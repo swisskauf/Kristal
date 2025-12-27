@@ -30,7 +30,6 @@ if (isValidConfig) {
 
 export const useMock = !client;
 
-// Semplice sistema di bus eventi per il mock con trigger immediato
 const authListeners: Set<(event: string, session: any) => void> = new Set();
 
 const mockAuth = {
@@ -39,13 +38,13 @@ const mockAuth = {
     authListeners.add(cb);
     const user = supabaseMock.auth.getUser();
     if (user) {
-      // Trigger immediato per lo stato iniziale
       cb('SIGNED_IN', { user, session: { user } });
     }
     return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
   signInWithPassword: async ({ email }: any) => {
-    const user = { id: 'mock-user-' + Date.now(), email, fullName: 'Ospite Kristal', role: email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client') };
+    const role = email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client');
+    const user = { id: 'mock-user-' + Date.now(), email, fullName: role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal'), role };
     supabaseMock.auth.signIn(user as any);
     const session = { user };
     authListeners.forEach(cb => cb('SIGNED_IN', session));
@@ -60,7 +59,6 @@ const mockAuth = {
   },
   signOut: async () => { 
     supabaseMock.auth.signOut(); 
-    // Notifica immediata a tutti i listener per forzare il re-render di App.tsx
     authListeners.forEach(cb => cb('SIGNED_OUT', null));
     return { error: null }; 
   }
@@ -99,23 +97,20 @@ export const db = {
   },
   appointments: {
     getAll: async () => {
+      const appts = useMock ? supabaseMock.appointments.getAll() : (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [];
       if (useMock) {
-        const appts = supabaseMock.appointments.getAll();
         const svcs = supabaseMock.services.getAll();
         const profs = supabaseMock.profiles.getAll();
-        // Arricchimento per visualizzazione immediata degli appuntamenti manuali
-        return appts.map(a => ({
+        return appts.map((a: any) => ({
           ...a,
-          services: svcs.find(s => s.id === a.service_id),
-          profiles: profs.find(p => p.id === a.client_id)
+          services: a.services || svcs.find(s => s.id === a.service_id),
+          profiles: a.profiles || profs.find(p => p.id === a.client_id)
         }));
       }
-      return (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [];
+      return appts;
     },
     upsert: async (a: any) => {
-      if (useMock) {
-        return supabaseMock.appointments.upsert(a);
-      }
+      if (useMock) return supabaseMock.appointments.upsert(a);
       const { services, profiles, ...clean } = a;
       return (await client.from('appointments').upsert(clean).select().single()).data;
     }
