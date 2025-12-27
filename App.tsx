@@ -10,6 +10,7 @@ import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import QuickRequestModal from './components/QuickRequestModal';
 import NewGuestForm from './components/NewGuestForm';
+import VisionAnalytics from './components/VisionAnalytics';
 import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, TechnicalSheet } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -60,10 +61,18 @@ const App: React.FC = () => {
       setAppointments(appts || []);
       setRequests(reqs || []);
       setProfiles(profs || []);
+
+      // Se l'utente loggato ha aggiornato il proprio profilo, sincronizza lo stato 'user'
+      if (user) {
+        const myProfile = profs.find((p: any) => p.id === user.id);
+        if (myProfile) {
+          setUser(prev => prev ? { ...prev, fullName: myProfile.full_name, avatar: myProfile.avatar, phone: myProfile.phone } : null);
+        }
+      }
     } catch (e) {
       console.error("Data Refresh Error", e);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -97,15 +106,16 @@ const App: React.FC = () => {
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setActiveTab('dashboard');
+      } else if (session?.user) {
         const profile = await db.profiles.get(session.user.id);
         const email = session.user.email?.toLowerCase();
         let role: any = profile?.role || 'client';
         if (email === 'serop.serop@outlook.com') role = 'admin';
         else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
         setUser({ id: session.user.id, email: session.user.email!, fullName: profile?.full_name || 'Ospite', phone: profile?.phone || '', role, avatar: profile?.avatar });
-      } else {
-        setUser(null);
       }
     });
     return () => subscription.unsubscribe();
@@ -165,8 +175,12 @@ const App: React.FC = () => {
       author: user?.fullName || 'Staff'
     };
     const updatedSheets = [...(selectedClientToManage.technical_sheets || []), newSheet];
-    const updatedProfile = await db.profiles.upsert({ ...selectedClientToManage, technical_sheets: updatedSheets });
-    setSelectedClientToManage(updatedProfile);
+    await db.profiles.upsert({ ...selectedClientToManage, technical_sheets: updatedSheets });
+    
+    // Refresh locale immediato per la modale aperta
+    const updatedClient = await db.profiles.get(selectedClientToManage.id);
+    setSelectedClientToManage(updatedClient);
+    
     setNewSheetContent('');
     setIsAddingSheet(false);
     refreshData();
@@ -180,56 +194,40 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const visionAnalytics = useMemo(() => {
-    if (!isAdmin) return null;
-    const stats = team.map(m => {
-      const appts = appointments.filter(a => a.team_member_name === m.name && a.status === 'confirmed');
-      const revenue = appts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
-      const absences = m.absences_json || [];
-      return {
-        name: m.name,
-        revenue,
-        vacation: absences.filter(a => a.type === 'vacation').length,
-      };
-    });
-    const totalRev = stats.reduce((acc, s) => acc + s.revenue, 0);
-    return { stats, totalRev };
-  }, [team, appointments, isAdmin]);
-
   return (
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
         {activeTab === 'dashboard' && (
           <div className="space-y-12 animate-in fade-in">
-            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-              <div>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Atelier</p>
-                <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
-                  {isAdmin ? 'Direzione' : isCollaborator ? 'Mio Workspace' : 'Il Tuo Rituale'}
-                </h2>
-              </div>
-              {isAdmin && visionAnalytics && (
-                <div className="bg-black text-white p-8 rounded-[2.5rem] shadow-2xl">
-                  <p className="text-[9px] text-amber-500 font-bold uppercase mb-1">Entrate Atelier</p>
-                  <p className="text-2xl font-luxury font-bold">CHF {visionAnalytics.totalRev}</p>
-                </div>
-              )}
-            </header>
+            {isAdmin ? (
+               <VisionAnalytics team={team} appointments={appointments} services={services} />
+            ) : (
+              <>
+                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                  <div>
+                    <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Atelier</p>
+                    <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
+                      {isCollaborator ? 'Mio Workspace' : 'Il Tuo Rituale'}
+                    </h2>
+                  </div>
+                </header>
 
-            {isCollaborator && currentMember && (
-              <CollaboratorDashboard 
-                member={currentMember} appointments={appointments} requests={requests} user={user!} 
-                onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
-                onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(); }}
-                onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
-              />
+                {isCollaborator && currentMember && (
+                  <CollaboratorDashboard 
+                    member={currentMember} appointments={appointments} requests={requests} user={user!} 
+                    onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
+                    onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(); }}
+                    onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
+                  />
+                )}
+              </>
             )}
             
             {(isAdmin || isCollaborator) && (
               <div className="flex flex-col md:flex-row justify-end gap-4 pt-10">
-                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-gray-50 transition-all">Registra Nuovo Ospite</button>
-                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Inserimento Ritual</button>
+                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-gray-50 transition-all">Nuovo Ospite</button>
+                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Nuovo Ritual</button>
               </div>
             )}
           </div>
@@ -402,11 +400,11 @@ const App: React.FC = () => {
                 </header>
                 
                 {isAddingSheet && (
-                  <div className="p-6 bg-amber-50 rounded-3xl space-y-4 border border-amber-100">
-                    <textarea value={newSheetContent} onChange={e => setNewSheetContent(e.target.value)} placeholder="Inserire dettagli tecnici, formula o preferenze..." className="w-full p-4 rounded-xl bg-white border-none text-xs font-medium resize-none shadow-sm" rows={4}></textarea>
+                  <div className="p-6 bg-amber-50 rounded-3xl space-y-4 border border-amber-100 animate-in slide-in-from-top-4">
+                    <textarea value={newSheetContent} onChange={e => setNewSheetContent(e.target.value)} placeholder="Dettagli tecnici, formula colore, prodotti usati o preferenze..." className="w-full p-4 rounded-xl bg-white border-none text-xs font-medium resize-none shadow-sm" rows={4}></textarea>
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => setIsAddingSheet(false)} className="text-[10px] font-bold uppercase text-gray-400">Annulla</button>
-                      <button onClick={handleAddTechnicalSheet} className="px-6 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-bold uppercase">Salva Scheda</button>
+                      <button onClick={handleAddTechnicalSheet} className="px-6 py-2 bg-black text-white rounded-xl text-[10px] font-bold uppercase">Salva</button>
                     </div>
                   </div>
                 )}
@@ -415,7 +413,7 @@ const App: React.FC = () => {
                   {(selectedClientToManage.technical_sheets || []).slice().reverse().map((sheet: any) => (
                     <div key={sheet.id} className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
                       <div className="flex justify-between items-start mb-2">
-                        <span className="text-[8px] font-bold uppercase text-amber-600 tracking-widest">{new Date(sheet.date).toLocaleDateString()}</span>
+                        <span className="text-[8px] font-bold uppercase text-amber-600 tracking-widest">{new Date(sheet.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</span>
                         <span className="text-[8px] font-bold uppercase text-gray-300">Da: {sheet.author}</span>
                       </div>
                       <p className="text-xs text-gray-600 italic leading-relaxed">{sheet.content}</p>
