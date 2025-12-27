@@ -37,12 +37,7 @@ const App: React.FC = () => {
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
   const [selectedClientToManage, setSelectedClientToManage] = useState<any | null>(null);
-  const [clientSearch, setClientSearch] = useState('');
   
-  // Technical Sheet State
-  const [isAddingSheet, setIsAddingSheet] = useState(false);
-  const [newSheetContent, setNewSheetContent] = useState('');
-
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
@@ -120,86 +115,85 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const handleAddTechnicalSheet = async () => {
-    if (!newSheetContent.trim() || !selectedClientToManage) return;
-    const newSheet: TechnicalSheet = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      category: 'Ritual',
-      content: newSheetContent,
-      author: user?.fullName || 'Staff Kristal'
-    };
-    const updatedProfile = {
-      ...selectedClientToManage,
-      technical_sheets: [...(selectedClientToManage.technical_sheets || []), newSheet]
-    };
-    await db.profiles.upsert(updatedProfile);
-    setNewSheetContent('');
-    setIsAddingSheet(false);
-    setSelectedClientToManage(updatedProfile);
-    refreshData();
+  const handleServiceClick = (service: Service) => {
+    if (isGuest) {
+      setIsAuthOpen(true);
+    } else if (!isAdmin && !isCollaborator) {
+      setFormInitialData({ service_id: service.id });
+      setIsFormOpen(true);
+    }
   };
+
+  const renderServiceList = () => (
+    <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+      <header className="text-center space-y-4">
+        <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
+        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Atelier Salone | salonekristal.ch</p>
+      </header>
+      <div className="grid md:grid-cols-2 gap-10">
+        {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
+          <div key={cat} className="space-y-6">
+            <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">{cat}</h4>
+            <div className="space-y-4">
+              {services.filter(s => s.category === cat).map(s => (
+                <div 
+                  key={s.id} 
+                  className="group p-6 bg-white rounded-[2.5rem] border border-gray-50 hover:shadow-xl transition-all flex justify-between items-center cursor-pointer active:scale-95" 
+                  onClick={() => handleServiceClick(s)}
+                >
+                  <div className="flex-1">
+                    <h5 className="font-bold text-lg text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
+                    <p className="text-[10px] text-gray-400 font-medium">{s.duration} minuti</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-luxury font-bold text-gray-900">CHF {s.price}</p>
+                    <p className="text-[8px] font-bold text-amber-600 uppercase tracking-widest mt-1">Prenota</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <>
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
         {activeTab === 'dashboard' && (
-          <div className="space-y-12 animate-in fade-in">
+          <div className="space-y-12">
             {isAdmin ? (
-               <VisionAnalytics team={team} appointments={appointments} services={services} />
-            ) : isGuest ? (
-              <div className="space-y-16">
-                <header className="text-center space-y-4">
-                  <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
-                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Atelier Kristal | salonekristal.ch</p>
-                </header>
-                <div className="grid md:grid-cols-2 gap-10">
-                   {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
-                     <div key={cat} className="space-y-6">
-                        <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">{cat}</h4>
-                        <div className="space-y-4">
-                          {services.filter(s => s.category === cat).map(s => (
-                            <div key={s.id} className="group p-6 bg-white rounded-[2.5rem] border border-gray-50 hover:shadow-xl transition-all flex justify-between items-center cursor-pointer" onClick={() => setIsAuthOpen(true)}>
-                              <div className="flex-1">
-                                <h5 className="font-bold text-lg text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
-                                <p className="text-[10px] text-gray-400 font-medium">{s.duration} minuti</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-xl font-luxury font-bold text-gray-900">CHF {s.price}</p>
-                                <p className="text-[8px] font-bold text-amber-600 uppercase tracking-widest mt-1">Prenota</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                     </div>
-                   ))}
-                </div>
-              </div>
+               <div className="animate-in fade-in"><VisionAnalytics team={team} appointments={appointments} services={services} /></div>
             ) : (
               <>
-                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                   <div>
-                    <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Kristal Atelier</p>
+                    <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mb-2">Salone Atelier</p>
                     <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
-                      {isCollaborator ? 'Mio Workspace' : 'Bentornata'}
+                      {isGuest ? 'Salone' : isCollaborator ? 'Mio Workspace' : `Benvenuta, ${user?.fullName.split(' ')[0]}`}
                     </h2>
                   </div>
                 </header>
-                {isCollaborator && currentMember && (
+
+                {isCollaborator && currentMember ? (
                   <CollaboratorDashboard 
                     member={currentMember} appointments={appointments} requests={requests} user={user!} 
                     onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
                     onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(); }}
                     onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
                   />
+                ) : (
+                  renderServiceList()
                 )}
               </>
             )}
+
             {(isAdmin || isCollaborator) && (
               <div className="flex flex-col md:flex-row justify-end gap-4 pt-10">
-                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl">Registra Nuovo Ospite</button>
-                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-amber-700">Nuovo Ritual Manuale</button>
+                 <button onClick={() => setIsNewGuestOpen(true)} className="px-10 py-5 bg-white text-black border border-gray-100 rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-gray-50 transition-all">Registra Nuovo Ospite</button>
+                 <button onClick={() => { setFormInitialData(null); setIsFormOpen(true); }} className="px-10 py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-amber-700 transition-all">Nuovo Ritual Manuale</button>
               </div>
             )}
           </div>
@@ -234,8 +228,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* ... Tab Registri e Servizi omessi per brevità, ma mantenuti attivi ... */}
       </Layout>
 
       <AIAssistant user={user} />
