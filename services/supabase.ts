@@ -30,30 +30,45 @@ if (isValidConfig) {
 
 export const useMock = !client;
 
+// Semplice sistema di bus eventi per il mock
+const authListeners: Set<(event: string, session: any) => void> = new Set();
+
 const mockAuth = {
   getSession: async () => ({ data: { session: supabaseMock.auth.getUser() ? { user: supabaseMock.auth.getUser() } : null }, error: null }),
   onAuthStateChange: (cb: any) => {
+    authListeners.add(cb);
     const user = supabaseMock.auth.getUser();
     if (user) setTimeout(() => cb('SIGNED_IN', { user }), 0);
-    return { data: { subscription: { unsubscribe: () => {} } } };
+    return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
   signInWithPassword: async ({ email }: any) => {
-    const user = { id: 'mock-user', email, fullName: 'Ospite Kristal', role: 'client' };
+    const user = { id: 'mock-user-' + Date.now(), email, fullName: 'Ospite Kristal', role: 'client' };
     supabaseMock.auth.signIn(user as any);
-    return { data: { user, session: {} }, error: null };
+    authListeners.forEach(cb => cb('SIGNED_IN', { user }));
+    return { data: { user, session: { user } }, error: null };
   },
-  signUp: async () => ({ 
-    data: { user: null, session: null }, 
-    error: { message: "Database non configurato." } 
-  }),
-  signOut: async () => { supabaseMock.auth.signOut(); return { error: null }; }
+  signUp: async (data: any) => {
+    const user = { id: 'mock-user-' + Date.now(), email: data.email, fullName: data.options.data.full_name, role: data.options.data.role };
+    supabaseMock.auth.signIn(user as any);
+    authListeners.forEach(cb => cb('SIGNED_IN', { user }));
+    return { data: { user, session: { user } }, error: null };
+  },
+  signOut: async () => { 
+    supabaseMock.auth.signOut(); 
+    authListeners.forEach(cb => cb('SIGNED_OUT', null));
+    return { error: null }; 
+  }
 };
 
 export const supabase = client || {
   auth: mockAuth,
   from: (table: string) => ({
     select: () => ({
-      eq: () => ({ maybeSingle: async () => ({ data: null, error: null }), single: async () => ({ data: null, error: null }) }),
+      eq: () => ({ 
+        maybeSingle: async () => ({ data: null, error: null }), 
+        single: async () => ({ data: null, error: null }),
+        order: () => ({ data: [], error: null })
+      }),
       order: () => ({ data: [], error: null })
     })
   })
@@ -79,7 +94,15 @@ export const db = {
   appointments: {
     getAll: async () => useMock ? supabaseMock.appointments.getAll() : (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [],
     upsert: async (a: any) => {
-      if (useMock) return supabaseMock.appointments.upsert(a);
+      if (useMock) {
+        // Arricchimento mock per visualizzazione immediata
+        const svcs = await db.services.getAll();
+        const profs = await db.profiles.getAll();
+        const service = svcs.find(s => s.id === a.service_id);
+        const profile = profs.find(p => p.id === a.client_id);
+        const enriched = { ...a, services: service, profiles: profile };
+        return supabaseMock.appointments.upsert(enriched);
+      }
       const { services, profiles, ...clean } = a;
       return (await client.from('appointments').upsert(clean).select().single()).data;
     }
