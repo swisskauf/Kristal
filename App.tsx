@@ -282,7 +282,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {(activeTab === 'team_schedule' || activeTab === 'collab_dashboard') && (isAdmin || isCollaborator) && (
+        {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold text-gray-900">Planning Atelier</h2>
             <TeamPlanning team={team} appointments={appointments} onToggleVacation={(m, d) => setQuickRequestData({ date: d, memberName: m })} currentUserMemberName={currentMember?.name} requests={requests} />
