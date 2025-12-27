@@ -16,26 +16,25 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const isGuest = !user;
 
   const guestNav = [
-    { id: 'dashboard', label: "L'Atelier", icon: 'fa-spa' },
+    { id: 'dashboard', label: "I Nostri Ritual", icon: 'fa-concierge-bell' },
   ];
 
   const clientNav = [
-    { id: 'dashboard', label: 'Prenota', icon: 'fa-calendar-plus' },
-    { id: 'calendar', label: 'Miei Appuntamenti', icon: 'fa-history' },
+    { id: 'dashboard', label: 'Prenota Ritual', icon: 'fa-calendar-plus' },
   ];
 
   const collaboratorNav = [
-    { id: 'dashboard', label: 'Agenda', icon: 'fa-user-clock' },
-    { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
-    { id: 'clients', label: 'Ospiti', icon: 'fa-heart' },
+    { id: 'dashboard', label: 'Agenda Personale', icon: 'fa-user-clock' },
+    { id: 'team_schedule', label: 'Planning Atelier', icon: 'fa-calendar-alt' },
+    { id: 'clients', label: 'Registro Ospiti', icon: 'fa-address-book' },
   ];
 
   const adminNav = [
-    { id: 'dashboard', label: 'Visione', icon: 'fa-chart-pie' },
-    { id: 'services_management', label: 'Servizi', icon: 'fa-concierge-bell' },
-    { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
-    { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
-    { id: 'clients', label: 'Ospiti', icon: 'fa-heart' },
+    { id: 'dashboard', label: 'Vision Atelier', icon: 'fa-chart-line' },
+    { id: 'services_management', label: 'Menu Servizi', icon: 'fa-book-open' },
+    { id: 'team_schedule', label: 'Planning Totale', icon: 'fa-calendar-alt' },
+    { id: 'team_management', label: 'Gestione Staff', icon: 'fa-users-cog' },
+    { id: 'clients', label: 'Registro Ospiti', icon: 'fa-address-book' },
   ];
 
   let navItems = guestNav;
@@ -48,7 +47,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       {/* SIDEBAR DESKTOP */}
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-gray-50 sticky top-0 h-screen z-40">
         <div className="p-12">
-          <h1 className="text-3xl font-luxury font-bold text-gray-900 tracking-tighter">
+          <h1 className="text-3xl font-luxury font-bold text-gray-900 tracking-tighter cursor-pointer" onClick={() => setActiveTab('dashboard')}>
             KRISTAL<span className="text-amber-600 text-[8px] font-normal uppercase block tracking-[0.4em] mt-1">Beauty Atelier</span>
           </h1>
         </div>
@@ -60,7 +59,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center space-x-4 px-6 py-4 rounded-2xl transition-all duration-300 ${
                 activeTab === item.id 
-                  ? 'bg-gray-900 text-white shadow-lg' 
+                  ? 'bg-black text-white shadow-xl' 
                   : 'text-gray-400 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
@@ -72,27 +71,28 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
         <div className="p-8">
           {!isGuest ? (
-            <div className="space-y-4">
+            <div className="space-y-4 border-t border-gray-50 pt-8">
               <div className="flex items-center space-x-3 px-2">
-                <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full object-cover" />
+                <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full object-cover border border-gray-100" />
                 <div className="overflow-hidden">
                   <p className="text-[10px] font-bold text-gray-900 truncate uppercase tracking-tighter">{user.fullName}</p>
                   <p className="text-[8px] text-amber-600 font-bold uppercase tracking-widest">
-                    {isAdmin ? 'Direzione' : isCollaborator ? 'Artista' : 'Ospite'}
+                    {isAdmin ? 'Direzione' : isCollaborator ? 'Staff' : 'Ospite'}
                   </p>
                 </div>
               </div>
               <button 
                 onClick={onLogout}
-                className="w-full text-left px-2 text-gray-300 hover:text-red-400 transition-colors"
+                className="w-full flex items-center space-x-3 px-4 py-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
               >
+                <i className="fas fa-sign-out-alt text-xs"></i>
                 <span className="text-[9px] font-bold uppercase tracking-[0.3em]">Congedarsi</span>
               </button>
             </div>
           ) : (
             <button 
               onClick={onLoginClick}
-              className="w-full py-4 bg-gray-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all"
+              className="w-full py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all"
             >
               Accedi
             </button>
@@ -102,26 +102,26 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
       {/* MOBILE HEADER */}
       <div className="md:hidden flex items-center justify-between p-6 bg-white border-b border-gray-50">
-        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter">KRISTAL</h1>
+        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
         )}
       </div>
 
-      <main className="flex-1 p-6 md:p-16 overflow-y-auto pb-32 md:pb-16">
-        <div className="max-w-5xl mx-auto">
+      <main className="flex-1 p-6 md:p-16 overflow-y-auto pb-32 md:pb-16 bg-[#fcfcfc]">
+        <div className="max-w-6xl mx-auto">
           {children}
         </div>
       </main>
 
       {/* BOTTOM NAV MOBILE */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex justify-around items-center z-50 shadow-2xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex justify-around items-center z-50 shadow-2xl">
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
             className={`flex flex-col items-center space-y-1 transition-all ${
-              activeTab === item.id ? 'text-gray-900' : 'text-gray-300'
+              activeTab === item.id ? 'text-black' : 'text-gray-300'
             }`}
           >
             <i className={`fas ${item.icon} text-lg`}></i>
@@ -129,7 +129,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
           </button>
         ))}
         {!isGuest && (
-          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300">
+          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300 hover:text-red-500">
             <i className="fas fa-sign-out-alt text-lg"></i>
             <span className="text-[7px] font-bold uppercase tracking-widest">Esci</span>
           </button>
