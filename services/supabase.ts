@@ -103,8 +103,8 @@ export const db = {
         const profs = supabaseMock.profiles.getAll();
         return appts.map((a: any) => ({
           ...a,
-          services: a.services || svcs.find(s => s.id === a.service_id),
-          profiles: a.profiles || profs.find(p => p.id === a.client_id)
+          services: svcs.find(s => s.id === a.service_id) || a.services,
+          profiles: profs.find(p => p.id === a.client_id) || a.profiles
         }));
       }
       return appts;
