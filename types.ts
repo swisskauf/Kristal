@@ -78,7 +78,9 @@ export interface TeamMember {
   unavailable_dates?: string[];
   total_vacation_days?: number;
   work_start_time?: string; 
-  work_end_time?: string;   
+  work_end_time?: string;
+  break_start_time?: string;
+  break_end_time?: string;
   // Dati Sensibili Admin
   address?: string;
   avs_number?: string;
