@@ -271,7 +271,11 @@ const App: React.FC = () => {
                team={team} 
                existingAppointments={appointments} 
                onSave={async (a) => { 
-                 const finalData = { ...a, client_id: (isAdmin || isCollaborator) ? a.client_id : user?.id };
+                 const finalData = { 
+                   ...a, 
+                   client_id: (isAdmin || isCollaborator) ? (a.client_id || user?.id) : user?.id,
+                   status: 'confirmed'
+                 };
                  await db.appointments.upsert(finalData); 
                  setIsFormOpen(false); 
                  setFormInitialData(null);
