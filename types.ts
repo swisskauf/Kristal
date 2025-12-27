@@ -20,8 +20,8 @@ export interface LeaveRequest {
   type: AbsenceType;
   start_date: string;
   end_date: string;
-  start_time?: string; // HH:mm
-  end_time?: string;   // HH:mm
+  start_time?: string;
+  end_time?: string;
   is_full_day: boolean;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
@@ -45,12 +45,7 @@ export interface TechnicalSheet {
   date: string;
   category: string;
   content: string;
-}
-
-export interface TreatmentRecord {
-  date: string;
-  service: string;
-  notes: string;
+  author: string;
 }
 
 export interface Service {
@@ -79,12 +74,16 @@ export interface TeamMember {
   bio?: string;
   avatar?: string;
   profile_id?: string; 
-  unavailable_dates?: string[]; 
   absences_json?: AbsenceEntry[];
+  // Added to fix TypeScript errors where unavailable_dates is expected (e.g., in constants.ts)
+  unavailable_dates?: string[];
   total_vacation_days?: number;
   work_start_time?: string; 
   work_end_time?: string;   
-  overtime_balance?: number; 
+  // Dati Sensibili Admin
+  address?: string;
+  avs_number?: string;
+  iban?: string;
 }
 
 export interface User {
@@ -94,8 +93,11 @@ export interface User {
   fullName: string;
   role: 'client' | 'admin' | 'collaborator';
   avatar?: string;
-  treatment_history?: TreatmentRecord[];
+  gender?: 'M' | 'F' | 'Other';
+  dob?: string;
   technical_sheets?: TechnicalSheet[];
+  // Added to fix TypeScript errors in geminiService.ts where treatment_history is accessed
+  treatment_history?: { service: string; date?: string }[];
 }
 
 export interface ChatMessage {
