@@ -9,9 +9,10 @@ interface CollaboratorDashboardProps {
   user: User;
   onSendRequest: (req: any) => void;
   onUpdateProfile: (p: any) => void;
+  onAddManualAppointment: () => void;
 }
 
-const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, appointments, requests, user, onSendRequest, onUpdateProfile }) => {
+const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, appointments, requests, user, onSendRequest, onUpdateProfile, onAddManualAppointment }) => {
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newReq, setNewReq] = useState({ type: 'vacation', start: '', end: '', notes: '' });
@@ -76,6 +77,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
           </div>
         </div>
         <div className="flex gap-4">
+          <button onClick={onAddManualAppointment} className="px-6 py-4 bg-amber-600 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:shadow-md transition-all">Manuale Ritual</button>
           <button onClick={() => setIsProfileModalOpen(true)} className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:shadow-md transition-all">Modifica Profilo</button>
           <button onClick={() => setIsRequestModalOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Richiedi Congedo</button>
         </div>
@@ -137,7 +139,10 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
 
       {isProfileModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-          <form onSubmit={handleUpdateProfileSubmit} className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl space-y-8">
+          <form onSubmit={handleUpdateProfileSubmit} className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl space-y-8 relative">
+            <button type="button" onClick={() => setIsProfileModalOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+              <i className="fas fa-times text-2xl"></i>
+            </button>
             <h3 className="text-2xl font-luxury font-bold">Mio Profilo Kristal</h3>
             <div className="space-y-4">
               <div className="space-y-1">
@@ -159,7 +164,10 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
 
       {isRequestModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-          <form onSubmit={handleSubmitRequest} className="bg-white w-full max-w-lg rounded-[4rem] p-12 shadow-2xl space-y-8">
+          <form onSubmit={handleSubmitRequest} className="bg-white w-full max-w-lg rounded-[4rem] p-12 shadow-2xl space-y-8 relative">
+            <button type="button" onClick={() => setIsRequestModalOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+              <i className="fas fa-times text-2xl"></i>
+            </button>
             <h3 className="text-2xl font-luxury font-bold">Nuova Richiesta</h3>
             <div className="space-y-6">
               <div className="space-y-2">
