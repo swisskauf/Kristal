@@ -32,7 +32,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const adminNav = [
     { id: 'dashboard', label: 'Visione', icon: 'fa-chart-pie' },
     { id: 'services_management', label: 'Servizi', icon: 'fa-concierge-bell' },
-    { id: 'team_schedule', label: 'Team', icon: 'fa-users' },
+    { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
+    { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
     { id: 'clients', label: 'Ospiti', icon: 'fa-heart' },
   ];
 
@@ -72,7 +73,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
           {!isGuest ? (
             <div className="space-y-4">
               <div className="flex items-center space-x-3 px-2">
-                <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full" />
+                <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full object-cover" />
                 <div className="overflow-hidden">
                   <p className="text-[10px] font-bold text-gray-900 truncate uppercase tracking-tighter">{user.fullName}</p>
                   <p className="text-[8px] text-amber-600 font-bold uppercase tracking-widest">
