@@ -151,7 +151,7 @@ const App: React.FC = () => {
             ) : isGuest ? (
               <div className="space-y-16">
                 <header className="text-center space-y-4">
-                  <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">I Nostri Ritual</h2>
+                  <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Atelier Kristal | salonekristal.ch</p>
                 </header>
                 <div className="grid md:grid-cols-2 gap-10">
