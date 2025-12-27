@@ -70,20 +70,25 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const getAppointmentStatus = (memberName: string, date: string, hour: string) => {
     const target = new Date(`${date}T${hour}:00.000Z`);
+    
+    // Cerchiamo l'appuntamento che copre questo slot
     const appt = appointments.find(a => {
       if (a.team_member_name !== memberName) return false;
       const appStart = new Date(a.date);
-      const appDuration = a.services?.duration || 30;
-      const appEnd = new Date(appStart.getTime() + appDuration * 60000);
+      // Fallback a 30 min se i dati del servizio mancano (arricchimento nel db service)
+      const duration = a.services?.duration || 30;
+      const appEnd = new Date(appStart.getTime() + duration * 60000);
+      
       return target >= appStart && target < appEnd;
     });
 
     if (!appt) return null;
 
-    const appStartTime = new Date(appt.date).toISOString().substring(11, 16);
+    // Determiniamo se questo slot è l'inizio effettivo per mostrare l'etichetta
+    const appStartStr = new Date(appt.date).toISOString().substring(11, 16);
     return {
       appt,
-      isStart: appStartTime === hour
+      isStart: appStartStr === hour
     };
   };
 
@@ -98,6 +103,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     return hourStr >= start && hourStr < end;
   };
 
+  const isUnavailableDay = (member: TeamMember, date: string) => {
+    return member.unavailable_dates?.includes(date);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in">
       <style>{`
@@ -107,6 +116,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         .break-pattern {
           background-image: repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(251, 191, 36, 0.05) 8px, rgba(251, 191, 36, 0.05) 16px);
           background-color: #fffbeb;
+        }
+        .unavailable-pattern {
+          background-image: repeating-linear-gradient(45deg, #fef2f2, #fef2f2 10px, #fee2e2 10px, #fee2e2 20px);
+          opacity: 0.6;
         }
       `}</style>
 
@@ -162,17 +175,18 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                        <span className="text-[8px] font-bold text-gray-300 uppercase">{hour}</span>
                     </div>
                     {viewMode === 'daily' ? filteredTeam.map(m => {
-                      // Fix: renamed undefined getAppointmentAt to getAppointmentStatus
                       const status = getAppointmentStatus(m.name, dateStr, hour);
                       const isWork = isWorkingHour(m, hour);
                       const isBreak = isBreakHour(m, hour);
+                      const isClosed = isUnavailableDay(m, dateStr);
 
                       return (
                         <div 
                           key={`${m.name}-${hour}`}
-                          onClick={() => !status && !isBreak && isWork && onSlotClick && onSlotClick(m.name, dateStr, hour)}
+                          onClick={() => !status && !isBreak && isWork && !isClosed && onSlotClick && onSlotClick(m.name, dateStr, hour)}
                           className={`h-14 rounded-2xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
                             status ? 'bg-black border-black text-white shadow-md z-10' : 
+                            isClosed ? 'unavailable-pattern border-red-50' :
                             isBreak ? 'break-pattern border-amber-50 opacity-60' :
                             isWork ? 'bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/20' : 'bg-gray-50 border-gray-50 opacity-30 non-work-pattern'
                           }`}
@@ -180,17 +194,23 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                            {status?.isStart && (
                              <div className="text-center p-1 w-full truncate px-4">
                                 <p className="text-[8px] font-bold uppercase truncate">{status.appt.profiles?.full_name || 'Ospite'}</p>
-                                <p className="text-[6px] opacity-60 uppercase">{status.appt.services?.name}</p>
+                                <p className="text-[6px] opacity-60 uppercase">{status.appt.services?.name || 'Ritual'}</p>
                              </div>
                            )}
-                           {isBreak && !status && <span className="text-[7px] font-bold text-amber-400 uppercase">Break</span>}
+                           {isBreak && !status && <span className="text-[7px] font-bold text-amber-400 uppercase">Pausa</span>}
+                           {isClosed && !status && <span className="text-[7px] font-bold text-red-400 uppercase">Chiuso</span>}
                         </div>
                       );
                     }) : weekDays.map(date => {
-                      const appts = appointments.filter(a => a.date.includes(`${date}T${hour}`));
+                      const apptsAtHour = appointments.filter(a => {
+                        const appDate = new Date(a.date).toISOString().split('T')[0];
+                        const appHour = new Date(a.date).toISOString().substring(11, 16);
+                        return appDate === date && appHour === hour;
+                      });
+                      
                       return (
                         <div key={`${date}-${hour}`} className="h-14 rounded-2xl border border-gray-50 bg-gray-50/20 flex items-center justify-center">
-                          {appts.length > 0 && <span className="text-[10px] font-bold text-amber-600">{appts.length} R.</span>}
+                          {apptsAtHour.length > 0 && <span className="text-[10px] font-bold text-amber-600">{apptsAtHour.length} R.</span>}
                         </div>
                       )
                     })}
