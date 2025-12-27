@@ -98,19 +98,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const signInWithGoogle = async () => {
-    setErrorMsg('');
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({ 
-        provider: 'google',
-        options: { redirectTo: getRedirectUrl() }
-      });
-      if (error) throw error;
-    } catch (err: any) {
-      setErrorMsg(err.message || "Servizio Google momentaneamente non disponibile.");
-    }
-  };
-
   if (emailSent) {
     return (
       <div className="w-full bg-white rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95">
@@ -154,23 +141,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             {loading ? <i className="fas fa-circle-notch animate-spin"></i> : (isRegistering ? 'Crea il mio account' : 'Entra in Atelier')}
           </button>
         </form>
-
-        <div className="mt-8 relative flex items-center py-2">
-          <div className="flex-grow border-t border-gray-100"></div>
-          <span className="flex-shrink mx-4 text-[8px] text-gray-300 uppercase tracking-widest font-bold">Oppure</span>
-          <div className="flex-grow border-t border-gray-100"></div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-4">
-          <button type="button" onClick={signInWithGoogle} className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all group">
-            <i className="fab fa-google text-red-500 group-hover:scale-110 transition-transform"></i>
-            <span className="text-[10px] font-bold uppercase">Google</span>
-          </button>
-          <button type="button" className="flex items-center justify-center space-x-2 py-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all opacity-40 cursor-not-allowed">
-            <i className="fab fa-apple text-gray-900"></i>
-            <span className="text-[10px] font-bold uppercase">Apple ID</span>
-          </button>
-        </div>
 
         <div className="mt-8 text-center">
           <button onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }} className="text-[10px] font-bold text-gray-400 hover:text-amber-600 transition-colors uppercase tracking-widest">
