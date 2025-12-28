@@ -1,29 +1,28 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { supabaseMock } from "./supabaseMock";
+
+import { createClient } from '@supabase/supabase-js';
+import { supabaseMock } from './supabaseMock';
 
 const getEnv = (key: string): string => {
-  const v =
-    (typeof import.meta !== "undefined" ? (import.meta as any).env?.[key] : "") ||
-    (typeof window !== "undefined" ? (window as any)?.process?.env?.[key] : "");
-  return (v ?? "").toString().trim();
+  if (typeof window === 'undefined') return '';
+  // @ts-ignore
+  const v = (import.meta.env?.[key]) || (window.process?.env?.[key]) || '';
+  return String(v).trim();
 };
 
-const supabaseUrl = getEnv("VITE_SUPABASE_URL");
-const supabaseAnonKey = getEnv("VITE_SUPABASE_ANON_KEY");
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-const isValidConfig =
-  !!supabaseUrl &&
-  !!supabaseAnonKey &&
-  supabaseUrl.startsWith("https://") &&
-  supabaseUrl !== "YOUR_SUPABASE_URL" &&
-  supabaseUrl !== "undefined";
+const isValidConfig = 
+  supabaseUrl && 
+  supabaseAnonKey && 
+  supabaseUrl.startsWith('https://') &&
+  supabaseUrl !== 'YOUR_SUPABASE_URL' &&
+  supabaseUrl !== 'undefined';
 
-let client: SupabaseClient | null = null;
+let client: any = null;
 if (isValidConfig) {
   try {
-    client = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: true, autoRefreshToken: true },
-    });
+    client = createClient(supabaseUrl, supabaseAnonKey);
   } catch (e) {
     console.error("Errore critico inizializzazione Supabase:", e);
   }
@@ -31,43 +30,116 @@ if (isValidConfig) {
 
 export const useMock = !client;
 
-const normalizeWeekly = (w: any) => (Array.isArray(w) ? w.map((n) => Number(n)) : []);
+const authListeners: Set<(event: string, session: any) => void> = new Set();
+
+const mockAuth = {
+  getSession: async () => ({ data: { session: supabaseMock.auth.getUser() ? { user: supabaseMock.auth.getUser() } : null }, error: null }),
+  onAuthStateChange: (cb: any) => {
+    authListeners.add(cb);
+    const user = supabaseMock.auth.getUser();
+    if (user) {
+      cb('SIGNED_IN', { user, session: { user } });
+    }
+    return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
+  },
+  signInWithPassword: async ({ email }: any) => {
+    const role = email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client');
+    const existingUser = (supabaseMock.profiles.getAll() as any[]).find(p => p.email?.toLowerCase() === email.toLowerCase());
+    
+    const user = { 
+      id: existingUser?.id || 'mock-user-' + Date.now(), 
+      email, 
+      fullName: existingUser?.full_name || (role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal')), 
+      role 
+    };
+    supabaseMock.auth.signIn(user as any);
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
+  },
+  signUp: async (data: any) => {
+    const user = { id: 'mock-user-' + Date.now(), email: data.email, fullName: data.options.data.full_name, role: data.options.data.role || 'client' };
+    supabaseMock.auth.signIn(user as any);
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
+  },
+  signOut: async () => { 
+    supabaseMock.auth.signOut(); 
+    authListeners.forEach(cb => cb('SIGNED_OUT', null));
+    return { error: null }; 
+  }
+};
+
+export const supabase = client || {
+  auth: mockAuth,
+  from: (table: string) => ({
+    select: (cols: string = '*') => ({
+      eq: (col: string, val: any) => ({ 
+        maybeSingle: async () => ({ data: null, error: null }), 
+        single: async () => ({ data: null, error: null }),
+        order: (oCol: string) => ({ data: [], error: null })
+      }),
+      order: (oCol: string) => ({ data: [], error: null })
+    })
+  })
+};
 
 export const db = {
+  profiles: {
+    getAll: async () => useMock ? supabaseMock.profiles.getAll() : (await client.from('profiles').select('*').order('full_name')).data || [],
+    get: async (id: string) => {
+      if (useMock) return (supabaseMock.profiles.getAll() as any[]).find(p => p.id === id) || null;
+      return (await client.from('profiles').select('*').eq('id', id).maybeSingle()).data;
+    },
+    upsert: async (p: any) => useMock ? supabaseMock.profiles.upsert(p) : (await client.from('profiles').upsert(p).select().single()).data
+  },
+  services: {
+    getAll: async () => useMock ? supabaseMock.services.getAll() : (await client.from('services').select('*').order('name')).data || [],
+    upsert: async (s: any) => useMock ? supabaseMock.services.upsert(s) : (await client.from('services').upsert(s).select().single()).data
+  },
+  team: {
+    getAll: async () => {
+      const data = useMock ? supabaseMock.team.getAll() : (await client.from('team_members').select('*')).data || [];
+      return data.map((m: any) => ({
+        ...m,
+        weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : []
+      }));
+    },
+    upsert: async (m: any) => useMock ? supabaseMock.team.upsert(m) : (await client.from('team_members').upsert(m).select().single()).data
+  },
   appointments: {
     getAll: async () => {
-      try {
-        if (useMock) {
-          return supabaseMock.appointments.getAll();
-        }
-        const { data, error } = await client!.from("appointments").select("*, services(*), profiles(*)").order("date");
-        if (error) throw error;
-        return data || [];
-      } catch (e) {
-        console.error("Errore fetch appuntamenti da Supabase:", e);
-        return supabaseMock.appointments.getAll();
+      let appts = [];
+      if (useMock) {
+        appts = supabaseMock.appointments.getAll();
+      } else {
+        const { data } = await client.from('appointments').select('*, services(*), profiles(*)').order('date');
+        appts = data || [];
       }
+      
+      // In modalità mock, carichiamo i riferimenti manualmente
+      if (useMock || (appts.length > 0 && !appts[0].services)) {
+        const svcs = await db.services.getAll();
+        const profs = await db.profiles.getAll();
+        return appts.map((a: any) => ({
+          ...a,
+          services: a.services || svcs.find(s => s.id === a.service_id),
+          profiles: a.profiles || profs.find(p => p.id === a.client_id)
+        }));
+      }
+      return appts;
     },
     upsert: async (a: any) => {
-      if (useMock) {
-        console.log("Utilizzo modalità mock. Dati appuntamento:", a);
-        const data = supabaseMock.appointments.upsert(a);
-        return { data, error: null };
-      }
-      try {
-        const { services, profiles, ...clean } = a;
-        console.log("Salvataggio appuntamento Supabase: Payload inviato", clean);
-        const { data, error } = await client!.from("appointments").upsert(clean).select().single();
-        if (error || !data) {
-          console.error("Errore durante il salvataggio di un appuntamento:", error);
-          throw new Error("Salvataggio fallito o dati mancanti.");
-        }
-        return { data, error: null };
-      } catch (e) {
-        console.error("Errore fallback Supabase appointments.upsert:", e);
-        const data = supabaseMock.appointments.upsert(a);
-        return { data, error: null };
-      }
-    },
+      if (useMock) return supabaseMock.appointments.upsert(a);
+      const { services, profiles, ...clean } = a;
+      return (await client.from('appointments').upsert(clean).select().single()).data;
+    }
   },
+  requests: {
+    getAll: async () => useMock ? supabaseMock.requests.getAll() : (await client.from('leave_requests').select('*')).data || [],
+    create: async (r: any) => useMock ? supabaseMock.requests.create(r) : (await client.from('leave_requests').insert(r)).data,
+    update: async (id: string, u: any) => useMock ? supabaseMock.requests.update(id, u) : (await client.from('leave_requests').update(u).eq('id', id)).data,
+    delete: async (id: string) => useMock ? supabaseMock.requests.delete(id) : (await client.from('leave_requests').delete().eq('id', id))
+  }
 };
