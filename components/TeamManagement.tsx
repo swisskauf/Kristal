@@ -14,8 +14,9 @@ interface TeamManagementProps {
 const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, services, profiles, onSave, onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'closures' | 'admin'>('analytics');
   
+  // Local states
   const [name, setName] = useState(member.name || '');
-  const [role, setRole] = useState(member.role || 'Stylist');
+  const [role, setRole] = useState(member.role || '');
   const [workStartTime, setWorkStartTime] = useState(member.work_start_time || '08:30');
   const [workEndTime, setWorkEndTime] = useState(member.work_end_time || '18:30');
   const [breakStartTime, setBreakStartTime] = useState(member.break_start_time || '13:00');
@@ -28,10 +29,14 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const [iban, setIban] = useState(member.iban || '');
   const [avatar, setAvatar] = useState<string | null>(member.avatar || null);
 
+  // Sync with prop when member changes (important for saving)
   useEffect(() => {
     setName(member.name);
+    setRole(member.role);
     setWeeklyClosures(member.weekly_closures || []);
     setUnavailableDates(member.unavailable_dates || []);
+    setWorkStartTime(member.work_start_time || '08:30');
+    setWorkEndTime(member.work_end_time || '18:30');
   }, [member]);
 
   const stats = useMemo(() => {
@@ -41,11 +46,15 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   }, [appointments, member.name]);
 
   const toggleWeeklyClosure = (day: number) => {
-    setWeeklyClosures(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+    setWeeklyClosures(prev => 
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
+    );
   };
 
   const addVacationDate = (date: string) => {
-    if (date && !unavailableDates.includes(date)) setUnavailableDates([...unavailableDates, date].sort());
+    if (date && !unavailableDates.includes(date)) {
+      setUnavailableDates([...unavailableDates, date].sort());
+    }
   };
 
   const removeVacationDate = (date: string) => {
@@ -53,7 +62,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   };
 
   const handleUpdateProfile = () => {
-    onSave({ 
+    const updated: TeamMember = { 
       ...member, 
       name,
       role,
@@ -62,12 +71,13 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       work_end_time: workEndTime,
       break_start_time: breakStartTime,
       break_end_time: breakEndTime,
-      weekly_closures: [...weeklyClosures], // Copia forzata dell'array
-      unavailable_dates: [...unavailableDates],
+      weekly_closures: weeklyClosures, // array di numeri 0-6
+      unavailable_dates: unavailableDates, // array di stringhe ISO date
       address,
       avs_number: avsNumber,
       iban
-    });
+    };
+    onSave(updated);
   };
 
   const DAYS = [
@@ -81,7 +91,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
         <div className="flex items-center gap-8">
           <img src={avatar || `https://ui-avatars.com/api/?name=${name || 'K'}`} className="w-24 h-24 rounded-[2rem] shadow-xl border-4 border-white object-cover" />
           <div>
-            <h3 className="text-3xl font-luxury font-bold text-gray-900">{name || 'Nuovo Artista'}</h3>
+            <h3 className="text-3xl font-luxury font-bold text-gray-900">{name || 'Artista'}</h3>
             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{role}</p>
           </div>
         </div>
@@ -115,15 +125,27 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 space-y-6">
                 <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Turno Lavoro</p>
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} className="p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
-                  <input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} className="p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-bold text-gray-400 uppercase ml-1">Inizio</span>
+                    <input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} className="w-full p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-bold text-gray-400 uppercase ml-1">Fine</span>
+                    <input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} className="w-full p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
+                  </div>
                 </div>
               </div>
               <div className="bg-amber-50/50 p-8 rounded-[2.5rem] border border-amber-100 space-y-6">
                 <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Pausa Pranzo</p>
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="time" value={breakStartTime} onChange={e => setBreakStartTime(e.target.value)} className="p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
-                  <input type="time" value={breakEndTime} onChange={e => setBreakEndTime(e.target.value)} className="p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-bold text-amber-600 uppercase ml-1">Dalle</span>
+                    <input type="time" value={breakStartTime} onChange={e => setBreakStartTime(e.target.value)} className="w-full p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-bold text-amber-600 uppercase ml-1">Alle</span>
+                    <input type="time" value={breakEndTime} onChange={e => setBreakEndTime(e.target.value)} className="w-full p-3 rounded-xl border-none font-bold text-xs shadow-sm" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -137,7 +159,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Chiusure Settimanali Ricorrenti</p>
               <div className="flex flex-wrap gap-2">
                 {DAYS.map(day => (
-                  <button key={day.id} onClick={() => toggleWeeklyClosure(day.id)} className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase transition-all border ${weeklyClosures.includes(day.id) ? 'bg-black text-white border-black shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}>
+                  <button 
+                    key={day.id} 
+                    type="button"
+                    onClick={() => toggleWeeklyClosure(day.id)} 
+                    className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase transition-all border ${weeklyClosures.includes(day.id) ? 'bg-black text-white border-black shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
+                  >
                     {day.label}
                   </button>
                 ))}
@@ -145,20 +172,28 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
             </div>
 
             <div className="space-y-4">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Vacanze e Congedi Specifici</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Vacanze e Congedi (Giorni Singoli)</p>
               <div className="flex gap-4">
                 <input type="date" id="vacation-picker" className="flex-1 p-4 rounded-xl bg-gray-50 border-none font-bold text-xs" />
-                <button type="button" onClick={() => {
-                  const input = document.getElementById('vacation-picker') as HTMLInputElement;
-                  addVacationDate(input.value);
-                  input.value = '';
-                }} className="px-6 bg-amber-600 text-white rounded-xl text-[10px] font-bold uppercase">Aggiungi</button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const input = document.getElementById('vacation-picker') as HTMLInputElement;
+                    addVacationDate(input.value);
+                    input.value = '';
+                  }} 
+                  className="px-6 bg-amber-600 text-white rounded-xl text-[10px] font-bold uppercase"
+                >
+                  Aggiungi
+                </button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {unavailableDates.map(d => (
                   <div key={d} className="bg-gray-50 px-4 py-3 rounded-xl flex justify-between items-center group">
                     <span className="text-[10px] font-bold text-gray-600">{new Date(d).toLocaleDateString()}</span>
-                    <button type="button" onClick={() => removeVacationDate(d)} className="text-gray-300 hover:text-red-500"><i className="fas fa-times-circle"></i></button>
+                    <button type="button" onClick={() => removeVacationDate(d)} className="text-gray-300 hover:text-red-500">
+                      <i className="fas fa-times-circle"></i>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -169,10 +204,19 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
 
         {activeSubTab === 'admin' && (
           <div className="space-y-6">
-            <input placeholder="Indirizzo" type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Indirizzo Residenza</label>
+              <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+            </div>
             <div className="grid grid-cols-2 gap-6">
-              <input placeholder="AVS" type="text" value={avsNumber} onChange={e => setAvsNumber(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
-              <input placeholder="IBAN" type="text" value={iban} onChange={e => setIban(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Numero AVS</label>
+                <input type="text" value={avsNumber} onChange={e => setAvsNumber(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">IBAN</label>
+                <input type="text" value={iban} onChange={e => setIban(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+              </div>
             </div>
             <button onClick={handleUpdateProfile} className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Salva Anagrafica</button>
           </div>
