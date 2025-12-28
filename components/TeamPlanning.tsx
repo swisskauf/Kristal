@@ -26,7 +26,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   requests = [], 
   isCollaborator = false 
 }) => {
-  const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
+  // Vista di default: daily (anche per admin) così vedi subito i blocchi
+  const [viewMode, setViewMode] = useState<'weekly' | 'daily'>('daily');
   const [viewDate, setViewDate] = useState(new Date());
 
   const filteredTeam = useMemo(() => {
