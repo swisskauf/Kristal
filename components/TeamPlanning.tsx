@@ -90,11 +90,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const member = team.find(t => t.name === memberName);
     if (!member) return null;
 
-    // Chiusura settimanale
+    const weekly = Array.isArray(member.weekly_closures) ? member.weekly_closures.map(Number) : [];
     const d = new Date(dateStr + 'T12:00:00');
-    if (member.weekly_closures?.includes(d.getDay())) return { type: 'CLOSURE' };
+    if (weekly.includes(d.getDay())) return { type: 'CLOSURE' };
 
-    // Ferie/Assenze (robusto su diverse chiavi)
     const hasFullDayAbsence = member.absences_json?.some(a => {
       const start = a.startDate || a.start_date;
       const full = a.isFullDay || a.is_full_day;
@@ -104,13 +103,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       return { type: 'VACATION' };
     }
 
-    // Pausa
     if (member.break_start_time && member.break_end_time && 
         hour >= member.break_start_time && hour < member.break_end_time) {
       return { type: 'BREAK' };
     }
 
-    // Orario Lavoro
     if (hour < (member.work_start_time || '08:30') || hour >= (member.work_end_time || '19:00')) {
       return { type: 'NON_WORKING' };
     }
@@ -246,7 +243,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                           {apptsAtHour.length > 0 && (
                             <div className="flex -space-x-1">
                               {apptsAtHour.slice(0, 3).map((a, idx) => (
-                                <div key={idx} className="w-4 h-4 rounded-full bg-black border border-white flex items-center justify-center">
+                                <div key={idx} className="w-4 h-4 rounded-full bg-black border border-white flex itemscenter justify-center">
                                   <span className="text-[5px] text-white font-bold">{a.team_member_name[0]}</span>
                                 </div>
                               ))}
