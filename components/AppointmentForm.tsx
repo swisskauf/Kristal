@@ -30,7 +30,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 }) => {
   const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
-  // Inizializzazione sicura: assicuriamoci di avere ID validi dai props o dai fallback
+  // Inizializzazione sicura
   const [clientId, setClientId] = useState<string>(initialData?.client_id || '');
   const [clientSearch, setClientSearch] = useState<string>('');
   const [serviceId, setServiceId] = useState<string>('');
@@ -39,6 +39,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     initialData?.date ? new Date(initialData.date).toLocaleDateString('en-CA') : todayStr
   );
   const [selectedTime, setSelectedTime] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sincronizzazione stati quando i dati caricano o cambiano
   useEffect(() => {
@@ -87,15 +88,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
 
-    // Check Chiusura Settimanale (Fix critico per fusi orari: aggiungi T12:00:00)
+    // Check Chiusura Settimanale
     const d = new Date(`${selectedDate}T12:00:00`);
     const dayOfWeek = d.getDay();
     const closures = selectedMember.weekly_closures || [];
     
-    // Se il giorno selezionato è una chiusura settimanale dell'artista
     if (closures.includes(dayOfWeek)) return [];
-
-    // Check Ferie specifiche
     if (selectedMember.unavailable_dates?.includes(selectedDate)) return [];
 
     const startH = parseInt((selectedMember.work_start_time || '08:30').split(':')[0], 10);
@@ -150,24 +148,29 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     return slots;
   }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData?.id, teamMemberName]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedService) return;
+    if (!selectedService || isSubmitting) return;
     if (isAdminOrStaff && !clientId) { alert('Scegliere un Ospite.'); return; }
     if (!selectedTime) { alert('Scegliere un orario.'); return; }
 
-    const [y, mo, d] = selectedDate.split('-').map(Number);
-    const [hh, mm] = selectedTime.split(':').map(Number);
-    const finalDate = new Date(y, mo - 1, d, hh, mm, 0).toISOString();
+    setIsSubmitting(true);
+    try {
+      const [y, mo, d] = selectedDate.split('-').map(Number);
+      const [hh, mm] = selectedTime.split(':').map(Number);
+      const finalDate = new Date(y, mo - 1, d, hh, mm, 0).toISOString();
 
-    onSave({
-      id: initialData?.id,
-      client_id: isAdminOrStaff ? clientId : undefined,
-      service_id: selectedService.id,
-      team_member_name: teamMemberName,
-      date: finalDate,
-      status: 'confirmed',
-    });
+      await onSave({
+        id: initialData?.id,
+        client_id: isAdminOrStaff ? clientId : initialData?.client_id,
+        service_id: selectedService.id,
+        team_member_name: teamMemberName,
+        date: finalDate,
+        status: 'confirmed',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -291,7 +294,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
         <div className="flex gap-4 pt-8 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[9px] tracking-widest">Annulla</button>
-          <button type="submit" className="flex-[2] py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] shadow-xl">Conferma Ritual</button>
+          <button 
+            type="submit" 
+            disabled={isSubmitting || !selectedTime}
+            className={`flex-[2] py-4 rounded-2xl font-bold uppercase text-[9px] shadow-xl transition-all ${
+              isSubmitting ? 'bg-gray-400' : 'bg-black text-white hover:bg-amber-600'
+            }`}
+          >
+            {isSubmitting ? 'Prenotazione in corso...' : 'Conferma Ritual'}
+          </button>
         </div>
       </form>
     </div>
