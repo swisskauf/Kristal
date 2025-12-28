@@ -97,25 +97,52 @@ export const supabase = client || {
 
 export const db = {
   profiles: {
-    getAll: async () =>
-      (useMock ? supabaseMock.profiles.getAll() : (await client!.from("profiles").select("*").order("full_name")).data) || [],
+    getAll: async () => {
+      if (useMock) return supabaseMock.profiles.getAll();
+      const { data, error } = await client!.from("profiles").select("*").order("full_name");
+      if (error) throw error;
+      return data || [];
+    },
     get: async (id: string) => {
       if (useMock) return (supabaseMock.profiles.getAll() as any[]).find((p) => p.id === id) || null;
-      return (await client!.from("profiles").select("*").eq("id", id).maybeSingle()).data;
+      const { data, error } = await client!.from("profiles").select("*").eq("id", id).maybeSingle();
+      if (error) throw error;
+      return data;
     },
-    upsert: async (p: any) =>
-      useMock ? supabaseMock.profiles.upsert(p) : (await client!.from("profiles").upsert(p).select().single()).data,
+    upsert: async (p: any) => {
+      if (useMock) return supabaseMock.profiles.upsert(p);
+      const { data, error } = await client!.from("profiles").upsert(p).select().single();
+      if (error) throw error;
+      return data;
+    },
   },
   services: {
-    getAll: async () =>
-      (useMock ? supabaseMock.services.getAll() : (await client!.from("services").select("*").order("name")).data) || [],
-    upsert: async (s: any) =>
-      useMock ? supabaseMock.services.upsert(s) : (await client!.from("services").upsert(s).select().single()).data,
+    getAll: async () => {
+      if (useMock) return supabaseMock.services.getAll();
+      const { data, error } = await client!.from("services").select("*").order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    upsert: async (s: any) => {
+      if (useMock) return supabaseMock.services.upsert(s);
+      const { data, error } = await client!.from("services").upsert(s).select().single();
+      if (error) throw error;
+      return data;
+    },
   },
   team: {
-    getAll: async () => (useMock ? supabaseMock.team.getAll() : (await client!.from("team_members").select("*")).data) || [],
-    upsert: async (m: any) =>
-      useMock ? supabaseMock.team.upsert(m) : (await client!.from("team_members").upsert(m).select().single()).data,
+    getAll: async () => {
+      if (useMock) return supabaseMock.team.getAll();
+      const { data, error } = await client!.from("team_members").select("*");
+      if (error) throw error;
+      return data || [];
+    },
+    upsert: async (m: any) => {
+      if (useMock) return supabaseMock.team.upsert(m);
+      const { data, error } = await client!.from("team_members").upsert(m).select().single();
+      if (error) throw error;
+      return data;
+    },
   },
   appointments: {
     getAll: async () => {
@@ -123,7 +150,8 @@ export const db = {
       if (useMock) {
         appts = supabaseMock.appointments.getAll();
       } else {
-        const { data } = await client!.from("appointments").select("*, services(*), profiles(*)").order("date");
+        const { data, error } = await client!.from("appointments").select("*, services(*), profiles(*)").order("date");
+        if (error) throw error;
         appts = data || [];
       }
 
@@ -139,16 +167,35 @@ export const db = {
     upsert: async (a: any) => {
       if (useMock) return supabaseMock.appointments.upsert(a);
       const { services, profiles, ...clean } = a;
-      return (await client!.from("appointments").upsert(clean).select().single()).data;
+      const { data, error } = await client!.from("appointments").upsert(clean).select().single();
+      if (error) throw error;
+      return data;
     },
   },
   requests: {
-    getAll: async () =>
-      (useMock ? supabaseMock.requests.getAll() : (await client!.from("leave_requests").select("*")).data) || [],
-    create: async (r: any) => (useMock ? supabaseMock.requests.create(r) : (await client!.from("leave_requests").insert(r)).data),
-    update: async (id: string, u: any) =>
-      useMock ? supabaseMock.requests.update(id, u) : (await client!.from("leave_requests").update(u).eq("id", id)).data,
-    delete: async (id: string) =>
-      useMock ? supabaseMock.requests.delete(id) : (await client!.from("leave_requests").delete().eq("id", id)),
+    getAll: async () => {
+      if (useMock) return supabaseMock.requests.getAll();
+      const { data, error } = await client!.from("leave_requests").select("*");
+      if (error) throw error;
+      return data || [];
+    },
+    create: async (r: any) => {
+      if (useMock) return supabaseMock.requests.create(r);
+      const { data, error } = await client!.from("leave_requests").insert(r).select().single();
+      if (error) throw error;
+      return data;
+    },
+    update: async (id: string, u: any) => {
+      if (useMock) return supabaseMock.requests.update(id, u);
+      const { data, error } = await client!.from("leave_requests").update(u).eq("id", id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    delete: async (id: string) => {
+      if (useMock) return supabaseMock.requests.delete(id);
+      const { error } = await client!.from("leave_requests").delete().eq("id", id);
+      if (error) throw error;
+      return true;
+    },
   },
 };
