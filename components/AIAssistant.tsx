@@ -7,9 +7,10 @@ interface AIAssistantProps {
 }
 
 const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
+  const firstName = user?.fullName ? user.fullName.split(' ')[0] : undefined;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', content: `Benvenuta in **Kristal**${user ? `, ${user.fullName.split(' ')[0]}` : ''}. In che modo posso rendere unico il vostro momento di bellezza oggi?` }
+    { role: 'model', content: `Benvenuta in **Kristal**${firstName ? `, ${firstName}` : ''}. In che modo posso rendere unico il vostro momento di bellezza oggi?` }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,9 +30,15 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsLoading(true);
 
-    const response = await getAIConsultation(userMsg, user || undefined);
-    setMessages(prev => [...prev, { role: 'model', content: response }]);
-    setIsLoading(false);
+    try {
+      const response = await getAIConsultation(userMsg, user || undefined);
+      setMessages(prev => [...prev, { role: 'model', content: response }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, { role: 'model', content: 'Mi dispiace, ho incontrato un problema tecnico. Riprova tra poco.' }]);
+      console.error('AI consultation error:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderContent = (content: string) => {
@@ -54,13 +61,13 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
       {/* AI Trigger Button - Moved to Top Right to avoid covering nav */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-20 right-4 md:top-10 md:right-10 w-12 h-12 md:w-16 md:h-16 bg-black text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[600] border border-amber-500/20"
+        className="fixed top-20 right-4 md:top-10 md:right-10 w-12 h-12 md:w-16 md:h-16 bg-black text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
       >
         <i className={`fas ${isOpen ? 'fa-times' : 'fa-sparkles'} text-base md:text-lg`}></i>
       </button>
 
       {isOpen && (
-        <div className="fixed top-36 right-4 left-4 md:left-auto md:right-10 md:w-[400px] h-[70vh] md:h-[550px] bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-[0_40px_80px_rgba(0,0,0,0.15)] border border-gray-100 flex flex-col z-[600] overflow-hidden animate-in slide-in-from-top-8 duration-500">
+        <div className="fixed top-36 right-4 left-4 md:left-auto md:right-10 md:w-[400px] h-[70vh] md:h-[550px] bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-[0_40px_80px_rgba(0,0,0,0.15)] border border-gray-50 flex flex-col z-[1200] animate-in fade-in slide-in-from-top-2">
           <div className="bg-white p-6 md:p-8 border-b border-gray-50 flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-600/20">
