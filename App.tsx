@@ -134,6 +134,15 @@ const App: React.FC = () => {
     return team.find(m => m.profile_id === user.id || m.name.toLowerCase() === user.fullName.split(' ')[0].toLowerCase());
   }, [user, team]);
 
+  // Appuntamenti dell'utente loggato (Cliente)
+  const myClientAppointments = useMemo(() => {
+    if (!user || isAdmin || isCollaborator) return [];
+    return appointments.filter(a => a.client_id === user.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [appointments, user, isAdmin, isCollaborator]);
+
+  const upcomingAppointments = myClientAppointments.filter(a => new Date(a.date) >= new Date());
+  const pastAppointments = myClientAppointments.filter(a => new Date(a.date) < new Date()).reverse();
+
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
       team_member_name: memberName,
@@ -190,10 +199,62 @@ const App: React.FC = () => {
                   />
                 ) : (
                   <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-                    <header className="text-center space-y-4">
+                    
+                    {/* Sezione I Miei Ritual (Solo per Clienti loggati) */}
+                    {!isGuest && !isCollaborator && upcomingAppointments.length > 0 && (
+                      <section className="space-y-8 animate-in fade-in">
+                        <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">I Tuoi Prossimi Ritual</h4>
+                        <div className="grid md:grid-cols-2 gap-6">
+                          {upcomingAppointments.map(app => (
+                            <div key={app.id} className="p-8 bg-black text-white rounded-[3rem] shadow-2xl relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
+                                <i className="fas fa-calendar-check text-5xl"></i>
+                              </div>
+                              <div className="relative z-10">
+                                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1">
+                                  {new Date(app.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                </p>
+                                <h5 className="text-2xl font-luxury font-bold mb-4">{app.services?.name}</h5>
+                                <div className="flex items-center gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <i className="far fa-clock text-amber-500 text-xs"></i>
+                                    <span className="text-xs font-bold">{new Date(app.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <i className="far fa-user text-amber-500 text-xs"></i>
+                                    <span className="text-xs font-bold">{app.team_member_name}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Sezione Storico (Solo per Clienti loggati) */}
+                    {!isGuest && !isCollaborator && pastAppointments.length > 0 && (
+                      <section className="space-y-6">
+                        <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">Storico Trattamenti</h4>
+                        <div className="space-y-3">
+                          {pastAppointments.slice(0, 3).map(app => (
+                            <div key={app.id} className="flex justify-between items-center p-6 bg-white rounded-3xl border border-gray-50 opacity-60">
+                              <div>
+                                <h6 className="font-bold text-sm text-gray-900">{app.services?.name}</h6>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase">Con {app.team_member_name} • {new Date(app.date).toLocaleDateString()}</p>
+                              </div>
+                              <div className="px-4 py-1.5 bg-gray-50 rounded-full text-[8px] font-bold text-gray-400 uppercase tracking-widest">Rituale Concluso</div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    <header className="text-center space-y-4 pt-4">
                       <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
                       <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">L'Eccellenza è un Rituale</p>
                     </header>
+
                     <div className="grid md:grid-cols-2 gap-10">
                       {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
                         <div key={cat} className="space-y-6">
@@ -352,11 +413,16 @@ const App: React.FC = () => {
                team={team} 
                existingAppointments={appointments} 
                onSave={async (a) => { 
-                 const finalData = { ...a, client_id: a.client_id || user?.id };
+                 const finalData = { 
+                   ...a, 
+                   client_id: isAdmin || isCollaborator ? (a.client_id || user?.id) : user?.id 
+                 };
                  await db.appointments.upsert(finalData); 
                  setIsFormOpen(false); 
                  setFormInitialData(null);
-                 refreshData(); 
+                 await refreshData(); 
+                 // Opzionalmente forziamo il tab dashboard per mostrare l'appuntamento
+                 setActiveTab('dashboard');
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} 
