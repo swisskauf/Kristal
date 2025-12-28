@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { TeamMember, Appointment, Service } from '../types';
 
@@ -14,14 +13,13 @@ interface TeamManagementProps {
 const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, services, profiles, onSave, onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'schedule' | 'closures' | 'admin'>('analytics');
   
-  // Local states
   const [name, setName] = useState(member.name || '');
   const [role, setRole] = useState(member.role || '');
   const [workStartTime, setWorkStartTime] = useState(member.work_start_time || '08:30');
   const [workEndTime, setWorkEndTime] = useState(member.work_end_time || '18:30');
   const [breakStartTime, setBreakStartTime] = useState(member.break_start_time || '13:00');
   const [breakEndTime, setBreakEndTime] = useState(member.break_end_time || '14:00');
-  const [weeklyClosures, setWeeklyClosures] = useState<number[]>(member.weekly_closures || []);
+  const [weeklyClosures, setWeeklyClosures] = useState<number[]>(Array.isArray(member.weekly_closures) ? member.weekly_closures.map(Number) : []);
   const [unavailableDates, setUnavailableDates] = useState<string[]>(member.unavailable_dates || []);
   
   const [address, setAddress] = useState(member.address || '');
@@ -29,11 +27,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const [iban, setIban] = useState(member.iban || '');
   const [avatar, setAvatar] = useState<string | null>(member.avatar || null);
 
-  // Sync with prop when member changes (important for saving)
+  const toNums = (arr: any) => (Array.isArray(arr) ? arr.map((n: any) => Number(n)) : []);
+
   useEffect(() => {
     setName(member.name);
     setRole(member.role);
-    setWeeklyClosures(member.weekly_closures || []);
+    setWeeklyClosures(toNums(member.weekly_closures));
     setUnavailableDates(member.unavailable_dates || []);
     setWorkStartTime(member.work_start_time || '08:30');
     setWorkEndTime(member.work_end_time || '18:30');
@@ -71,8 +70,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       work_end_time: workEndTime,
       break_start_time: breakStartTime,
       break_end_time: breakEndTime,
-      weekly_closures: weeklyClosures, // array di numeri 0-6
-      unavailable_dates: unavailableDates, // array di stringhe ISO date
+      weekly_closures: Array.from(new Set(weeklyClosures.map(Number))),
+      unavailable_dates: unavailableDates,
       address,
       avs_number: avsNumber,
       iban
@@ -163,7 +162,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                     key={day.id} 
                     type="button"
                     onClick={() => toggleWeeklyClosure(day.id)} 
-                    className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase transition-all border ${weeklyClosures.includes(day.id) ? 'bg-black text-white border-black shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
+                    className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase transition-all border ${weeklyClosures.includes(day.id) ? 'bg-black text-white border-black shadow-md' : 'bg-white border-gray-100 text-gray-500 hover:border-amber-200'}`}
                   >
                     {day.label}
                   </button>
@@ -205,16 +204,16 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
         {activeSubTab === 'admin' && (
           <div className="space-y-6">
             <div className="space-y-1">
-              <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Indirizzo Residenza</label>
+              <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Indirizzo Residenza</label>
               <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
             </div>
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Numero AVS</label>
+                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Numero AVS</label>
                 <input type="text" value={avsNumber} onChange={e => setAvsNumber(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">IBAN</label>
+                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">IBAN</label>
                 <input type="text" value={iban} onChange={e => setIban(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
               </div>
             </div>
