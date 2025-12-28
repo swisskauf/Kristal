@@ -174,8 +174,7 @@ export const db = {
       if (useMock) return supabaseMock.appointments.upsert(a);
       const { services, profiles, ...clean } = a;
       const { data, error } = await client!.from("appointments").upsert(clean).select().single();
-      if (error) throw error;
-      return data;
+      return { data, error };
     },
   },
   requests: {
