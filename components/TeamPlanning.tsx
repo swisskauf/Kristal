@@ -189,78 +189,77 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                 </div>
               ))}
 
-              {hours.map(hour => {
-                const dateForSlot = viewMode === 'daily' ? weekDays[0] : null;
-                return (
-                  <React.Fragment key={hour}>
-                    <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-4 h-12">
-                       <span className="text-[7px] font-bold text-gray-300 uppercase">{hour}</span>
-                    </div>
-                    {viewMode === 'daily' ? filteredTeam.map(m => {
-                      const status = getSlotStatus(m.name, dateForSlot!, hour);
-                      
-                      const baseClass = "h-12 rounded-xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ";
-                      let content = null;
-                      let extraClass = "";
+              {hours.map(hour => (
+                <React.Fragment key={hour}>
+                  <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-4 h-12">
+                     <span className="text-[7px] font-bold text-gray-300 uppercase">{hour}</span>
+                  </div>
+                  {viewMode === 'daily'
+                    ? filteredTeam.map(m => {
+                        const dateStr = weekDays[0]; // daily mode uses the single day
+                        const status = getSlotStatus(m.name, dateStr, hour);
+                        const baseClass = "h-12 rounded-xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ";
+                        let content = null;
+                        let extraClass = "";
 
-                      if (status?.type === 'APPOINTMENT') {
-                        extraClass = "bg-black border-black text-white shadow-md z-10";
-                        if (status.isStart) {
-                          content = (
-                            <div className="text-center p-1 w-full truncate px-2">
-                               <p className="text-[7px] font-bold uppercase truncate">{status.appt.profiles?.full_name || 'Ospite'}</p>
-                               <p className="text-[5px] opacity-60 uppercase truncate">{status.appt.services?.name}</p>
-                            </div>
-                          );
+                        if (status?.type === 'APPOINTMENT') {
+                          extraClass = "bg-black border-black text-white shadow-md z-10";
+                          if (status.isStart) {
+                            content = (
+                              <div className="text-center p-1 w-full truncate px-2">
+                                 <p className="text-[7px] font-bold uppercase truncate">{status.appt.profiles?.full_name || 'Ospite'}</p>
+                                 <p className="text-[5px] opacity-60 uppercase truncate">{status.appt.services?.name}</p>
+                              </div>
+                            );
+                          }
+                        } else if (status?.type === 'CLOSURE') {
+                          extraClass = "closure-pattern border-gray-100 opacity-60";
+                          content = <span className="text-[5px] font-bold text-gray-400 uppercase">CHIUSO</span>;
+                        } else if (status?.type === 'VACATION') {
+                          extraClass = "vacation-pattern border-amber-100";
+                          content = <span className="text-[5px] font-bold text-amber-600 uppercase">ASSENTE</span>;
+                        } else if (status?.type === 'BREAK') {
+                          extraClass = "break-pattern border-amber-50";
+                          content = <span className="text-[6px] font-bold text-amber-300 uppercase">PAUSA</span>;
+                        } else if (status?.type === 'NON_WORKING') {
+                          extraClass = "bg-gray-50 border-gray-50 opacity-30 non-work-pattern";
+                        } else {
+                          extraClass = "bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/10";
                         }
-                      } else if (status?.type === 'CLOSURE') {
-                        extraClass = "closure-pattern border-gray-100 opacity-60";
-                        content = <span className="text-[5px] font-bold text-gray-400 uppercase">CHIUSO</span>;
-                      } else if (status?.type === 'VACATION') {
-                        extraClass = "vacation-pattern border-amber-100";
-                        content = <span className="text-[5px] font-bold text-amber-600 uppercase">ASSENTE</span>;
-                      } else if (status?.type === 'BREAK') {
-                        extraClass = "break-pattern border-amber-50";
-                        content = <span className="text-[6px] font-bold text-amber-300 uppercase">PAUSA</span>;
-                      } else if (status?.type === 'NON_WORKING') {
-                        extraClass = "bg-gray-50 border-gray-50 opacity-30 non-work-pattern";
-                      } else {
-                        extraClass = "bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/10";
-                      }
 
-                      return (
-                        <div 
-                          key={`${m.name}-${hour}`}
-                          onClick={() => !status && onSlotClick && onSlotClick(m.name, dateForSlot!, hour)}
-                          className={baseClass + extraClass}
-                        >
-                           {content}
-                        </div>
-                      );
-                    }) : weekDays.map(date => {
-                      const apptsAtHour = appointments.filter(a => {
-                        const dKey = toDateKeyLocal(new Date(a.date));
-                        const h = new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                        return dKey === date && h === hour && a.status !== 'cancelled';
-                      });
-                      
-                      return (
-                        <div key={`${date}-${hour}`} className="h-12 rounded-xl border border-gray-50 flex items-center justify-center bg-white">
-                          {apptsAtHour.length > 0 && (
-                            <div className="flex -space-x-1">
-                              {apptsAtHour.slice(0, 3).map((a, idx) => (
-                                <div key={idx} className="w-4 h-4 rounded-full bg-black border border-white flex itemscenter justify-center">
-                                  <span className="text-[5px] text-white font-bold">{a.team_member_name[0]}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </React.Fragment>
-                );
-              })}
+                        return (
+                          <div 
+                            key={`${m.name}-${hour}`}
+                            onClick={() => !status && onSlotClick && onSlotClick(m.name, dateStr, hour)}
+                            className={baseClass + extraClass}
+                          >
+                             {content}
+                          </div>
+                        );
+                      })
+                    : weekDays.map(date => {
+                        const status = null; // in weekly view we only show markers, not slot clicks
+                        const apptsAtHour = appointments.filter(a => {
+                          const dKey = toDateKeyLocal(new Date(a.date));
+                          const h = new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                          return dKey === date && h === hour && a.status !== 'cancelled';
+                        });
+                        return (
+                          <div key={`${date}-${hour}`} className="h-12 rounded-xl border border-gray-50 flex items-center justify-center bg-white">
+                            {apptsAtHour.length > 0 && (
+                              <div className="flex -space-x-1">
+                                {apptsAtHour.slice(0, 3).map((a, idx) => (
+                                  <div key={idx} className="w-4 h-4 rounded-full bg-black border border-white flex itemscenter justify-center">
+                                    <span className="text-[5px] text-white font-bold">{a.team_member_name[0]}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                </React.Fragment>
+              ))}
            </div>
          </div>
       </div>
