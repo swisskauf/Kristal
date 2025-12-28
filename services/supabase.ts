@@ -98,16 +98,15 @@ export const db = {
   appointments: {
     getAll: async () => {
       const appts = useMock ? supabaseMock.appointments.getAll() : (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [];
-      if (useMock) {
-        const svcs = supabaseMock.services.getAll();
-        const profs = supabaseMock.profiles.getAll();
-        return appts.map((a: any) => ({
-          ...a,
-          services: svcs.find(s => s.id === a.service_id),
-          profiles: profs.find(p => p.id === a.client_id)
-        }));
-      }
-      return appts;
+      const svcs = await db.services.getAll();
+      const profs = await db.profiles.getAll();
+      
+      // Assicura che ogni appuntamento abbia i riferimenti carichi indipendentemente dal database
+      return appts.map((a: any) => ({
+        ...a,
+        services: svcs.find(s => s.id === a.service_id) || a.services,
+        profiles: profs.find(p => p.id === a.client_id) || a.profiles
+      }));
     },
     upsert: async (a: any) => {
       if (useMock) return supabaseMock.appointments.upsert(a);
