@@ -49,6 +49,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
   const selectedService = useMemo(() => services.find((s) => s.id === serviceId), [services, serviceId]);
   const selectedMember = useMemo(() => team.find((t) => t.name === teamMemberName), [team, teamMemberName]);
+  const weeklyClosures = useMemo(
+    () => (selectedMember?.weekly_closures ? selectedMember.weekly_closures.map((n: any) => Number(n)) : []),
+    [selectedMember]
+  );
 
   const filteredProfiles = useMemo(() => {
     return profiles
@@ -74,12 +78,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
 
-    // Chiusure settimanali
     const d = new Date(`${selectedDate}T12:00:00`);
     const dayOfWeek = d.getDay();
-    if (selectedMember.weekly_closures?.includes(dayOfWeek)) return [];
+    if (weeklyClosures.includes(dayOfWeek)) return [];
 
-    // Ferie / indisponibilità
     if (selectedMember.unavailable_dates?.includes(selectedDate)) return [];
 
     const startH = parseInt((selectedMember.work_start_time || '08:30').split(':')[0], 10);
@@ -91,13 +93,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       const slotStart = h * 60 + m;
       const slotEnd = slotStart + duration;
 
-      // Evita slot già passati nel giorno corrente (+15 min di margine)
       if (selectedDate === todayStr) {
         const now = new Date();
         if (slotStart <= now.getHours() * 60 + now.getMinutes() + 15) return false;
       }
 
-      // Pausa pranzo / break
       if (selectedMember.break_start_time && selectedMember.break_end_time) {
         const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
         const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
@@ -106,7 +106,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         if (slotStart < bEnd && slotEnd > bStart) return false;
       }
 
-      // Non sforare l'orario di chiusura
       const [whE, wmE] = (selectedMember.work_end_time || '19:00').split(':').map(Number);
       if (slotEnd > whE * 60 + wmE) return false;
 
@@ -119,7 +118,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
         const appStart = appD.getHours() * 60 + appD.getMinutes();
         const appDuration =
-          // priorità: servizio annesso, poi durata sul record, altrimenti default
           (app as any)?.services?.duration ||
           (app as any)?.service?.duration ||
           (app as any)?.duration ||
@@ -140,7 +138,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       }
     }
     return slots;
-  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData?.id, teamMemberName]);
+  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData?.id, teamMemberName, weeklyClosures]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,7 +247,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               {next21Days.map((day) => {
                 const d = new Date(`${day}T12:00:00`);
                 const isSelected = selectedDate === day;
-                const isClosed = selectedMember?.weekly_closures?.includes(d.getDay());
+                const isClosed = weeklyClosures.includes(d.getDay());
                 return (
                   <button
                     key={day}
