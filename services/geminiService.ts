@@ -3,8 +3,8 @@ import { SERVICES } from "../constants";
 import { User } from "../types";
 
 const getApiKey = () =>
-  (typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY : '') ||
-  (typeof window !== 'undefined' ? (window as any)?.process?.env?.VITE_GEMINI_API_KEY : '') ||
+  (typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY : 'AIzaSyCWMuYIjw1XdmbZNqRD2PLhGTz5QhrwO6U') ||
+  (typeof window !== 'undefined' ? (window as any)?.process?.env?.VITE_GEMINI_API_KEY : 'AIzaSyCWMuYIjw1XdmbZNqRD2PLhGTz5QhrwO6U') ||
   '';
 
 export async function getAIConsultation(userPrompt: string, userProfile?: User) {
