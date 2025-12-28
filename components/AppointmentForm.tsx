@@ -28,22 +28,32 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   isAdminOrStaff = false,
   profiles = [],
 }) => {
-  // Parsing robusto della data odierna (YYYY-MM-DD)
   const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
-  // Stati inizializzati con fallback sicuri
+  // Inizializzazione sicura: assicuriamoci di avere ID validi dai props o dai fallback
   const [clientId, setClientId] = useState<string>(initialData?.client_id || '');
   const [clientSearch, setClientSearch] = useState<string>('');
-  const [serviceId, setServiceId] = useState<string>(initialData?.service_id || (services.length > 0 ? services[0].id : ''));
-  const [teamMemberName, setTeamMemberName] = useState<string>(initialData?.team_member_name || (team.length > 0 ? team[0].name : ''));
+  const [serviceId, setServiceId] = useState<string>('');
+  const [teamMemberName, setTeamMemberName] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(
     initialData?.date ? new Date(initialData.date).toLocaleDateString('en-CA') : todayStr
   );
   const [selectedTime, setSelectedTime] = useState<string>('');
 
+  // Sincronizzazione stati quando i dati caricano o cambiano
   useEffect(() => {
-    if (initialData?.service_id) setServiceId(initialData.service_id);
-    if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
+    if (services.length > 0 && !serviceId) {
+      setServiceId(initialData?.service_id || services[0].id);
+    }
+  }, [services, initialData, serviceId]);
+
+  useEffect(() => {
+    if (team.length > 0 && !teamMemberName) {
+      setTeamMemberName(initialData?.team_member_name || team[0].name);
+    }
+  }, [team, initialData, teamMemberName]);
+
+  useEffect(() => {
     if (initialData?.date) {
       const d = new Date(initialData.date);
       setSelectedTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
@@ -77,10 +87,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
 
-    // Check Chiusura Settimanale (Usiamo mezzogiorno per evitare shift TZ)
+    // Check Chiusura Settimanale (Fix critico per fusi orari: aggiungi T12:00:00)
     const d = new Date(`${selectedDate}T12:00:00`);
     const dayOfWeek = d.getDay();
     const closures = selectedMember.weekly_closures || [];
+    
+    // Se il giorno selezionato è una chiusura settimanale dell'artista
     if (closures.includes(dayOfWeek)) return [];
 
     // Check Ferie specifiche
@@ -95,13 +107,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       const slotStart = h * 60 + m;
       const slotEnd = slotStart + duration;
 
-      // Se oggi, non permettere slot passati
       if (selectedDate === todayStr) {
         const now = new Date();
         if (slotStart <= now.getHours() * 60 + now.getMinutes() + 15) return false;
       }
 
-      // Check Pausa
       if (selectedMember.break_start_time && selectedMember.break_end_time) {
         const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
         const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
@@ -110,20 +120,17 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         if (slotStart < bEnd && slotEnd > bStart) return false;
       }
 
-      // Check Fine Lavoro
       const [whE, wmE] = (selectedMember.work_end_time || '19:00').split(':').map(Number);
       if (slotEnd > whE * 60 + wmE) return false;
 
-      // Check Collisioni Appuntamenti
       const hasConflict = existingAppointments.some((app) => {
         if (app.id === initialData?.id || app.status === 'cancelled') return false;
         if (app.team_member_name !== teamMemberName) return false;
-
+        
         const appD = new Date(app.date);
         if (appD.toLocaleDateString('en-CA') !== selectedDate) return false;
 
         const appStart = appD.getHours() * 60 + appD.getMinutes();
-        // Calcolo durata appuntamento esistente (con fallback)
         const appDuration = (app as any).services?.duration || (app as any).duration || 30;
         const appEnd = appStart + appDuration;
 
@@ -145,11 +152,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedService) { alert('Scegliete un Ritual.'); return; }
-    if (isAdminOrStaff && !clientId) { alert('Scegliete un Ospite.'); return; }
-    if (!selectedTime) { alert('Scegliete un orario.'); return; }
+    if (!selectedService) return;
+    if (isAdminOrStaff && !clientId) { alert('Scegliere un Ospite.'); return; }
+    if (!selectedTime) { alert('Scegliere un orario.'); return; }
 
-    // Costruzione data ISO garantendo il fuso locale
     const [y, mo, d] = selectedDate.split('-').map(Number);
     const [hh, mm] = selectedTime.split(':').map(Number);
     const finalDate = new Date(y, mo - 1, d, hh, mm, 0).toISOString();
@@ -193,7 +199,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 >
                   <option value="" disabled>Seleziona Ospite...</option>
                   {filteredProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>{p.full_name} — {p.phone || p.email}</option>
+                    <option key={p.id} value={p.id}>{p.full_name}</option>
                   ))}
                 </select>
               </div>
@@ -268,9 +274,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                     type="button"
                     onClick={() => setSelectedTime(slot)}
                     className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 ${
-                      selectedTime === slot
-                        ? 'bg-amber-600 border-amber-600 text-white shadow-md'
-                        : 'bg-white border-gray-100 text-gray-700 hover:border-amber-200'
+                      selectedTime === slot ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white border-gray-100 text-gray-700'
                     }`}
                   >
                     {slot}
@@ -278,9 +282,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 ))
               ) : (
                 <div className="col-span-full py-8 bg-gray-50 rounded-2xl text-center border border-dashed border-gray-200">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                    Nessuna disponibilità o giorno di chiusura.
-                  </p>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase">Nessuna disponibilità.</p>
                 </div>
               )}
             </div>
@@ -289,9 +291,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
         <div className="flex gap-4 pt-8 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[9px] tracking-widest">Annulla</button>
-          <button type="submit" className="flex-[2] py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">
-            Conferma Ritual
-          </button>
+          <button type="submit" className="flex-[2] py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] shadow-xl">Conferma Ritual</button>
         </div>
       </form>
     </div>
