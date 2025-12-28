@@ -35,7 +35,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const days = [];
     const baseDate = new Date(viewDate);
     const day = baseDate.getDay();
-    const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1); // Lunedì come inizio settimana
+    const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1);
     baseDate.setDate(diff);
     
     if (viewMode === 'weekly') {
@@ -71,27 +71,25 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const getAppointmentStatus = (memberName: string, dateStr: string, hour: string) => {
     const [h, m] = hour.split(':').map(Number);
-    const targetMinutes = h * 60 + m;
+    const targetMin = h * 60 + m;
 
     const appt = appointments.find(a => {
       if (!a.team_member_name || a.team_member_name.toLowerCase() !== memberName.toLowerCase()) return false;
-      if (a.status === 'cancelled') return false;
+      if (a.status === 'cancelled' || a.status === 'noshow') return false;
       
       const appDate = new Date(a.date);
-      const appDateISO = appDate.toISOString().split('T')[0];
-      if (appDateISO !== dateStr) return false;
+      if (appDate.toISOString().split('T')[0] !== dateStr) return false;
 
-      const appStartMinutes = appDate.getHours() * 60 + appDate.getMinutes();
+      const appStartMin = appDate.getHours() * 60 + appDate.getMinutes();
       const duration = a.services?.duration || 30;
-      const appEndMinutes = appStartMinutes + duration;
+      const appEndMin = appStartMin + duration;
 
-      return targetMinutes >= appStartMinutes && targetMinutes < appEndMinutes;
+      return targetMin >= appStartMin && targetMin < appEndMin;
     });
 
     if (!appt) return null;
-
     const appDate = new Date(appt.date);
-    const appHourStr = `${appDate.getHours().toString().padStart(2, '0')}:${appDate.getMinutes().toString().padStart(2, '0')}`;
+    const appHourStr = appDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     
     return {
       appt,
@@ -111,11 +109,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getClosureType = (member: TeamMember, date: string) => {
-    const d = new Date(date);
+    const d = new Date(date + 'T12:00:00');
     const dayOfWeek = d.getDay();
     
     if (member.weekly_closures?.includes(dayOfWeek)) return 'CHIUSURA';
-    if (member.unavailable_dates?.includes(date)) return 'CONGEDO';
+    if (member.unavailable_dates?.includes(date)) return 'VACANZA';
     if (member.absences_json?.some(a => a.startDate === date && a.isFullDay)) return 'ASSENTE';
     
     return null;
@@ -132,11 +130,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           background-color: #fffbeb;
         }
         .closure-pattern {
-          background-image: repeating-linear-gradient(45deg, #f9fafb, #f9fafb 10px, #f3f4f6 10px, #f3f4f6 20px);
+          background-image: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px);
           background-color: #f9fafb;
         }
         .vacation-pattern {
-          background-image: repeating-linear-gradient(45deg, #fffbeb, #fffbeb 10px, #fef3c7 10px, #fef3c7 20px);
+          background-image: repeating-linear-gradient(45deg, #fef3c7, #fef3c7 10px, #fde68a 10px, #fde68a 20px);
           background-color: #fffbeb;
         }
       `}</style>
@@ -147,7 +145,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
             <i className="fas fa-chevron-left text-[10px]"></i>
           </button>
           <div className="text-center min-w-[180px]">
-            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Planning Atelier</h4>
+            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Atelier Planning</h4>
             <p className="text-[8px] font-bold text-amber-600 uppercase tracking-[0.2em]">
               {viewMode === 'weekly' 
                 ? `${new Date(weekDays[0]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(weekDays[6]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`
@@ -180,8 +178,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                 </div>
               )) : weekDays.map(date => (
                 <div key={date} className="text-center pb-4 border-b border-gray-50">
-                  <p className="text-[8px] font-bold text-amber-600 uppercase">{new Date(date).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
-                  <p className="text-sm font-luxury font-bold text-gray-900">{new Date(date).getDate()}</p>
+                  <p className="text-[8px] font-bold text-amber-600 uppercase">{new Date(date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short' })}</p>
+                  <p className="text-sm font-luxury font-bold text-gray-900">{new Date(date + 'T12:00:00').getDate()}</p>
                 </div>
               ))}
 
@@ -193,10 +191,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                        <span className="text-[7px] font-bold text-gray-300 uppercase">{hour}</span>
                     </div>
                     {viewMode === 'daily' ? filteredTeam.map(m => {
+                      const closureType = getClosureType(m, dateForSlot!);
                       const status = getAppointmentStatus(m.name, dateForSlot!, hour);
                       const isWork = isWorkingHour(m, hour);
                       const isBreak = isBreakHour(m, hour);
-                      const closureType = getClosureType(m, dateForSlot!);
 
                       return (
                         <div 
@@ -205,7 +203,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                           className={`h-12 rounded-xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
                             status ? 'bg-black border-black text-white shadow-md z-10' : 
                             closureType === 'CHIUSURA' ? 'closure-pattern border-gray-100' :
-                            closureType === 'CONGEDO' || closureType === 'ASSENTE' ? 'vacation-pattern border-amber-100' :
+                            closureType === 'VACANZA' || closureType === 'ASSENTE' ? 'vacation-pattern border-amber-100' :
                             isBreak ? 'break-pattern border-amber-50 opacity-50' :
                             isWork ? 'bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/10' : 'bg-gray-50 border-gray-50 opacity-30 non-work-pattern'
                           }`}
@@ -221,25 +219,23 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                         </div>
                       );
                     }) : weekDays.map(date => {
-                      // In vista settimanale, per ogni artista, se c'è un congedo lo evidenziamo
-                      const dayClosures = team.some(m => getClosureType(m, date) !== null);
+                      const allMembersClosed = team.every(m => getClosureType(m, date) !== null);
                       const apptsAtHour = appointments.filter(a => {
                         const d = new Date(a.date).toISOString().split('T')[0];
                         const dLocal = new Date(a.date);
-                        const h = dLocal.getHours().toString().padStart(2, '0') + ':' + dLocal.getMinutes().toString().padStart(2, '0');
-                        return d === date && h === hour && a.status !== 'cancelled';
+                        const h = dLocal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                        return d === date && h === hour && a.status !== 'cancelled' && a.status !== 'noshow';
                       });
                       
                       return (
-                        <div key={`${date}-${hour}`} className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center ${dayClosures ? 'bg-gray-50/50' : 'bg-white'}`}>
+                        <div key={`${date}-${hour}`} className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center ${allMembersClosed ? 'bg-gray-50/50 closure-pattern' : 'bg-white'}`}>
                           {apptsAtHour.length > 0 && (
                             <div className="flex -space-x-1">
                               {apptsAtHour.slice(0, 3).map((a, idx) => (
                                 <div key={idx} className="w-4 h-4 rounded-full bg-black border border-white flex items-center justify-center">
-                                  <span className="text-[5px] text-white">{a.team_member_name[0]}</span>
+                                  <span className="text-[5px] text-white font-bold">{a.team_member_name[0]}</span>
                                 </div>
                               ))}
-                              {apptsAtHour.length > 3 && <span className="text-[6px] ml-1 font-bold">+{apptsAtHour.length - 3}</span>}
                             </div>
                           )}
                         </div>
