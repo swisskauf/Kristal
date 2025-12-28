@@ -103,13 +103,20 @@ export const supabaseMock = {
     upsert: (member: any) => {
       const current = supabaseMock.team.getAll();
       const idx = current.findIndex(m => m.name === member.name);
+      
+      const memberToSave = {
+        ...member,
+        weekly_closures: member.weekly_closures || [],
+        unavailable_dates: member.unavailable_dates || []
+      };
+
       if (idx > -1) {
-        current[idx] = { ...current[idx], ...member };
+        current[idx] = { ...current[idx], ...memberToSave };
       } else {
-        current.push(member);
+        current.push(memberToSave);
       }
       localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(current));
-      return idx > -1 ? current[idx] : member;
+      return memberToSave;
     }
   },
   appointments: {
@@ -119,7 +126,6 @@ export const supabaseMock = {
     },
     upsert: (app: Appointment) => {
       const current = supabaseMock.appointments.getAll();
-      // Rimuoviamo campi circolari o pesanti prima di salvare
       const { services, profiles, ...cleanApp } = app;
       const existsIdx = current.findIndex(a => a.id === cleanApp.id);
       
