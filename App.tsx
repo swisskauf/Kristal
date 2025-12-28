@@ -137,10 +137,10 @@ const App: React.FC = () => {
   // Realtime appointments
   useEffect(() => {
     if (useMock) return;
-    const anySupabase: any = supabase as any;
-    if (!anySupabase.channel) return;
+    const client = supabase as unknown as any;
+    if (!client?.channel) return;
 
-    const channel = anySupabase
+    const channel = client
       .channel('realtime:appointments')
       .on(
         'postgres_changes',
@@ -170,7 +170,7 @@ const App: React.FC = () => {
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
       team_member_name: memberName,
-      date: `${date}T${hour}:00.000Z`
+      date: `${date}T${hour}:00` // locale, senza Z
     });
     setIsFormOpen(true);
   };
@@ -356,9 +356,9 @@ const App: React.FC = () => {
                    setIsFormOpen(false); 
                    setFormInitialData(null);
                    await refreshData(); 
-                 } catch (err) {
+                 } catch (err: any) {
                    console.error("Errore salvataggio appuntamento:", err);
-                   alert("Errore nel salvataggio dell'appuntamento. Controlla che il team e i servizi esistano in Supabase.");
+                   alert("Errore nel salvataggio dell'appuntamento: " + (err?.message || "sconosciuto"));
                  }
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
