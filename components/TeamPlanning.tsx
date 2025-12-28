@@ -61,61 +61,57 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const moveTime = (offset: number) => {
     const d = new Date(viewDate);
-    if (viewMode === 'weekly') {
-      d.setDate(d.getDate() + (offset * 7));
-    } else {
-      d.setDate(d.getDate() + offset);
-    }
+    if (viewMode === 'weekly') d.setDate(d.getDate() + (offset * 7));
+    else d.setDate(d.getDate() + offset);
     setViewDate(d);
   };
 
-  const getAppointmentStatus = (memberName: string, dateStr: string, hour: string) => {
+  const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
 
     const appt = appointments.find(a => {
-      if (!a.team_member_name || a.team_member_name.toLowerCase() !== memberName.toLowerCase()) return false;
-      if (a.status === 'cancelled' || a.status === 'noshow') return false;
-      
+      if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
       const appDate = new Date(a.date);
       if (appDate.toISOString().split('T')[0] !== dateStr) return false;
 
-      const appStartMin = appDate.getHours() * 60 + appDate.getMinutes();
+      const appStart = appDate.getHours() * 60 + appDate.getMinutes();
       const duration = a.services?.duration || 30;
-      const appEndMin = appStartMin + duration;
+      const appEnd = appStart + duration;
 
-      return targetMin >= appStartMin && targetMin < appEndMin;
+      return targetMin >= appStart && targetMin < appEnd;
     });
 
-    if (!appt) return null;
-    const appDate = new Date(appt.date);
-    const appHourStr = appDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    
-    return {
-      appt,
-      isStart: appHourStr === hour
-    };
-  };
+    if (appt) {
+      const appDate = new Date(appt.date);
+      const isStart = appDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) === hour;
+      return { type: 'APPOINTMENT', appt, isStart };
+    }
 
-  const isBreakHour = (member: TeamMember, hourStr: string) => {
-    if (!member.break_start_time || !member.break_end_time) return false;
-    return hourStr >= member.break_start_time && hourStr < member.break_end_time;
-  };
+    const member = team.find(t => t.name === memberName);
+    if (!member) return null;
 
-  const isWorkingHour = (member: TeamMember, hourStr: string) => {
-    const start = member.work_start_time || '08:30';
-    const end = member.work_end_time || '19:00';
-    return hourStr >= start && hourStr < end;
-  };
+    // Chiusura settimanale
+    const d = new Date(dateStr + 'T12:00:00');
+    if (member.weekly_closures?.includes(d.getDay())) return { type: 'CLOSURE' };
 
-  const getClosureType = (member: TeamMember, date: string) => {
-    const d = new Date(date + 'T12:00:00');
-    const dayOfWeek = d.getDay();
-    
-    if (member.weekly_closures?.includes(dayOfWeek)) return 'CHIUSURA';
-    if (member.unavailable_dates?.includes(date)) return 'VACANZA';
-    if (member.absences_json?.some(a => a.startDate === date && a.isFullDay)) return 'ASSENTE';
-    
+    // Ferie/Assenze
+    if (member.unavailable_dates?.includes(dateStr) || 
+        member.absences_json?.some(a => a.startDate === dateStr && a.isFullDay)) {
+      return { type: 'VACATION' };
+    }
+
+    // Pausa
+    if (member.break_start_time && member.break_end_time && 
+        hour >= member.break_start_time && hour < member.break_end_time) {
+      return { type: 'BREAK' };
+    }
+
+    // Orario Lavoro
+    if (hour < (member.work_start_time || '08:30') || hour >= (member.work_end_time || '19:00')) {
+      return { type: 'NON_WORKING' };
+    }
+
     return null;
   };
 
@@ -149,7 +145,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
             <p className="text-[8px] font-bold text-amber-600 uppercase tracking-[0.2em]">
               {viewMode === 'weekly' 
                 ? `${new Date(weekDays[0]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(weekDays[6]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`
-                : new Date(weekDays[0]).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+                : new Date(weekDays[0] + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
               }
             </p>
           </div>
@@ -191,44 +187,55 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                        <span className="text-[7px] font-bold text-gray-300 uppercase">{hour}</span>
                     </div>
                     {viewMode === 'daily' ? filteredTeam.map(m => {
-                      const closureType = getClosureType(m, dateForSlot!);
-                      const status = getAppointmentStatus(m.name, dateForSlot!, hour);
-                      const isWork = isWorkingHour(m, hour);
-                      const isBreak = isBreakHour(m, hour);
+                      const status = getSlotStatus(m.name, dateForSlot!, hour);
+                      
+                      const baseClass = "h-12 rounded-xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ";
+                      let content = null;
+                      let extraClass = "";
+
+                      if (status?.type === 'APPOINTMENT') {
+                        extraClass = "bg-black border-black text-white shadow-md z-10";
+                        if (status.isStart) {
+                          content = (
+                            <div className="text-center p-1 w-full truncate px-2">
+                               <p className="text-[7px] font-bold uppercase truncate">{status.appt.profiles?.full_name || 'Ospite'}</p>
+                               <p className="text-[5px] opacity-60 uppercase truncate">{status.appt.services?.name}</p>
+                            </div>
+                          );
+                        }
+                      } else if (status?.type === 'CLOSURE') {
+                        extraClass = "closure-pattern border-gray-100 opacity-60";
+                        content = <span className="text-[5px] font-bold text-gray-400 uppercase">CHIUSO</span>;
+                      } else if (status?.type === 'VACANZA' || status?.type === 'ASSENTE') {
+                        extraClass = "vacation-pattern border-amber-100";
+                        content = <span className="text-[5px] font-bold text-amber-600 uppercase">ASSENTE</span>;
+                      } else if (status?.type === 'BREAK') {
+                        extraClass = "break-pattern border-amber-50";
+                        content = <span className="text-[6px] font-bold text-amber-300 uppercase">PAUSA</span>;
+                      } else if (status?.type === 'NON_WORKING') {
+                        extraClass = "bg-gray-50 border-gray-50 opacity-30 non-work-pattern";
+                      } else {
+                        extraClass = "bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/10";
+                      }
 
                       return (
                         <div 
                           key={`${m.name}-${hour}`}
-                          onClick={() => !status && !isBreak && isWork && !closureType && onSlotClick && onSlotClick(m.name, dateForSlot!, hour)}
-                          className={`h-12 rounded-xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
-                            status ? 'bg-black border-black text-white shadow-md z-10' : 
-                            closureType === 'CHIUSURA' ? 'closure-pattern border-gray-100' :
-                            closureType === 'VACANZA' || closureType === 'ASSENTE' ? 'vacation-pattern border-amber-100' :
-                            isBreak ? 'break-pattern border-amber-50 opacity-50' :
-                            isWork ? 'bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/10' : 'bg-gray-50 border-gray-50 opacity-30 non-work-pattern'
-                          }`}
+                          onClick={() => !status && onSlotClick && onSlotClick(m.name, dateForSlot!, hour)}
+                          className={baseClass + extraClass}
                         >
-                           {status?.isStart && (
-                             <div className="text-center p-1 w-full truncate px-2">
-                                <p className="text-[7px] font-bold uppercase truncate">{status.appt.profiles?.full_name || 'Ospite'}</p>
-                                <p className="text-[5px] opacity-60 uppercase truncate">{status.appt.services?.name}</p>
-                             </div>
-                           )}
-                           {closureType && !status && <span className="text-[5px] font-bold uppercase text-gray-300">{closureType}</span>}
-                           {isBreak && !status && !closureType && <span className="text-[6px] font-bold text-amber-300 uppercase">PAUSA</span>}
+                           {content}
                         </div>
                       );
                     }) : weekDays.map(date => {
-                      const allMembersClosed = team.every(m => getClosureType(m, date) !== null);
                       const apptsAtHour = appointments.filter(a => {
                         const d = new Date(a.date).toISOString().split('T')[0];
-                        const dLocal = new Date(a.date);
-                        const h = dLocal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                        return d === date && h === hour && a.status !== 'cancelled' && a.status !== 'noshow';
+                        const h = new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                        return d === date && h === hour && a.status !== 'cancelled';
                       });
                       
                       return (
-                        <div key={`${date}-${hour}`} className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center ${allMembersClosed ? 'bg-gray-50/50 closure-pattern' : 'bg-white'}`}>
+                        <div key={`${date}-${hour}`} className="h-12 rounded-xl border border-gray-50 flex items-center justify-center bg-white">
                           {apptsAtHour.length > 0 && (
                             <div className="flex -space-x-1">
                               {apptsAtHour.slice(0, 3).map((a, idx) => (
