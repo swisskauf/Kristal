@@ -26,7 +26,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   requests = [], 
   isCollaborator = false 
 }) => {
-  // Vista di default: daily (anche per admin) così vedi subito i blocchi
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>('daily');
   const [viewDate, setViewDate] = useState(new Date());
 
