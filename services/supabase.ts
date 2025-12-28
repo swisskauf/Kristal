@@ -54,7 +54,12 @@ const mockAuth = {
     const user = {
       id: "mock-user-" + Date.now(),
       email,
-      fullName: role === "admin" ? "Direzione Kristal" : role === "collaborator" ? "Maurizio Stylist" : "Ospite Kristal",
+      fullName:
+        role === "admin"
+          ? "Direzione Kristal"
+          : role === "collaborator"
+          ? "Maurizio Stylist"
+          : "Ospite Kristal",
       role,
     };
     supabaseMock.auth.signIn(user as any);
