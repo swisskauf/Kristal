@@ -285,7 +285,23 @@ const App: React.FC = () => {
             <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black transition-all">
               <i className="fas fa-times text-2xl"></i>
             </button>
-            <TeamManagement member={selectedMemberToManage} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); setSelectedMemberToManage(null); refreshData(); }} onClose={() => setSelectedMemberToManage(null)} />
+            <TeamManagement
+              member={selectedMemberToManage}
+              appointments={appointments}
+              services={services}
+              profiles={profiles}
+              onSave={async (m) => {
+                try {
+                  await db.team.upsert(m);
+                  await refreshData();
+                  setSelectedMemberToManage(null);
+                } catch (err: any) {
+                  console.error("Errore salvataggio team:", err);
+                  alert("Errore nel salvataggio delle indisponibilità: " + (err?.message || "sconosciuto"));
+                }
+              }}
+              onClose={() => setSelectedMemberToManage(null)}
+            />
           </div>
         </div>
       )}
