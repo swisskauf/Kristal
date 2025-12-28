@@ -12,7 +12,7 @@ import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
 import AIAssistant from './components/AIAssistant';
 import { supabase, db, useMock } from './services/supabase';
-import { Service, User, TeamMember, Appointment, LeaveRequest, TechnicalSheet } from './types';
+import { Service, User, TeamMember, Appointment, LeaveRequest } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
 const toDateKeyLocal = (d: Date) =>
@@ -106,6 +106,7 @@ const App: React.FC = () => {
     }
   }, [user?.id, ensureSeedData]);
 
+  // Auth listener
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
@@ -133,6 +134,28 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Realtime appointments
+  useEffect(() => {
+    if (useMock) return;
+    const anySupabase: any = supabase as any;
+    if (!anySupabase.channel) return;
+
+    const channel = anySupabase
+      .channel('realtime:appointments')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'appointments' },
+        () => {
+          refreshData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { channel.unsubscribe(); } catch {}
+    };
+  }, [refreshData]);
+
   useEffect(() => { if (!loading) refreshData(); }, [loading, refreshData]);
 
   const handleLogout = async () => {
@@ -145,7 +168,6 @@ const App: React.FC = () => {
   }, [user, team]);
 
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
-    // date già formattata YYYY-MM-DD, hour HH:MM
     setFormInitialData({
       team_member_name: memberName,
       date: `${date}T${hour}:00.000Z`
