@@ -95,6 +95,8 @@ export const supabase = client || {
   }),
 };
 
+const normalizeWeekly = (w: any) => (Array.isArray(w) ? w.map((n) => Number(n)) : []);
+
 export const db = {
   profiles: {
     getAll: async () => {
@@ -135,11 +137,15 @@ export const db = {
       if (useMock) return supabaseMock.team.getAll();
       const { data, error } = await client!.from("team_members").select("*");
       if (error) throw error;
-      return data || [];
+      return (data || []).map((m: any) => ({
+        ...m,
+        weekly_closures: normalizeWeekly(m.weekly_closures),
+      }));
     },
     upsert: async (m: any) => {
       if (useMock) return supabaseMock.team.upsert(m);
-      const { data, error } = await client!.from("team_members").upsert(m).select().single();
+      const payload = { ...m, weekly_closures: normalizeWeekly(m.weekly_closures) };
+      const { data, error } = await client!.from("team_members").upsert(payload).select().single();
       if (error) throw error;
       return data;
     },
