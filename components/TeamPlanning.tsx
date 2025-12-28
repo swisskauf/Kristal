@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { TeamMember, Appointment, AbsenceType } from '../types';
 
@@ -69,7 +68,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getAppointmentStatus = (memberName: string, dateStr: string, hour: string) => {
-    // Normalizziamo il tempo target in minuti dall'inizio della giornata per un confronto sicuro
     const [h, m] = hour.split(':').map(Number);
     const targetMinutes = h * 60 + m;
 
@@ -80,7 +78,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       const appDateISO = appDate.toISOString().split('T')[0];
       if (appDateISO !== dateStr) return false;
 
-      const appStartMinutes = appDate.getUTCHours() * 60 + appDate.getUTCMinutes();
+      // Usiamo i minuti locali per il confronto nell'agenda UI
+      const appStartMinutes = appDate.getHours() * 60 + appDate.getMinutes();
       const duration = a.services?.duration || 30;
       const appEndMinutes = appStartMinutes + duration;
 
@@ -90,7 +89,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     if (!appt) return null;
 
     const appDate = new Date(appt.date);
-    const appHourStr = `${appDate.getUTCHours().toString().padStart(2, '0')}:${appDate.getUTCMinutes().toString().padStart(2, '0')}`;
+    const appHourStr = `${appDate.getHours().toString().padStart(2, '0')}:${appDate.getMinutes().toString().padStart(2, '0')}`;
     
     return {
       appt,
@@ -221,7 +220,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     }) : weekDays.map(date => {
                       const apptsAtHour = appointments.filter(a => {
                         const d = new Date(a.date).toISOString().split('T')[0];
-                        const h = new Date(a.date).getUTCHours().toString().padStart(2, '0') + ':' + new Date(a.date).getUTCMinutes().toString().padStart(2, '0');
+                        const dLocal = new Date(a.date);
+                        const h = dLocal.getHours().toString().padStart(2, '0') + ':' + dLocal.getMinutes().toString().padStart(2, '0');
                         return d === date && h === hour;
                       });
                       
