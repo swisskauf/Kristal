@@ -168,7 +168,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     const [y, mo, d] = selectedDate.split('-').map(Number);
     const [hh, mm] = selectedTime.split(':').map(Number);
     const localDate = new Date(y, mo - 1, d, hh, mm, 0);
-    const finalDate = localDate.toISOString(); // UTC coerente con il giorno/orario scelto
+    const finalDate = localDate.toISOString(); // UTC coerente con giorno/orario scelti
 
     onSave({
       id: initialData?.id,
