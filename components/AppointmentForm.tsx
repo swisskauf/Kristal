@@ -165,8 +165,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       return;
     }
 
-    // Salvataggio locale (no Z) per evitare slittamenti
-    const finalDate = `${selectedDate}T${selectedTime}:00`;
+    const [y, mo, d] = selectedDate.split('-').map(Number);
+    const [hh, mm] = selectedTime.split(':').map(Number);
+    const localDate = new Date(y, mo - 1, d, hh, mm, 0);
+    const finalDate = localDate.toISOString(); // UTC coerente con il giorno/orario scelto
 
     onSave({
       id: initialData?.id,
