@@ -11,6 +11,12 @@ interface TeamPlanningProps {
   isCollaborator?: boolean;
 }
 
+const toDateKeyLocal = (d: Date) =>
+  `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d
+    .getDate()
+    .toString()
+    .padStart(2, '0')}`;
+
 const TeamPlanning: React.FC<TeamPlanningProps> = ({ 
   team, 
   appointments, 
@@ -41,10 +47,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       for (let i = 0; i < 7; i++) {
         const d = new Date(baseDate);
         d.setDate(baseDate.getDate() + i);
-        days.push(d.toISOString().split('T')[0]);
+        days.push(toDateKeyLocal(d));
       }
     } else {
-      days.push(viewDate.toISOString().split('T')[0]);
+      days.push(toDateKeyLocal(viewDate));
     }
     return days;
   }, [viewDate, viewMode]);
@@ -72,10 +78,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const appt = appointments.find(a => {
       if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
       const appDate = new Date(a.date);
-      if (appDate.toISOString().split('T')[0] !== dateStr) return false;
+      if (toDateKeyLocal(appDate) !== dateStr) return false;
 
       const appStart = appDate.getHours() * 60 + appDate.getMinutes();
-      const duration = a.services?.duration || 30;
+      const duration = a.services?.duration || (a as any)?.duration || 30;
       const appEnd = appStart + duration;
 
       return targetMin >= appStart && targetMin < appEnd;
@@ -233,9 +239,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       );
                     }) : weekDays.map(date => {
                       const apptsAtHour = appointments.filter(a => {
-                        const d = new Date(a.date).toISOString().split('T')[0];
+                        const dKey = toDateKeyLocal(new Date(a.date));
                         const h = new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                        return d === date && h === hour && a.status !== 'cancelled';
+                        return dKey === date && h === hour && a.status !== 'cancelled';
                       });
                       
                       return (
