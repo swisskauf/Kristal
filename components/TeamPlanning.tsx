@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { TeamMember, Appointment } from '../types';
 
@@ -95,9 +94,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const d = new Date(dateStr + 'T12:00:00');
     if (member.weekly_closures?.includes(d.getDay())) return { type: 'CLOSURE' };
 
-    // Ferie/Assenze
-    if (member.unavailable_dates?.includes(dateStr) || 
-        member.absences_json?.some(a => a.startDate === dateStr && a.isFullDay)) {
+    // Ferie/Assenze (robusto su diverse chiavi)
+    const hasFullDayAbsence = member.absences_json?.some(a => {
+      const start = a.startDate || a.start_date;
+      const full = a.isFullDay || a.is_full_day;
+      return start === dateStr && full;
+    });
+    if (member.unavailable_dates?.includes(dateStr) || hasFullDayAbsence) {
       return { type: 'VACATION' };
     }
 
@@ -155,8 +158,12 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         </div>
 
         <div className="flex bg-gray-50/80 p-1 rounded-2xl border border-gray-100">
-          <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Settimana</button>
-          <button onClick={() => setViewMode('daily')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Giorno</button>
+          <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>
+            Settimana
+          </button>
+          <button onClick={() => setViewMode('daily')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>
+            Giorno
+          </button>
         </div>
       </div>
 
@@ -206,7 +213,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       } else if (status?.type === 'CLOSURE') {
                         extraClass = "closure-pattern border-gray-100 opacity-60";
                         content = <span className="text-[5px] font-bold text-gray-400 uppercase">CHIUSO</span>;
-                      } else if (status?.type === 'VACANZA' || status?.type === 'ASSENTE') {
+                      } else if (status?.type === 'VACATION') {
                         extraClass = "vacation-pattern border-amber-100";
                         content = <span className="text-[5px] font-bold text-amber-600 uppercase">ASSENTE</span>;
                       } else if (status?.type === 'BREAK') {
