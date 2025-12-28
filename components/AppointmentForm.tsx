@@ -23,28 +23,28 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   isAdminOrStaff = false,
   profiles = [] 
 }) => {
+  // Stati locali con fallback robusti
   const [clientId, setClientId] = useState(initialData?.client_id || '');
   const [clientSearch, setClientSearch] = useState('');
-  const [serviceId, setServiceId] = useState(initialData?.service_id || services[0]?.id || '');
-  const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || team[0]?.name || '');
+  const [serviceId, setServiceId] = useState(initialData?.service_id || '');
+  const [teamMemberName, setTeamMemberName] = useState(initialData?.team_member_name || '');
   
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  
-  const [selectedDate, setSelectedDate] = useState<string>(
-    initialData?.date ? initialData.date.split('T')[0] : todayStr
-  );
-  const [selectedTime, setSelectedTime] = useState<string>(
-    initialData?.date ? new Date(initialData.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
-  );
+  const [selectedDate, setSelectedDate] = useState<string>(initialData?.date ? initialData.date.split('T')[0] : todayStr);
+  const [selectedTime, setSelectedTime] = useState<string>('');
 
+  // Sincronizzazione iniziale e aggiornamenti props
   useEffect(() => {
+    if (!serviceId && services.length > 0) setServiceId(services[0].id);
+    if (!teamMemberName && team.length > 0) setTeamMemberName(team[0].name);
+    
+    if (initialData?.service_id) setServiceId(initialData.service_id);
     if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
     if (initialData?.date) {
       const d = new Date(initialData.date);
-      setSelectedDate(d.toISOString().split('T')[0]);
       setSelectedTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
     }
-  }, [initialData]);
+  }, [initialData, services, team]);
 
   const selectedService = useMemo(() => services.find(s => s.id === serviceId), [services, serviceId]);
   const selectedMember = useMemo(() => team.find(t => t.name === teamMemberName), [team, teamMemberName]);
@@ -70,72 +70,69 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
     
-    // Usiamo mezzogiorno per evitare shift di data dovuti al fuso orario durante getDay()
+    // 1. Controllo Giorno di Chiusura Settimanale
     const d = new Date(selectedDate + 'T12:00:00');
     const dayOfWeek = d.getDay();
-
-    // 1. Controllo Chiusura Settimanale
     if (selectedMember.weekly_closures?.includes(dayOfWeek)) return [];
 
-    // 2. Controllo Assenze specifiche
+    // 2. Controllo Assenze/Vacanze
     const isOff = selectedMember.unavailable_dates?.includes(selectedDate) || 
                   selectedMember.absences_json?.some(a => a.startDate === selectedDate && a.isFullDay);
     if (isOff) return [];
 
-    const startHour = selectedMember.work_start_time ? parseInt(selectedMember.work_start_time.split(':')[0], 10) : 8;
-    const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 19;
+    const startH = parseInt((selectedMember.work_start_time || '08:30').split(':')[0]);
+    const endH = parseInt((selectedMember.work_end_time || '19:00').split(':')[0]);
     
     const slots = [];
-    const serviceDuration = selectedService.duration;
+    const duration = selectedService.duration;
 
-    const checkOverlap = (timeStr: string) => {
+    const isSlotAvailable = (timeStr: string) => {
       const [h, m] = timeStr.split(':').map(Number);
-      const slotStartMin = h * 60 + m;
-      const slotEndMin = slotStartMin + serviceDuration;
+      const slotStart = h * 60 + m;
+      const slotEnd = slotStart + duration;
 
-      // Controllo ora attuale
+      // Filtro orario passato
       if (selectedDate === todayStr) {
         const now = new Date();
-        const nowMin = now.getHours() * 60 + now.getMinutes();
-        if (slotStartMin <= nowMin + 20) return false;
+        if (slotStart <= now.getHours() * 60 + now.getMinutes() + 15) return false;
       }
 
-      // Controllo Pausa
+      // Filtro Pausa Pranzo
       if (selectedMember.break_start_time && selectedMember.break_end_time) {
-        const [bhS, bmS] = selectedMember.break_start_time.split(':').map(Number);
-        const [bhE, bmE] = selectedMember.break_end_time.split(':').map(Number);
-        const bStart = bhS * 60 + bmS;
-        const bEnd = bhE * 60 + bmE;
-        if (slotStartMin < bEnd && slotEndMin > bStart) return false;
+        const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
+        const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
+        const bStart = bsH * 60 + bsM;
+        const bEnd = beH * 60 + beM;
+        if (slotStart < bEnd && slotEnd > bStart) return false;
       }
 
-      // Controllo Fine Orario
+      // Filtro Fine Giornata
       const [whE, wmE] = (selectedMember.work_end_time || '19:00').split(':').map(Number);
-      const workEnd = whE * 60 + wmE;
-      if (slotEndMin > workEnd) return false;
+      if (slotEnd > (whE * 60 + wmE)) return false;
 
-      // 5. Collisione Appuntamenti (Precisa)
-      const conflict = existingAppointments.some(app => {
-        if (app.id === initialData?.id || app.status === 'cancelled' || app.status === 'noshow') return false;
+      // 3. Collisione con Appuntamenti Esistenti
+      const hasConflict = existingAppointments.some(app => {
+        if (app.id === initialData?.id || app.status === 'cancelled') return false;
         if (app.team_member_name !== teamMemberName) return false;
         
-        const appDate = new Date(app.date);
-        if (appDate.toISOString().split('T')[0] !== selectedDate) return false;
+        const appD = new Date(app.date);
+        if (appD.toISOString().split('T')[0] !== selectedDate) return false;
 
-        const appStartMin = appDate.getHours() * 60 + appDate.getMinutes();
+        const appStart = appD.getHours() * 60 + appD.getMinutes();
         const appDuration = app.services?.duration || 30;
-        const appEndMin = appStartMin + appDuration;
+        const appEnd = appStart + appDuration;
 
-        return slotStartMin < appEndMin && slotEndMin > appStartMin;
+        // Se l'intervallo richiesto si sovrappone a uno esistente
+        return slotStart < appEnd && slotEnd > appStart;
       });
 
-      return !conflict;
+      return !hasConflict;
     };
 
-    for (let h = startHour; h <= endHour; h++) {
+    for (let h = startH; h <= endH; h++) {
       for (let m of ['00', '30']) {
-        const timeStr = `${h.toString().padStart(2, '0')}:${m}`;
-        if (checkOverlap(timeStr)) slots.push(timeStr);
+        const t = `${h.toString().padStart(2, '0')}:${m}`;
+        if (isSlotAvailable(t)) slots.push(t);
       }
     }
     return slots;
@@ -143,8 +140,9 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isAdminOrStaff && !clientId) { alert("Selezionate un Ospite."); return; }
-    if (!selectedTime) { alert("Scegliete un orario."); return; }
+    if (!serviceId) { alert("Scegli un Ritual."); return; }
+    if (isAdminOrStaff && !clientId) { alert("Scegli un Ospite."); return; }
+    if (!selectedTime) { alert("Scegli un orario."); return; }
 
     const finalDate = new Date(`${selectedDate}T${selectedTime}:00`).toISOString();
     onSave({
@@ -160,18 +158,18 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     <div className="animate-in fade-in zoom-in-95 duration-500">
       <form onSubmit={handleSubmit} className="space-y-10">
         <header className="mb-6">
-          <h3 className="text-2xl font-luxury font-bold text-gray-900">Configurazione Ritual</h3>
-          <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mt-1">Prenotazione Diretta</p>
+          <h3 className="text-2xl font-luxury font-bold text-gray-900">Nuovo Ritual</h3>
+          <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mt-1">Configurazione Esperienza</p>
         </header>
 
         <div className="space-y-8">
           {isAdminOrStaff && (
             <div className="space-y-4">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Cerca Ospite</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Ospite</label>
               <div className="relative">
                 <input 
                   type="text" 
-                  placeholder="Nome, email o telefono..."
+                  placeholder="Cerca per nome o telefono..."
                   value={clientSearch}
                   onChange={(e) => setClientSearch(e.target.value)}
                   className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all mb-2"
@@ -183,9 +181,9 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                   required
                   className="w-full p-4 rounded-3xl bg-white border border-gray-100 outline-none font-medium text-sm shadow-sm transition-all scrollbar-hide"
                 >
-                  <option value="" disabled>Seleziona Ospite...</option>
+                  <option value="" disabled>Seleziona dall'elenco...</option>
                   {filteredProfiles.map(p => (
-                    <option key={p.id} value={p.id}>{p.full_name} ({p.phone || p.email})</option>
+                    <option key={p.id} value={p.id}>{p.full_name} — {p.phone || p.email}</option>
                   ))}
                 </select>
               </div>
@@ -194,13 +192,13 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Ritual</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Servizio</label>
               <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
-                {services.map(s => <option key={s.id} value={s.id}>{s.name} — {s.duration} min</option>)}
+                {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.duration} min)</option>)}
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Artista</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Collaboratore</label>
               <select value={teamMemberName} onChange={(e) => setTeamMemberName(e.target.value)} className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm shadow-sm transition-all">
                 {team.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
               </select>
@@ -208,7 +206,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
 
           <div className="space-y-4">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Calendario</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Data</label>
             <div className="flex space-x-3 overflow-x-auto pb-4 scrollbar-hide">
               {next21Days.map(day => {
                 const d = new Date(day + 'T12:00:00');
@@ -235,7 +233,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
 
           <div className="space-y-4">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Orario disponibile</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Slot Disponibili</label>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
               {availableSlots.length > 0 ? availableSlots.map(slot => (
                 <button key={slot} type="button" onClick={() => setSelectedTime(slot)} className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 ${selectedTime === slot ? 'bg-amber-600 text-white border-amber-600 shadow-xl' : 'bg-white border-gray-50 text-gray-500 hover:border-black hover:text-black'}`}>
@@ -243,7 +241,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 </button>
               )) : (
                 <div className="col-span-full py-8 bg-gray-50 rounded-2xl text-center border border-dashed border-gray-200">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità per questa data.</p>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità o giorno di chiusura.</p>
                 </div>
               )}
             </div>
@@ -253,7 +251,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         <div className="flex gap-4 pt-8 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[9px] tracking-widest">Annulla</button>
           <button type="submit" className="flex-[2] py-4 bg-black text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">
-            {initialData?.id ? 'Aggiorna Ritual' : 'Conferma Prenotazione'}
+            Conferma Ritual
           </button>
         </div>
       </form>
