@@ -3,25 +3,26 @@ import { SERVICES } from "../constants";
 import { User } from "../types";
 
 const getApiKey = () =>
-  (typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY : 'AIzaSyCWMuYIjw1XdmbZNqRD2PLhGTz5QhrwO6U') ||
-  (typeof window !== 'undefined' ? (window as any)?.process?.env?.VITE_GEMINI_API_KEY : 'AIzaSyCWMuYIjw1XdmbZNqRD2PLhGTz5QhrwO6U') ||
-  '';
+  (typeof import.meta !== "undefined" ? (import.meta as any).env?.VITE_GEMINI_API_KEY : "AIzaSyCWMuYIjw1XdmbZNqRD2PLhGTz5QhrwO6U") ||
+  (typeof window !== "undefined" ? (window as any)?.process?.env?.VITE_GEMINI_API_KEY : "AIzaSyCWMuYIjw1XdmbZNqRD2PLhGTz5QhrwO6U") ||
+  "";
 
 export async function getAIConsultation(userPrompt: string, userProfile?: User) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.warn("Gemini API key mancante: restituisco risposta di fallback.");
+    console.warn("Gemini API key mancante: risposta di fallback.");
     return "Siamo qui per voi. Prenotate un Ritual e vi accogliamo in atelier con una consulenza dedicata.";
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const serviceList = SERVICES.map(s => `${s.name} (${s.category}) - CHF ${s.price}`).join(', ');
+  const serviceList = SERVICES.map((s) => `${s.name} (${s.category}) - CHF ${s.price}`).join(", ");
 
   let historyContext = "";
   if (userProfile?.treatment_history?.length) {
-    historyContext = `L'ospite si chiama ${userProfile.fullName}. Storico trattamenti: ${
-      userProfile.treatment_history.slice(-2).map(h => `${h.service}`).join(', ')
-    }.`;
+    historyContext = `L'ospite si chiama ${userProfile.fullName}. Storico trattamenti: ${userProfile.treatment_history
+      .slice(-2)
+      .map((h) => `${h.service}`)
+      .join(", ")}.`;
   }
 
   const systemInstruction = `Sei la Concierge AI di "Kristal", atelier di bellezza luxury a salonekristal.ch.
@@ -39,23 +40,23 @@ export async function getAIConsultation(userPrompt: string, userProfile?: User) 
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.0-flash', // versione stabile
+      model: "gemini-3.0-flash",
       contents: [{ parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction,
-        tools: [{ googleSearch: {} }]
-      }
+        tools: [{ googleSearch: {} }],
+      },
     });
 
     const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     let text = response.text || "La vostra bellezza merita silenzio e cura. Vi aspettiamo in atelier.";
-    
+
     if (grounding?.length) {
       const sources = grounding
         .map((chunk: any) => chunk.web)
         .filter(Boolean)
         .map((web: any) => `\n- [${web.title}](${web.uri})`)
-        .join('');
+        .join("");
       if (sources) text += `\n\nFonti ed approfondimenti:${sources}`;
     }
 
