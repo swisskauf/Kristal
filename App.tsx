@@ -15,6 +15,11 @@ import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, TechnicalSheet } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
+const toDateKeyLocal = (d: Date) =>
+  `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate()
+    .toString()
+    .padStart(2, '0')}`;
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,6 +145,7 @@ const App: React.FC = () => {
   }, [user, team]);
 
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
+    // date già formattata YYYY-MM-DD, hour HH:MM
     setFormInitialData({
       team_member_name: memberName,
       date: `${date}T${hour}:00.000Z`
