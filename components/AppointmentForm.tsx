@@ -34,7 +34,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     initialData?.date ? initialData.date.split('T')[0] : todayStr
   );
   const [selectedTime, setSelectedTime] = useState<string>(
-    initialData?.date ? new Date(initialData.date).toTimeString().substring(0, 5) : ''
+    initialData?.date ? new Date(initialData.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
   );
 
   useEffect(() => {
@@ -42,7 +42,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (initialData?.date) {
       const d = new Date(initialData.date);
       setSelectedDate(d.toISOString().split('T')[0]);
-      setSelectedTime(d.toTimeString().substring(0, 5));
+      setSelectedTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
     }
   }, [initialData]);
 
@@ -52,14 +52,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const filteredProfiles = useMemo(() => {
     return profiles.filter(p => 
       p.full_name.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      p.email?.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      p.phone?.includes(clientSearch)
+      (p.email && p.email.toLowerCase().includes(clientSearch.toLowerCase())) ||
+      (p.phone && p.phone.includes(clientSearch))
     ).sort((a,b) => a.full_name.localeCompare(b.full_name));
   }, [profiles, clientSearch]);
 
-  const next14Days = useMemo(() => {
+  const next21Days = useMemo(() => {
     const days = [];
-    for (let i = 0; i < 21; i++) { // Esteso a 21 giorni per miglior visione
+    for (let i = 0; i < 21; i++) {
       const d = new Date();
       d.setDate(d.getDate() + i);
       days.push(d.toISOString().split('T')[0]);
@@ -70,13 +70,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
     
-    const d = new Date(selectedDate);
+    // Usiamo mezzogiorno per evitare shift di data dovuti al fuso orario durante getDay()
+    const d = new Date(selectedDate + 'T12:00:00');
     const dayOfWeek = d.getDay();
 
     // 1. Controllo Chiusura Settimanale
     if (selectedMember.weekly_closures?.includes(dayOfWeek)) return [];
 
-    // 2. Controllo Assenze specifiche (Ferie/Congedi)
+    // 2. Controllo Assenze specifiche
     const isOff = selectedMember.unavailable_dates?.includes(selectedDate) || 
                   selectedMember.absences_json?.some(a => a.startDate === selectedDate && a.isFullDay);
     if (isOff) return [];
@@ -85,56 +86,56 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     const endHour = selectedMember.work_end_time ? parseInt(selectedMember.work_end_time.split(':')[0], 10) : 19;
     
     const slots = [];
-    const durationMinutes = selectedService.duration;
+    const serviceDuration = selectedService.duration;
 
-    const isIntervalFree = (timeStr: string) => {
-      // Usiamo una base date per i calcoli dei minuti per evitare problemi di fuso orario nel confronto locale
+    const checkOverlap = (timeStr: string) => {
       const [h, m] = timeStr.split(':').map(Number);
-      const slotStartMinutes = h * 60 + m;
-      const slotEndMinutes = slotStartMinutes + durationMinutes;
+      const slotStartMin = h * 60 + m;
+      const slotEndMin = slotStartMin + serviceDuration;
 
-      // Controllo ora attuale se oggi
+      // Controllo ora attuale
       if (selectedDate === todayStr) {
         const now = new Date();
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (slotStartMinutes <= nowMinutes + 15) return false; // Almeno 15 min di preavviso
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        if (slotStartMin <= nowMin + 20) return false;
       }
-      
-      // 3. Controllo Pausa Pranzo
+
+      // Controllo Pausa
       if (selectedMember.break_start_time && selectedMember.break_end_time) {
         const [bhS, bmS] = selectedMember.break_start_time.split(':').map(Number);
         const [bhE, bmE] = selectedMember.break_end_time.split(':').map(Number);
         const bStart = bhS * 60 + bmS;
         const bEnd = bhE * 60 + bmE;
-        if (slotStartMinutes < bEnd && slotEndMinutes > bStart) return false;
+        if (slotStartMin < bEnd && slotEndMin > bStart) return false;
       }
 
-      // 4. Controllo Fine Orario
+      // Controllo Fine Orario
       const [whE, wmE] = (selectedMember.work_end_time || '19:00').split(':').map(Number);
       const workEnd = whE * 60 + wmE;
-      if (slotEndMinutes > workEnd) return false;
+      if (slotEndMin > workEnd) return false;
 
-      // 5. Controllo Collisione Appuntamenti (Esatto)
-      return !existingAppointments.some(app => {
-        if (app.id === initialData?.id || app.status === 'cancelled') return false;
+      // 5. Collisione Appuntamenti (Precisa)
+      const conflict = existingAppointments.some(app => {
+        if (app.id === initialData?.id || app.status === 'cancelled' || app.status === 'noshow') return false;
         if (app.team_member_name !== teamMemberName) return false;
         
         const appDate = new Date(app.date);
-        const appDateISO = appDate.toISOString().split('T')[0];
-        if (appDateISO !== selectedDate) return false;
+        if (appDate.toISOString().split('T')[0] !== selectedDate) return false;
 
-        const appStartMinutes = appDate.getHours() * 60 + appDate.getMinutes();
+        const appStartMin = appDate.getHours() * 60 + appDate.getMinutes();
         const appDuration = app.services?.duration || 30;
-        const appEndMinutes = appStartMinutes + appDuration;
+        const appEndMin = appStartMin + appDuration;
 
-        return slotStartMinutes < appEndMinutes && slotEndMinutes > appStartMinutes;
+        return slotStartMin < appEndMin && slotEndMin > appStartMin;
       });
+
+      return !conflict;
     };
 
     for (let h = startHour; h <= endHour; h++) {
       for (let m of ['00', '30']) {
         const timeStr = `${h.toString().padStart(2, '0')}:${m}`;
-        if (isIntervalFree(timeStr)) slots.push(timeStr);
+        if (checkOverlap(timeStr)) slots.push(timeStr);
       }
     }
     return slots;
@@ -209,8 +210,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           <div className="space-y-4">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Calendario</label>
             <div className="flex space-x-3 overflow-x-auto pb-4 scrollbar-hide">
-              {next14Days.map(day => {
-                const d = new Date(day);
+              {next21Days.map(day => {
+                const d = new Date(day + 'T12:00:00');
                 const isSelected = selectedDate === day;
                 const isClosed = selectedMember?.weekly_closures?.includes(d.getDay());
                 return (
