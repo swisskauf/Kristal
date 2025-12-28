@@ -171,7 +171,10 @@ export const db = {
       }));
     },
     upsert: async (a: any) => {
-      if (useMock) return supabaseMock.appointments.upsert(a);
+      if (useMock) {
+        const data = supabaseMock.appointments.upsert(a);
+        return { data, error: null };
+      }
       const { services, profiles, ...clean } = a;
       const { data, error } = await client!.from("appointments").upsert(clean).select().single();
       return { data, error };
