@@ -25,14 +25,12 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Data States
   const [appointments, setAppointments] = useState<any[]>([]);
   const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
   const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   
-  // UI Control States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<any>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -106,7 +104,6 @@ const App: React.FC = () => {
     }
   }, [user?.id, ensureSeedData]);
 
-  // Auth listener
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
@@ -134,7 +131,6 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime appointments
   useEffect(() => {
     if (useMock) return;
     const client = supabase as unknown as any;
@@ -170,7 +166,7 @@ const App: React.FC = () => {
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
       team_member_name: memberName,
-      date: `${date}T${hour}:00` // locale, senza Z
+      date: `${date}T${hour}:00`
     });
     setIsFormOpen(true);
   };
@@ -295,7 +291,6 @@ const App: React.FC = () => {
 
       <AIAssistant user={user} />
 
-      {/* MODALS */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -353,6 +348,10 @@ const App: React.FC = () => {
                    };
                    const saved = await db.appointments.upsert(finalData); 
                    if (!saved) throw new Error("Salvataggio appuntamento fallito");
+                   setAppointments(prev => {
+                     const others = prev.filter(p => p.id !== saved.id);
+                     return [...others, saved];
+                   });
                    setIsFormOpen(false); 
                    setFormInitialData(null);
                    await refreshData(); 
