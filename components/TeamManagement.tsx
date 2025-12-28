@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TeamMember, Appointment, Service } from '../types';
 
 interface TeamManagementProps {
@@ -27,6 +27,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
   const [avsNumber, setAvsNumber] = useState(member.avs_number || '');
   const [iban, setIban] = useState(member.iban || '');
   const [avatar, setAvatar] = useState<string | null>(member.avatar || null);
+
+  useEffect(() => {
+    setName(member.name);
+    setWeeklyClosures(member.weekly_closures || []);
+    setUnavailableDates(member.unavailable_dates || []);
+  }, [member]);
 
   const stats = useMemo(() => {
     const memberAppts = appointments.filter(a => a.team_member_name === member.name && a.status === 'confirmed');
@@ -56,8 +62,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
       work_end_time: workEndTime,
       break_start_time: breakStartTime,
       break_end_time: breakEndTime,
-      weekly_closures: weeklyClosures,
-      unavailable_dates: unavailableDates,
+      weekly_closures: [...weeklyClosures], // Copia forzata dell'array
+      unavailable_dates: [...unavailableDates],
       address,
       avs_number: avsNumber,
       iban
@@ -131,7 +137,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Chiusure Settimanali Ricorrenti</p>
               <div className="flex flex-wrap gap-2">
                 {DAYS.map(day => (
-                  <button key={day.id} onClick={() => toggleWeeklyClosure(day.id)} className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase transition-all border ${weeklyClosures.includes(day.id) ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100'}`}>
+                  <button key={day.id} onClick={() => toggleWeeklyClosure(day.id)} className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase transition-all border ${weeklyClosures.includes(day.id) ? 'bg-black text-white border-black shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}>
                     {day.label}
                   </button>
                 ))}
@@ -142,7 +148,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Vacanze e Congedi Specifici</p>
               <div className="flex gap-4">
                 <input type="date" id="vacation-picker" className="flex-1 p-4 rounded-xl bg-gray-50 border-none font-bold text-xs" />
-                <button onClick={() => {
+                <button type="button" onClick={() => {
                   const input = document.getElementById('vacation-picker') as HTMLInputElement;
                   addVacationDate(input.value);
                   input.value = '';
@@ -152,12 +158,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
                 {unavailableDates.map(d => (
                   <div key={d} className="bg-gray-50 px-4 py-3 rounded-xl flex justify-between items-center group">
                     <span className="text-[10px] font-bold text-gray-600">{new Date(d).toLocaleDateString()}</span>
-                    <button onClick={() => removeVacationDate(d)} className="text-gray-300 hover:text-red-500"><i className="fas fa-times-circle"></i></button>
+                    <button type="button" onClick={() => removeVacationDate(d)} className="text-gray-300 hover:text-red-500"><i className="fas fa-times-circle"></i></button>
                   </div>
                 ))}
               </div>
             </div>
-            <button onClick={handleUpdateProfile} className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Salva Chiusure</button>
+            <button onClick={handleUpdateProfile} className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Salva Indisponibilità</button>
           </div>
         )}
 
