@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -7,18 +8,12 @@ import TeamManagement from './components/TeamManagement';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
-import QuickRequestModal from './components/QuickRequestModal';
 import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
 import AIAssistant from './components/AIAssistant';
 import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
-
-const toDateKeyLocal = (d: Date) =>
-  `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate()
-    .toString()
-    .padStart(2, '0')}`;
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -36,19 +31,11 @@ const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isNewGuestOpen, setIsNewGuestOpen] = useState(false);
   const [editingGuest, setEditingGuest] = useState<any | null>(null);
-  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
-  const [selectedClientToManage, setSelectedClientToManage] = useState<any | null>(null);
   
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
-
-  const normalizeTeam = (list: any[]) =>
-    (list || []).map((m) => ({
-      ...m,
-      weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : [],
-    }));
 
   const ensureSeedData = useCallback(async () => {
     if (useMock) return;
@@ -58,31 +45,31 @@ const App: React.FC = () => {
         db.team.getAll()
       ]);
 
-      if (!svcs.length) {
+      if (!svcs || svcs.length === 0) {
         await Promise.all(DEFAULT_SERVICES.map(s => db.services.upsert(s)));
       }
-      if (!tm.length) {
+      if (!tm || tm.length === 0) {
         await Promise.all(DEFAULT_TEAM.map(m => db.team.upsert(m)));
       }
     } catch (err) {
-      console.error("Seed data error:", err);
+      console.warn("Seed data process skipped or partial:", err);
     }
   }, []);
 
   const refreshData = useCallback(async () => {
     try {
-      await ensureSeedData();
+      if (!useMock) await ensureSeedData();
 
       const [svcs, tm, appts, reqs, profs] = await Promise.all([
-        db.services.getAll().catch(() => []),
-        db.team.getAll().catch(() => []),
+        db.services.getAll().catch(() => DEFAULT_SERVICES),
+        db.team.getAll().catch(() => DEFAULT_TEAM),
         db.appointments.getAll().catch(() => []),
         db.requests.getAll().catch(() => []),
         db.profiles.getAll().catch(() => [])
       ]);
       
-      setServices(svcs.length ? svcs : DEFAULT_SERVICES);
-      setTeam(tm.length ? normalizeTeam(tm) : normalizeTeam(DEFAULT_TEAM));
+      setServices(svcs && svcs.length ? svcs : DEFAULT_SERVICES);
+      setTeam(tm && tm.length ? tm : DEFAULT_TEAM);
       setAppointments(appts || []);
       setRequests(reqs || []);
       setProfiles(profs || []);
@@ -95,12 +82,14 @@ const App: React.FC = () => {
             fullName: myProfile.full_name, 
             avatar: myProfile.avatar, 
             phone: myProfile.phone, 
-            technical_sheets: myProfile.technical_sheets 
+            technical_sheets: myProfile.technical_sheets || []
           } : null);
         }
       }
     } catch (e) {
       console.error("Data Refresh Error", e);
+    } finally {
+      setLoading(false);
     }
   }, [user?.id, ensureSeedData]);
 
@@ -116,6 +105,7 @@ const App: React.FC = () => {
         let role: any = profile?.role || 'client';
         if (email === 'serop.serop@outlook.com') role = 'admin';
         else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
+        
         setUser({ 
           id: session.user.id, 
           email: session.user.email!, 
@@ -132,27 +122,8 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (useMock) return;
-    const client = supabase as unknown as any;
-    if (!client?.channel) return;
-
-    const channel = client
-      .channel('realtime:appointments')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'appointments' },
-        () => {
-          refreshData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      try { channel.unsubscribe(); } catch {}
-    };
-  }, [refreshData]);
-
-  useEffect(() => { if (!loading) refreshData(); }, [loading, refreshData]);
+    if (!loading) refreshData();
+  }, [loading, refreshData]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -160,7 +131,7 @@ const App: React.FC = () => {
 
   const currentMember = useMemo(() => {
     if (!user) return null;
-    return team.find(m => m.profile_id === user.id);
+    return team.find(m => m.profile_id === user.id || m.name.toLowerCase() === user.fullName.split(' ')[0].toLowerCase());
   }, [user, team]);
 
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
@@ -180,39 +151,17 @@ const App: React.FC = () => {
     }
   };
 
-  const renderServiceList = () => (
-    <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-      <header className="text-center space-y-4">
-        <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
-        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Atelier Salone | salonekristal.ch</p>
-      </header>
-      <div className="grid md:grid-cols-2 gap-10">
-        {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
-          <div key={cat} className="space-y-6">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">{cat}</h4>
-            <div className="space-y-4">
-              {services.filter(s => s.category === cat).map(s => (
-                <div 
-                  key={s.id} 
-                  className="group p-6 bg-white rounded-[2.5rem] border border-gray-50 hover:shadow-xl transition-all flex justify-between items-center cursor-pointer active:scale-95" 
-                  onClick={() => handleServiceClick(s)}
-                >
-                  <div className="flex-1">
-                    <h5 className="font-bold text-lg text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
-                    <p className="text-[10px] text-gray-400 font-medium">{s.duration} minuti</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-luxury font-bold text-gray-900">CHF {s.price}</p>
-                    <p className="text-[8px] font-bold text-amber-600 uppercase tracking-widest mt-1">Prenota</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <h1 className="text-2xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal Atelier</h1>
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Caricamento in corso...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <>
@@ -227,7 +176,7 @@ const App: React.FC = () => {
                 <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                   <div>
                     <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">
-                      {isGuest ? 'Salone' : isCollaborator ? 'Mio Workspace' : `Benvenuta, ${user?.fullName.split(' ')[0]}`}
+                      {isGuest ? 'Atelier Kristal' : isCollaborator ? 'Workspace' : `Benvenuta, ${user?.fullName.split(' ')[0]}`}
                     </h2>
                   </div>
                 </header>
@@ -240,7 +189,37 @@ const App: React.FC = () => {
                     onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
                   />
                 ) : (
-                  renderServiceList()
+                  <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                    <header className="text-center space-y-4">
+                      <h2 className="text-6xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
+                      <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">L'Eccellenza è un Rituale</p>
+                    </header>
+                    <div className="grid md:grid-cols-2 gap-10">
+                      {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
+                        <div key={cat} className="space-y-6">
+                          <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">{cat}</h4>
+                          <div className="space-y-4">
+                            {services.filter(s => s.category === cat).map(s => (
+                              <div 
+                                key={s.id} 
+                                className="group p-6 bg-white rounded-[2.5rem] border border-gray-50 hover:shadow-xl transition-all flex justify-between items-center cursor-pointer active:scale-95" 
+                                onClick={() => handleServiceClick(s)}
+                              >
+                                <div className="flex-1">
+                                  <h5 className="font-bold text-lg text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
+                                  <p className="text-[10px] text-gray-400 font-medium">{s.duration} minuti</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xl font-luxury font-bold text-gray-900">CHF {s.price}</p>
+                                  <p className="text-[8px] font-bold text-amber-600 uppercase tracking-widest mt-1">Prenota</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </>
             )}
@@ -287,6 +266,44 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <div className="flex justify-between items-center">
+               <h2 className="text-4xl font-luxury font-bold">Menu Servizi</h2>
+               <button onClick={() => setIsFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px]">Aggiungi Ritual</button>
+             </div>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {services.map(s => (
+                 <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm">
+                   <h4 className="font-bold text-lg mb-1">{s.name}</h4>
+                   <p className="text-[9px] text-amber-600 font-bold uppercase mb-4">{s.category}</p>
+                   <div className="flex justify-between items-end">
+                     <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
+                     <p className="text-[10px] text-gray-400 font-bold">{s.duration} min</p>
+                   </div>
+                 </div>
+               ))}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
+          <div className="space-y-12 animate-in fade-in">
+            <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {profiles.filter(p => p.role === 'client').map(p => (
+                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm flex items-center gap-6 hover:shadow-md transition-all">
+                    <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-16 h-16 rounded-full object-cover" />
+                    <div>
+                       <h4 className="font-bold text-sm">{p.full_name}</h4>
+                       <p className="text-[9px] text-gray-400 font-bold">{p.phone || 'Nessun telefono'}</p>
+                    </div>
+                 </div>
+               ))}
+            </div>
+          </div>
+        )}
       </Layout>
 
       <AIAssistant user={user} />
@@ -294,7 +311,7 @@ const App: React.FC = () => {
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
-            <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white transition-all transform hover:rotate-90">
+            <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white">
               <i className="fas fa-times text-2xl"></i>
             </button>
             <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
@@ -304,8 +321,8 @@ const App: React.FC = () => {
 
       {selectedMemberToManage && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
-            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black transition-all">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
               <i className="fas fa-times text-2xl"></i>
             </button>
             <TeamManagement
@@ -314,14 +331,9 @@ const App: React.FC = () => {
               services={services}
               profiles={profiles}
               onSave={async (m) => {
-                try {
-                  await db.team.upsert(m);
-                  await refreshData();
-                  setSelectedMemberToManage(null);
-                } catch (err: any) {
-                  console.error("Errore salvataggio team:", err);
-                  alert("Errore nel salvataggio delle indisponibilità: " + (err?.message || "sconosciuto"));
-                }
+                await db.team.upsert(m);
+                await refreshData();
+                setSelectedMemberToManage(null);
               }}
               onClose={() => setSelectedMemberToManage(null)}
             />
@@ -331,7 +343,7 @@ const App: React.FC = () => {
 
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
              <button onClick={() => { setIsFormOpen(false); setFormInitialData(null); }} className="absolute top-8 right-10 text-gray-300 hover:text-black">
                <i className="fas fa-times text-2xl"></i>
              </button>
@@ -340,25 +352,11 @@ const App: React.FC = () => {
                team={team} 
                existingAppointments={appointments} 
                onSave={async (a) => { 
-                 try {
-                   const finalData = { 
-                     ...a, 
-                     client_id: (isAdmin || isCollaborator) ? (a.client_id || user?.id) : user?.id,
-                     status: 'confirmed'
-                   };
-                   const { data, error } = await db.appointments.upsert(finalData); 
-                   if (error || !data) throw error || new Error("Salvataggio appuntamento fallito");
-                   setAppointments(prev => {
-                     const others = prev.filter(p => p.id !== data.id);
-                     return [...others, data];
-                   });
-                   setIsFormOpen(false); 
-                   setFormInitialData(null);
-                   await refreshData(); 
-                 } catch (err: any) {
-                   console.error("Errore salvataggio appuntamento:", err);
-                   alert("Errore nel salvataggio dell'appuntamento: " + (err?.message || "sconosciuto"));
-                 }
+                 const finalData = { ...a, client_id: a.client_id || user?.id };
+                 await db.appointments.upsert(finalData); 
+                 setIsFormOpen(false); 
+                 setFormInitialData(null);
+                 refreshData(); 
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} 
@@ -371,7 +369,7 @@ const App: React.FC = () => {
 
       {(isNewGuestOpen || editingGuest) && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
             <button onClick={() => { setIsNewGuestOpen(false); setEditingGuest(null); }} className="absolute top-8 right-10 text-gray-300 hover:text-black">
               <i className="fas fa-times text-2xl"></i>
             </button>
