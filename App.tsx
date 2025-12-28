@@ -304,7 +304,7 @@ const App: React.FC = () => {
 
       {selectedMemberToManage && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max_h-[90vh] animate-in zoom-in-95">
             <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black transition-all">
               <i className="fas fa-times text-2xl"></i>
             </button>
@@ -330,8 +330,8 @@ const App: React.FC = () => {
       )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z_[1800] flex items-center justify_center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow_y-auto max_h-[90vh] animate-in zoom-in-95">
              <button onClick={() => { setIsFormOpen(false); setFormInitialData(null); }} className="absolute top-8 right-10 text-gray-300 hover:text-black">
                <i className="fas fa-times text-2xl"></i>
              </button>
@@ -346,11 +346,11 @@ const App: React.FC = () => {
                      client_id: (isAdmin || isCollaborator) ? (a.client_id || user?.id) : user?.id,
                      status: 'confirmed'
                    };
-                   const saved = await db.appointments.upsert(finalData); 
-                   if (!saved) throw new Error("Salvataggio appuntamento fallito");
+                   const { data, error } = await db.appointments.upsert(finalData); 
+                   if (error || !data) throw error || new Error("Salvataggio appuntamento fallito");
                    setAppointments(prev => {
-                     const others = prev.filter(p => p.id !== saved.id);
-                     return [...others, saved];
+                     const others = prev.filter(p => p.id !== data.id);
+                     return [...others, data];
                    });
                    setIsFormOpen(false); 
                    setFormInitialData(null);
@@ -370,8 +370,8 @@ const App: React.FC = () => {
       )}
 
       {(isNewGuestOpen || editingGuest) && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify_center p-4">
+          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative overflow_y-auto max_h-[90vh] animate-in zoom-in-95">
             <button onClick={() => { setIsNewGuestOpen(false); setEditingGuest(null); }} className="absolute top-8 right-10 text-gray-300 hover:text-black">
               <i className="fas fa-times text-2xl"></i>
             </button>
