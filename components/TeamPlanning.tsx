@@ -68,26 +68,33 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     setViewDate(d);
   };
 
-  const getAppointmentStatus = (memberName: string, date: string, hour: string) => {
-    const target = new Date(`${date}T${hour}:00.000Z`);
-    const targetTime = target.getTime();
-    
+  const getAppointmentStatus = (memberName: string, dateStr: string, hour: string) => {
+    // Normalizziamo il tempo target in minuti dall'inizio della giornata per un confronto sicuro
+    const [h, m] = hour.split(':').map(Number);
+    const targetMinutes = h * 60 + m;
+
     const appt = appointments.find(a => {
-      if (!a.team_member_name || a.team_member_name.trim() !== memberName.trim()) return false;
-      const appStart = new Date(a.date);
-      const appStartTime = appStart.getTime();
-      const duration = a.services?.duration || 30;
-      const appEndTime = appStartTime + duration * 60000;
+      if (!a.team_member_name || a.team_member_name.trim().toLowerCase() !== memberName.trim().toLowerCase()) return false;
       
-      return targetTime >= appStartTime && targetTime < appEndTime;
+      const appDate = new Date(a.date);
+      const appDateISO = appDate.toISOString().split('T')[0];
+      if (appDateISO !== dateStr) return false;
+
+      const appStartMinutes = appDate.getUTCHours() * 60 + appDate.getUTCMinutes();
+      const duration = a.services?.duration || 30;
+      const appEndMinutes = appStartMinutes + duration;
+
+      return targetMinutes >= appStartMinutes && targetMinutes < appEndMinutes;
     });
 
     if (!appt) return null;
 
-    const appStartStr = new Date(appt.date).toISOString().substring(11, 16);
+    const appDate = new Date(appt.date);
+    const appHourStr = `${appDate.getUTCHours().toString().padStart(2, '0')}:${appDate.getUTCMinutes().toString().padStart(2, '0')}`;
+    
     return {
       appt,
-      isStart: appStartStr === hour
+      isStart: appHourStr === hour
     };
   };
 
@@ -214,7 +221,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     }) : weekDays.map(date => {
                       const apptsAtHour = appointments.filter(a => {
                         const d = new Date(a.date).toISOString().split('T')[0];
-                        const h = new Date(a.date).toISOString().substring(11, 16);
+                        const h = new Date(a.date).getUTCHours().toString().padStart(2, '0') + ':' + new Date(a.date).getUTCMinutes().toString().padStart(2, '0');
                         return d === date && h === hour;
                       });
                       
