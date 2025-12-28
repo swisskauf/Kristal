@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Appointment, Service, TeamMember } from '../types';
 
+const toDateKeyLocal = (d: Date) =>
+  `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate()
+    .toString()
+    .padStart(2, '0')}`;
+
 interface AppointmentFormProps {
   onSave: (app: Partial<Appointment>) => void;
   onCancel: () => void;
@@ -27,14 +32,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   isAdminOrStaff = false,
   profiles = [],
 }) => {
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => toDateKeyLocal(new Date()), []);
 
   const [clientId, setClientId] = useState<string>(initialData?.client_id ?? '');
   const [clientSearch, setClientSearch] = useState<string>('');
   const [serviceId, setServiceId] = useState<string>(initialData?.service_id ?? services[0]?.id ?? '');
   const [teamMemberName, setTeamMemberName] = useState<string>(initialData?.team_member_name ?? team[0]?.name ?? '');
   const [selectedDate, setSelectedDate] = useState<string>(
-    initialData?.date ? new Date(initialData.date).toISOString().split('T')[0] : todayStr,
+    initialData?.date ? toDateKeyLocal(new Date(initialData.date)) : todayStr,
   );
   const [selectedTime, setSelectedTime] = useState<string>('');
 
@@ -43,6 +48,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (initialData?.team_member_name) setTeamMemberName(initialData.team_member_name);
     if (initialData?.date) {
       const d = new Date(initialData.date);
+      setSelectedDate(toDateKeyLocal(d));
       setSelectedTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
     }
   }, [initialData]);
@@ -70,7 +76,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     for (let i = 0; i < 21; i++) {
       const d = new Date();
       d.setDate(d.getDate() + i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(toDateKeyLocal(d));
     }
     return days;
   }, []);
@@ -114,7 +120,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         if (app.team_member_name !== teamMemberName) return false;
 
         const appD = new Date(app.date);
-        if (appD.toISOString().split('T')[0] !== selectedDate) return false;
+        if (toDateKeyLocal(appD) !== selectedDate) return false;
 
         const appStart = appD.getHours() * 60 + appD.getMinutes();
         const appDuration =
@@ -159,7 +165,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       return;
     }
 
-    const finalDate = new Date(`${selectedDate}T${selectedTime}:00`).toISOString();
+    const [y, mo, d] = selectedDate.split('-').map(Number);
+    const [hh, mm] = selectedTime.split(':').map(Number);
+    const localDate = new Date(y, mo - 1, d, hh, mm, 0);
+    const finalDate = localDate.toISOString(); // UTC ma costruito da locale
+
     onSave({
       id: initialData?.id,
       client_id: isAdminOrStaff ? clientId : undefined,
