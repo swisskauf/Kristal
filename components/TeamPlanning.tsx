@@ -70,13 +70,16 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const getAppointmentStatus = (memberName: string, date: string, hour: string) => {
     const target = new Date(`${date}T${hour}:00.000Z`);
+    const targetTime = target.getTime();
     
     const appt = appointments.find(a => {
-      if (a.team_member_name !== memberName) return false;
+      if (!a.team_member_name || a.team_member_name.trim() !== memberName.trim()) return false;
       const appStart = new Date(a.date);
+      const appStartTime = appStart.getTime();
       const duration = a.services?.duration || 30;
-      const appEnd = new Date(appStart.getTime() + duration * 60000);
-      return target >= appStart && target < appEnd;
+      const appEndTime = appStartTime + duration * 60000;
+      
+      return targetTime >= appStartTime && targetTime < appEndTime;
     });
 
     if (!appt) return null;
@@ -103,10 +106,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const d = new Date(date);
     const dayOfWeek = d.getDay();
     
-    // 1. Chiusura settimanale (es: Lunedì)
     if (member.weekly_closures?.includes(dayOfWeek)) return 'Chiusura Settimanale';
-    
-    // 2. Vacanza specifica (da date assenza o unavailable_dates)
     if (member.unavailable_dates?.includes(date)) return 'Vacanza/Congedo';
     
     return null;
@@ -177,22 +177,22 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
               ))}
 
               {hours.map(hour => {
-                const dateStr = weekDays[0];
+                const dateForSlot = viewMode === 'daily' ? weekDays[0] : null;
                 return (
                   <React.Fragment key={hour}>
                     <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-6 h-14">
                        <span className="text-[8px] font-bold text-gray-300 uppercase">{hour}</span>
                     </div>
                     {viewMode === 'daily' ? filteredTeam.map(m => {
-                      const status = getAppointmentStatus(m.name, dateStr, hour);
+                      const status = getAppointmentStatus(m.name, dateForSlot!, hour);
                       const isWork = isWorkingHour(m, hour);
                       const isBreak = isBreakHour(m, hour);
-                      const closureType = getClosureType(m, dateStr);
+                      const closureType = getClosureType(m, dateForSlot!);
 
                       return (
                         <div 
                           key={`${m.name}-${hour}`}
-                          onClick={() => !status && !isBreak && isWork && !closureType && onSlotClick && onSlotClick(m.name, dateStr, hour)}
+                          onClick={() => !status && !isBreak && isWork && !closureType && onSlotClick && onSlotClick(m.name, dateForSlot!, hour)}
                           className={`h-14 rounded-2xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
                             status ? 'bg-black border-black text-white shadow-md z-10' : 
                             closureType === 'Chiusura Settimanale' ? 'closure-pattern border-gray-100 text-gray-300' :
@@ -212,15 +212,15 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                         </div>
                       );
                     }) : weekDays.map(date => {
-                      const apptsCount = appointments.filter(a => {
+                      const apptsAtHour = appointments.filter(a => {
                         const d = new Date(a.date).toISOString().split('T')[0];
                         const h = new Date(a.date).toISOString().substring(11, 16);
                         return d === date && h === hour;
-                      }).length;
+                      });
                       
                       return (
                         <div key={`${date}-${hour}`} className="h-14 rounded-2xl border border-gray-50 bg-gray-50/20 flex items-center justify-center">
-                          {apptsCount > 0 && <span className="text-[10px] font-bold text-amber-600">{apptsCount} R.</span>}
+                          {apptsAtHour.length > 0 && <span className="text-[10px] font-bold text-amber-600">{apptsAtHour.length} R.</span>}
                         </div>
                       )
                     })}
