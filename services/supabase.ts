@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 
@@ -97,15 +96,21 @@ export const db = {
   },
   appointments: {
     getAll: async () => {
-      const appts = useMock ? supabaseMock.appointments.getAll() : (await client.from('appointments').select('*, services(*), profiles(*)').order('date')).data || [];
+      let appts = [];
+      if (useMock) {
+        appts = supabaseMock.appointments.getAll();
+      } else {
+        const { data } = await client.from('appointments').select('*, services(*), profiles(*)').order('date');
+        appts = data || [];
+      }
+      
       const svcs = await db.services.getAll();
       const profs = await db.profiles.getAll();
       
-      // Assicura che ogni appuntamento abbia i riferimenti carichi indipendentemente dal database
       return appts.map((a: any) => ({
         ...a,
-        services: svcs.find(s => s.id === a.service_id) || a.services,
-        profiles: profs.find(p => p.id === a.client_id) || a.profiles
+        services: a.services || svcs.find(s => s.id === a.service_id),
+        profiles: a.profiles || profs.find(p => p.id === a.client_id)
       }));
     },
     upsert: async (a: any) => {
