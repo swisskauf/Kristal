@@ -20,21 +20,22 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   ];
 
   const clientNav = [
-    { id: 'dashboard', label: 'Kristal', icon: 'fa-calendar-plus' },
+    { id: 'dashboard', label: 'Home', icon: 'fa-home' },
+    { id: 'my_rituals', label: 'I Miei Ritual', icon: 'fa-calendar-check' },
   ];
 
   const collaboratorNav = [
-    { id: 'dashboard', label: 'Agenda Personale', icon: 'fa-user-clock' },
-    { id: 'team_schedule', label: 'Planning Atelier', icon: 'fa-calendar-alt' },
-    { id: 'clients', label: 'Registro Ospiti', icon: 'fa-address-book' },
+    { id: 'dashboard', label: 'Dashboard', icon: 'fa-user-clock' },
+    { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
+    { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
   ];
 
   const adminNav = [
-    { id: 'dashboard', label: 'Vision Atelier', icon: 'fa-chart-line' },
-    { id: 'services_management', label: 'Menu Servizi', icon: 'fa-book-open' },
-    { id: 'team_schedule', label: 'Planning Totale', icon: 'fa-calendar-alt' },
-    { id: 'team_management', label: 'Gestione Staff', icon: 'fa-users-cog' },
-    { id: 'clients', label: 'Registro Ospiti', icon: 'fa-address-book' },
+    { id: 'dashboard', label: 'Vision', icon: 'fa-chart-line' },
+    { id: 'services_management', label: 'Servizi', icon: 'fa-book-open' },
+    { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
+    { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
+    { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
   ];
 
   let navItems = guestNav;
