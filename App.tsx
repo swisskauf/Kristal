@@ -138,13 +138,16 @@ const App: React.FC = () => {
     return team.find(m => m.profile_id === user.id || m.name.toLowerCase() === user.fullName.split(' ')[0].toLowerCase());
   }, [user, team]);
 
+  // Ordinamento: Imminenti (data crescente), Passati (data decrescente)
   const myClientAppointments = useMemo(() => {
     if (!user) return [];
-    return appointments.filter(a => a.client_id === user.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return appointments
+      .filter(a => a.client_id === user.id && a.status !== 'cancelled')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [appointments, user]);
 
   const upcomingAppointments = myClientAppointments.filter(a => new Date(a.date) >= new Date());
-  const pastAppointments = myClientAppointments.filter(a => new Date(a.date) < new Date()).reverse();
+  const pastAppointments = [...myClientAppointments.filter(a => new Date(a.date) < new Date())].reverse();
 
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
@@ -166,11 +169,10 @@ const App: React.FC = () => {
     
     await db.appointments.upsert({ ...appt, status });
     
-    // Simula invio mail
     const client = profiles.find(p => p.id === appt.client_id);
     if (client) {
-      console.log(`Email inviata a ${client.email}: Stato Ritual aggiornato a ${status}`);
-      alert(`Feedback inviato con successo a ${client.full_name} via mail e notifica app.`);
+      const statusText = status === 'cancelled' ? 'CANCELLATO' : status.toUpperCase();
+      alert(`Feedback inviato a ${client.full_name}.\nStato Ritual: ${statusText}\nSincronizzazione agenda completata.`);
     }
     
     setSelectedAppointmentDetail(null);
@@ -266,7 +268,7 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <header>
                <h2 className="text-4xl font-luxury font-bold">I Miei Ritual</h2>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Sincronizzazione in corso...</p>
+               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gestione Prenotazioni Personali</p>
             </header>
 
             <section className="space-y-8">
@@ -282,14 +284,21 @@ const App: React.FC = () => {
                            {new Date(app.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
                         </p>
                         <h5 className="text-3xl font-luxury font-bold mb-6">{app.services?.name}</h5>
-                        <div className="flex items-center gap-8">
-                          <div className="flex items-center gap-2">
-                            <i className="far fa-clock text-amber-500 text-xs"></i>
-                            <span className="text-[11px] font-bold">{new Date(app.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <div className="flex flex-col gap-4">
+                          <div className="flex items-center gap-8">
+                            <div className="flex items-center gap-2">
+                              <i className="far fa-clock text-amber-500 text-xs"></i>
+                              <span className="text-[11px] font-bold">{new Date(app.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <i className="far fa-user text-amber-500 text-xs"></i>
+                              <span className="text-[11px] font-bold">Con {app.team_member_name}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <i className="far fa-user text-amber-500 text-xs"></i>
-                            <span className="text-[11px] font-bold">Con {app.team_member_name}</span>
+                          <div className="pt-4 border-t border-white/10">
+                            <p className="text-[8px] text-white/40 uppercase font-bold tracking-widest">
+                              Prenotato il: {new Date(app.created_at).toLocaleString('it-IT')}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -316,6 +325,7 @@ const App: React.FC = () => {
                            <div>
                               <h6 className="font-bold text-lg text-gray-900">{app.services?.name}</h6>
                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Eseguito il {new Date(app.date).toLocaleDateString()} • {app.team_member_name}</p>
+                              <p className="text-[7px] text-gray-300 font-bold uppercase mt-1">Prenotazione del {new Date(app.created_at).toLocaleDateString()}</p>
                            </div>
                         </div>
                         <p className="text-lg font-luxury font-bold">CHF {app.services?.price}</p>
@@ -366,7 +376,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Altri tab Admin rimossi per brevità, mantenuti quelli esistenti */}
         {activeTab === 'team_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Gestione Staff</h2>
@@ -487,6 +496,10 @@ const App: React.FC = () => {
                    <i className="fas fa-user-check text-amber-600"></i>
                    <span>Artista: {selectedAppointmentDetail.team_member_name}</span>
                 </div>
+                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                   <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Registrato il</p>
+                   <p className="text-[11px] font-bold text-gray-600">{new Date(selectedAppointmentDetail.created_at).toLocaleString('it-IT')}</p>
+                </div>
              </div>
 
              <div className="grid grid-cols-2 gap-4">
@@ -501,20 +514,25 @@ const App: React.FC = () => {
                  }}
                  className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-100"
                >
-                 Modifica Ritual
+                 Riprogramma Ritual
+               </button>
+               <button 
+                 onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')}
+                 className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+               >
+                 Cancella Ritual
                </button>
                <button 
                  onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')}
-                 className="py-4 bg-black text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
+                 className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
                >
-                 Invia Feedback / Notifica
+                 Invia Feedback / Notifica Stato
                </button>
              </div>
           </div>
         </div>
       )}
 
-      {/* Altri modal esistenti mantenuti */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -561,12 +579,20 @@ const App: React.FC = () => {
                onSave={async (a) => { 
                  const finalData = { 
                    ...a, 
-                   client_id: isAdmin || isCollaborator ? (a.client_id || user?.id) : user?.id 
+                   client_id: isAdmin || isCollaborator ? (a.client_id || user?.id) : user?.id,
+                   created_at: a.created_at || new Date().toISOString()
                  };
                  await db.appointments.upsert(finalData); 
                  setIsFormOpen(false); 
                  setFormInitialData(null);
                  await refreshData(); 
+                 
+                 // Feedback
+                 const client = profiles.find(p => p.id === finalData.client_id);
+                 if (client) {
+                    alert(`Ritual ${a.id ? 'aggiornato' : 'prenotato'} con successo per ${client.full_name}.\nArtista: ${finalData.team_member_name}`);
+                 }
+
                  setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'my_rituals');
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
