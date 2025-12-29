@@ -3,14 +3,13 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
 import AppointmentForm from './components/AppointmentForm';
-import ServiceForm from './components/ServiceForm';
-import TeamManagement from './components/TeamManagement';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import VisionAnalytics from './components/VisionAnalytics';
 import AIAssistant from './components/AIAssistant';
 import InstagramGallery from './components/InstagramGallery';
+import GuestManagement from './components/GuestManagement';
 import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -22,7 +21,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Feature Settings con persistenza (v10) - Rimosso salonPhone
   const [settings, setSettings] = useState({
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
@@ -38,11 +36,9 @@ const App: React.FC = () => {
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<any>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<any | null>(null);
-  const [selectedServiceToEdit, setSelectedServiceToEdit] = useState<Service | undefined>(undefined);
   
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
 
@@ -52,7 +48,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v10');
+    const savedSettings = localStorage.getItem('kristal_settings_v11');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -60,25 +56,19 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v10', JSON.stringify(newSettings));
-    showToast("Configurazione salvata.");
+    localStorage.setItem('kristal_settings_v11', JSON.stringify(newSettings));
+    showToast("Impostazioni salvate.");
   };
 
   const ensureDataSeeding = useCallback(async () => {
     try {
       const existingServices = await db.services.getAll();
       if (!existingServices || existingServices.length === 0) {
-        console.log("Seeding default services...");
-        for (const s of DEFAULT_SERVICES) {
-          await db.services.upsert(s);
-        }
+        for (const s of DEFAULT_SERVICES) await db.services.upsert(s);
       }
       const existingTeam = await db.team.getAll();
       if (!existingTeam || existingTeam.length === 0) {
-        console.log("Seeding default team...");
-        for (const m of DEFAULT_TEAM) {
-          await db.team.upsert(m);
-        }
+        for (const m of DEFAULT_TEAM) await db.team.upsert(m);
       }
     } catch (e) {
       console.warn("Seeding error:", e);
@@ -87,9 +77,7 @@ const App: React.FC = () => {
 
   const refreshData = useCallback(async () => {
     try {
-      // Assicuriamoci che i dati esistano prima di caricarli
       await ensureDataSeeding();
-      
       const [svcs, tm, appts, reqs, profs, closures] = await Promise.all([
         db.services.getAll(),
         db.team.getAll(),
@@ -133,41 +121,15 @@ const App: React.FC = () => {
           avatar: profile?.avatar 
         });
       }
-      // Dopo il check auth, carichiamo i dati
       refreshData();
     });
     return () => subscription.unsubscribe();
   }, [refreshData]);
 
-  // Ricaricamento periodico o su cambio tab per consistenza
+  // Caricamento forzato al montaggio per garantire i servizi anche in vista guest
   useEffect(() => {
-    if (activeTab !== 'dashboard') {
-      refreshData();
-    }
-  }, [activeTab, refreshData]);
-
-  const logOperation = async (clientId: string, action: string, details: string) => {
-    const timestamp = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const logEntry = `[${timestamp}] ${action}: ${details}`;
-    
-    const profile = profiles.find(p => p.id === clientId);
-    if (!profile) return;
-
-    const updatedHistory = [...(profile.treatment_history || []), { service: logEntry, date: new Date().toISOString() }];
-    const updatedSheets = [...(profile.technical_sheets || []), {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      category: 'LOG_SISTEMA',
-      content: logEntry,
-      author: user?.fullName || 'Sistema Kristal'
-    }];
-
-    await db.profiles.upsert({
-      ...profile,
-      treatment_history: updatedHistory,
-      technical_sheets: updatedSheets
-    });
-  };
+    refreshData();
+  }, [refreshData]);
 
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
@@ -201,14 +163,12 @@ const App: React.FC = () => {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
-        const actionText = status === 'confirmed' ? 'CONFERMATO' : status === 'cancelled' ? 'CANCELLATO' : 'NON EFFETTUATO (NO-SHOW)';
-        await logOperation(appt.client_id, 'STATO RITUAL', `${actionText} - ${appt.services?.name} il ${new Date(appt.date).toLocaleDateString()}`);
-        showToast(`Stato rituale aggiornato.`);
+        showToast(`Rituale ${status === 'confirmed' ? 'confermato' : status}.`);
         refreshData();
         setSelectedAppointmentDetail(null);
       }
     } catch (e) {
-      showToast("Errore operazione.", "error");
+      showToast("Errore durante l'aggiornamento.", "error");
     }
   };
 
@@ -217,7 +177,7 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center"><div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (loading && services.length === 0) return <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center"><div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
     <>
@@ -272,7 +232,7 @@ const App: React.FC = () => {
                     )) : (
                       <div className="col-span-full py-20 text-center">
                          <div className="inline-block w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Menu Ritual...</p>
+                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Atelier...</p>
                       </div>
                     )}
                   </div>
@@ -363,6 +323,12 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
+          <div className="animate-in fade-in">
+             <GuestManagement profiles={profiles} appointments={appointments} onRefresh={refreshData} />
+          </div>
+        )}
+
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Agenda Atelier</h2>
@@ -391,6 +357,10 @@ const App: React.FC = () => {
                         <div><p className="text-lg font-bold">Kristal AI Assistant</p><p className="text-[10px] text-gray-400 font-bold uppercase">Consulente virtuale</p></div>
                       </div>
                       <button onClick={() => setSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
+                    </div>
+                    <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100">
+                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Numero Emergenze Atelier</p>
+                       <p className="text-xl font-luxury font-bold text-gray-900">{SALON_PHONE}</p>
                     </div>
                     <button onClick={() => saveSettings(settings)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Salva Configurazione</button>
                   </div>
@@ -429,12 +399,9 @@ const App: React.FC = () => {
                services={services} team={team} existingAppointments={appointments} 
                onSave={async (a) => { 
                  const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
-                 const isUpdate = !!a.id;
                  await db.appointments.upsert({ ...a, client_id }); 
-                 const ritName = services.find(s => s.id === a.service_id)?.name || 'Ritual';
-                 await logOperation(client_id, isUpdate ? 'MODIFICA RITUAL' : 'PRENOTAZIONE', `${ritName} il ${new Date(a.date!).toLocaleDateString()} alle ${new Date(a.date!).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
                  setIsFormOpen(false); setFormInitialData(null); await refreshData(); 
-                 showToast(isUpdate ? "Rituale aggiornato." : "Rituale programmato con successo.");
+                 showToast("Rituale programmato con successo.");
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
@@ -453,10 +420,9 @@ const App: React.FC = () => {
                <p className="text-base font-bold mt-4 text-gray-500">{(selectedAppointmentDetail as any).profiles?.full_name}</p>
              </header>
              <div className="grid grid-cols-2 gap-6">
-               <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-5 bg-gray-50 text-black border border-gray-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:shadow-lg transition-all">Modifica Orario</button>
+               <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-5 bg-gray-50 text-black border border-gray-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:shadow-lg transition-all">Modifica</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-5 bg-red-50 text-red-600 border border-red-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Annulla</button>
-               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'noshow')} className="col-span-2 py-5 bg-slate-900 text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl">Segna come No-Show</button>
-               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-6 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-2xl shadow-black/20 hover:bg-amber-700 transition-all">Conferma Appuntamento</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-6 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-2xl shadow-black/20 hover:bg-amber-700 transition-all">Conferma Ritual</button>
              </div>
           </div>
         </div>
