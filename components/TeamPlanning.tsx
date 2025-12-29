@@ -11,6 +11,7 @@ interface TeamPlanningProps {
   currentUserMemberName?: string;
   requests?: any[];
   isCollaborator?: boolean;
+  salonClosures?: string[];
 }
 
 const TeamPlanning: React.FC<TeamPlanningProps> = ({ 
@@ -21,7 +22,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   onAppointmentClick,
   currentUserMemberName, 
   requests = [], 
-  isCollaborator = false 
+  isCollaborator = false,
+  salonClosures = []
 }) => {
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
   const [viewDate, setViewDate] = useState(new Date());
@@ -68,7 +70,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     setViewDate(d);
   };
 
-  // Funzione per generare colori unici per ogni collaboratore per differenziare l'agenda
   const getMemberAccent = (name: string) => {
     const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const colors = ['border-amber-500', 'border-purple-500', 'border-emerald-500', 'border-sky-500', 'border-rose-500'];
@@ -87,6 +88,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
+    // 1. Chiusura Salone (Festività Globale)
+    if (salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
+
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
 
@@ -138,6 +142,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         .break-pattern { background-image: repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(251, 191, 36, 0.05) 8px, rgba(251, 191, 36, 0.05) 16px); background-color: #fffbeb; }
         .closure-pattern { background-image: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); background-color: #f9fafb; }
         .vacation-pattern { background-image: repeating-linear-gradient(45deg, #fef3c7, #fef3c7 10px, #fde68a 10px, #fde68a 20px); background-color: #fffbeb; }
+        .salon-closure-pattern { background-image: repeating-linear-gradient(45deg, #fef2f2, #fef2f2 10px, #fee2e2 10px, #fee2e2 20px); background-color: #fef2f2; }
+        .appointment-anim { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
       `}</style>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -159,7 +165,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           </button>
         </div>
 
-        <div className="flex bg-gray-50/80 p-1 rounded-2xl border border-gray-100">
+        <div className="flex bg-gray-50/80 p-1 rounded-2xl border border-gray-100 shadow-inner">
           <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Settimana</button>
           <button onClick={() => setViewMode('daily')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Giorno</button>
         </div>
@@ -178,7 +184,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                    </div>
                 </div>
               )) : weekDays.map(date => (
-                <div key={date} className="text-center pb-4 border-b border-gray-50">
+                <div key={date} className={`text-center pb-4 border-b ${salonClosures.includes(date) ? 'border-red-200 bg-red-50/20' : 'border-gray-50'} rounded-t-2xl`}>
                   <p className="text-[8px] font-bold text-amber-600 uppercase">{new Date(`${date}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
                   <p className="text-sm font-luxury font-bold text-gray-900">{new Date(`${date}T12:00:00`).getDate()}</p>
                 </div>
@@ -193,15 +199,18 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     </div>
                     {viewMode === 'daily' ? filteredTeam.map(m => {
                       const status = getSlotStatus(m.name, dateForSlot!, hour);
-                      const baseClass = "h-12 rounded-xl border transition-all flex flex-col items-center justify-center relative cursor-pointer ";
+                      const baseClass = "h-12 rounded-xl border appointment-anim flex flex-col items-center justify-center relative cursor-pointer ";
                       let content = null;
                       let extraClass = "";
 
-                      if (status?.type === 'APPOINTMENT') {
+                      if (status?.type === 'SALON_CLOSURE') {
+                        extraClass = "salon-closure-pattern border-red-100 opacity-80 cursor-not-allowed";
+                        content = <span className="text-[5px] font-bold text-red-600 uppercase">FESTIVITÀ</span>;
+                      } else if (status?.type === 'APPOINTMENT') {
                         const appt = status.appt;
                         const catColor = getCategoryColor((appt as any).services?.category);
                         const memberAccent = getMemberAccent(m.name);
-                        extraClass = `${catColor} shadow-md z-10 border-l-4 ${memberAccent}`;
+                        extraClass = `${catColor} shadow-md z-10 border-l-4 ${memberAccent} hover:scale-105 active:scale-95`;
                         if (status.isStart) {
                           content = (
                             <div className="text-center p-1 w-full truncate px-2" onClick={() => onAppointmentClick && onAppointmentClick(appt as any)}>
@@ -220,25 +229,31 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                         extraClass = "break-pattern border-amber-50";
                         content = <span className="text-[6px] font-bold text-amber-300 uppercase">PAUSA</span>;
                       } else if (status?.type === 'NON_WORKING') {
-                        extraClass = "bg-gray-50 border-gray-50 opacity-30 non-work-pattern";
+                        extraClass = "bg-gray-50 border-gray-50 opacity-30 non-work-pattern cursor-default";
                       } else {
                         extraClass = "bg-white border-gray-50 hover:border-amber-200 hover:bg-amber-50/10";
                       }
 
                       return (
-                        <div key={`${m.name}-${hour}`} onClick={() => !status && onSlotClick && onSlotClick(m.name, dateForSlot!, hour)} className={baseClass + extraClass}>
+                        <div key={`${m.name}-${hour}`} onClick={() => (!status || status.type === 'APPOINTMENT') && (status?.type === 'APPOINTMENT' ? onAppointmentClick && onAppointmentClick((status as any).appt) : onSlotClick && onSlotClick(m.name, dateForSlot!, hour))} className={baseClass + extraClass}>
                            {content}
                         </div>
                       );
                     }) : weekDays.map(date => {
+                      const isSalonClosure = salonClosures.includes(date);
                       const apptsAtHour = appointments.filter(a => {
                         const d = new Date(a.date).toISOString().split('T')[0];
                         const h = new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
                         return d === date && h === hour && a.status !== 'cancelled';
                       });
+                      
                       return (
-                        <div key={`${date}-${hour}`} className="h-12 rounded-xl border border-gray-50 flex items-center justify-center bg-white">
-                          {apptsAtHour.length > 0 && <div className="w-2 h-2 rounded-full bg-black"></div>}
+                        <div key={`${date}-${hour}`} className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center ${isSalonClosure ? 'salon-closure-pattern' : 'bg-white'}`}>
+                          {isSalonClosure ? (
+                             <i className="fas fa-ribbon text-[8px] text-red-200"></i>
+                          ) : apptsAtHour.length > 0 && (
+                             <div className="w-2 h-2 rounded-full bg-black"></div>
+                          )}
                         </div>
                       )
                     })}
