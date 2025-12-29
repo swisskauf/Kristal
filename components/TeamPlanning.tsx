@@ -147,11 +147,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <button onClick={() => moveTime(-1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400">
+          <button onClick={() => moveTime(-1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all">
             <i className="fas fa-chevron-left text-[10px]"></i>
           </button>
           <div className="text-center min-w-[180px]">
-            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Agenda Atelier</h4>
+            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Atelier Planning</h4>
             <p className="text-[8px] font-bold text-amber-600 uppercase tracking-[0.2em]">
               {viewMode === 'weekly' 
                 ? `${new Date(weekDays[0]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(weekDays[6]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`
@@ -159,7 +159,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
               }
             </p>
           </div>
-          <button onClick={() => moveTime(1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400">
+          <button onClick={() => moveTime(1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all">
             <i className="fas fa-chevron-right text-[10px]"></i>
           </button>
         </div>
@@ -241,21 +241,26 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     }) : weekDays.map(date => {
                       const isSalonClosure = salonClosures.includes(date);
                       const apptsAtHour = appointments.filter(a => {
-                        const d = new Date(a.date).toISOString().split('T')[0];
-                        const h = new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                        const apptDate = new Date(a.date);
+                        const d = apptDate.toISOString().split('T')[0];
+                        const h = apptDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
                         return d === date && h === hour && a.status !== 'cancelled';
                       });
                       
                       return (
                         <div 
                           key={`${date}-${hour}`} 
-                          onClick={() => apptsAtHour.length > 0 && onAppointmentClick && onAppointmentClick(apptsAtHour[0])}
-                          className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center transition-all cursor-pointer ${isSalonClosure ? 'salon-closure-pattern' : 'bg-white hover:bg-amber-50/10'}`}
+                          onClick={() => {
+                            if (apptsAtHour.length > 0 && onAppointmentClick) {
+                              onAppointmentClick(apptsAtHour[0]);
+                            }
+                          }}
+                          className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center transition-all cursor-pointer ${isSalonClosure ? 'salon-closure-pattern' : 'bg-white hover:bg-amber-50/20 active:scale-95'}`}
                         >
                           {isSalonClosure ? (
                              <i className="fas fa-ribbon text-[8px] text-red-400"></i>
                           ) : apptsAtHour.length > 0 && (
-                             <div className="w-2.5 h-2.5 rounded-full bg-black shadow-lg animate-pulse"></div>
+                             <div className="w-3 h-3 rounded-full bg-black shadow-lg animate-pulse border-2 border-white"></div>
                           )}
                         </div>
                       )
