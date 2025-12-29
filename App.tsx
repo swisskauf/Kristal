@@ -51,7 +51,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v2');
+    const savedSettings = localStorage.getItem('kristal_settings_v3');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -59,11 +59,35 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v2', JSON.stringify(newSettings));
-    showToast("Impostazioni salvate con successo.");
+    localStorage.setItem('kristal_settings_v3', JSON.stringify(newSettings));
+    showToast("Impostazioni salvate.");
   };
 
-  const sendEmailNotification = (appointment: any, type: 'new' | 'update') => {
+  // Funzione di logging avanzata
+  const logOperation = async (clientId: string, action: string, details: string) => {
+    const timestamp = new Date().toLocaleString('it-IT');
+    const logEntry = `[${timestamp}] ${action}: ${details}`;
+    
+    const profile = profiles.find(p => p.id === clientId);
+    if (!profile) return;
+
+    const updatedHistory = [...(profile.treatment_history || []), { service: logEntry, date: new Date().toISOString() }];
+    const updatedSheets = [...(profile.technical_sheets || []), {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      category: 'LOG_SISTEMA',
+      content: logEntry,
+      author: user?.fullName || 'Sistema'
+    }];
+
+    await db.profiles.upsert({
+      ...profile,
+      treatment_history: updatedHistory,
+      technical_sheets: updatedSheets
+    });
+  };
+
+  const sendEmailNotification = (appointment: any, type: 'new' | 'update' | 'cancel') => {
     if (!settings.emailNotificationsEnabled) return;
 
     const profile = profiles.find(p => p.id === appointment.client_id) || appointment.profiles;
@@ -71,14 +95,13 @@ const App: React.FC = () => {
     const guestEmail = profile?.email || 'notifica@kristal-atelier.ch';
     const date = new Date(appointment.date).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     
-    // Logica di simulazione avanzata
-    console.group(`%c [KRISTAL MAIL SERVER] - ${type.toUpperCase()}`, 'background: #111; color: #d97706; padding: 4px; border-radius: 4px;');
-    console.log(`Destinatario: ${guestName} (${guestEmail})`);
-    console.log(`Oggetto: ${type === 'new' ? 'Conferma del tuo Ritual Kristal' : 'Aggiornamento del tuo appuntamento'}`);
-    console.log(`Corpo: Gentile ${guestName}, ti informiamo che il tuo rituale del ${date} è stato correttamente ${type === 'new' ? 'riservato' : 'aggiornato'}.`);
+    console.group(`%c [KRISTAL NOTIFICATION ENGINE]`, 'background: #000; color: #fbbf24; padding: 5px;');
+    console.log(`Tipo: ${type.toUpperCase()}`);
+    console.log(`Email a: ${guestEmail}`);
+    console.log(`Data Ritual: ${date}`);
     console.groupEnd();
 
-    showToast(`Notifica inviata a ${guestName}`, 'info');
+    showToast(`Email di ${type === 'cancel' ? 'cancellazione' : 'notifica'} inviata a ${guestName}`, 'info');
   };
 
   const isAdmin = user?.role === 'admin';
@@ -95,9 +118,17 @@ const App: React.FC = () => {
     return Array.from(new Set(cats));
   }, [services]);
 
-  const guestAppointments = useMemo(() => {
-    if (!user) return [];
-    return appointments.filter(a => a.client_id === user.id).sort((a,b) => b.date.localeCompare(a.date));
+  // Raggruppamento Appuntamenti per Ospite
+  const groupedGuestAppointments = useMemo(() => {
+    if (!user) return { upcoming: [], past: [], cancelled: [] };
+    const userAppts = appointments.filter(a => a.client_id === user.id);
+    const now = new Date();
+
+    return {
+      upcoming: userAppts.filter(a => new Date(a.date) >= now && a.status === 'confirmed').sort((a,b) => a.date.localeCompare(b.date)),
+      past: userAppts.filter(a => new Date(a.date) < now && (a.status === 'confirmed' || a.status === 'noshow')).sort((a,b) => b.date.localeCompare(a.date)),
+      cancelled: userAppts.filter(a => a.status === 'cancelled').sort((a,b) => b.date.localeCompare(a.date))
+    };
   }, [appointments, user]);
 
   const ensureDataSeeding = useCallback(async () => {
@@ -178,13 +209,15 @@ const App: React.FC = () => {
     if (!loading) refreshData();
   }, [loading, refreshData]);
 
-  const handleUpdateAppointmentStatus = async (id: string, status: 'confirmed' | 'cancelled') => {
+  const handleUpdateAppointmentStatus = async (id: string, status: 'confirmed' | 'cancelled' | 'noshow') => {
     try {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
-        showToast(`Rituale ${status === 'confirmed' ? 'confermato' : 'annullato'}.`);
-        if (isAdmin || isCollaborator) sendEmailNotification(appt, 'update');
+        const actionText = status === 'confirmed' ? 'Confermato' : status === 'cancelled' ? 'Annullato' : 'Non effettuato (No-Show)';
+        await logOperation(appt.client_id, 'STATO RITUAL', `${actionText} - ${appt.services?.name}`);
+        showToast(`Rituale ${status}.`);
+        sendEmailNotification(appt, status === 'cancelled' ? 'cancel' : 'update');
         refreshData();
         setSelectedAppointmentDetail(null);
       }
@@ -204,7 +237,7 @@ const App: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h1 className="text-2xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal Atelier</h1>
-          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Sincronizzazione...</p>
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Sincronizzazione Registro...</p>
         </div>
       </div>
     );
@@ -283,31 +316,78 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'my_rituals' && user && (
-          <div className="space-y-10 animate-in fade-in">
-             <h2 className="text-4xl font-luxury font-bold">I Miei Ritual</h2>
-             <div className="grid gap-6">
-               {guestAppointments.length > 0 ? guestAppointments.map(a => (
-                 <div key={a.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-6">
-                      <div className="w-16 h-16 bg-black text-white rounded-[1.5rem] flex flex-col items-center justify-center">
-                        <span className="text-[8px] uppercase font-bold text-amber-500">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
-                        <span className="text-xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
+          <div className="space-y-16 animate-in fade-in">
+             <header className="flex items-center justify-between">
+               <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
+               <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600"><i className="fas fa-calendar-check text-xl"></i></div>
+             </header>
+
+             {/* PROSSIMI RITUAL */}
+             <section className="space-y-8">
+               <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600 border-l-4 border-amber-600 pl-4">Prossime Sessioni</h3>
+               <div className="grid md:grid-cols-2 gap-6">
+                 {groupedGuestAppointments.upcoming.length > 0 ? groupedGuestAppointments.upcoming.map(a => (
+                   <div key={a.id} className="bg-white p-10 rounded-[3.5rem] border border-gray-100 flex flex-col justify-between shadow-sm hover:shadow-xl transition-all group">
+                      <div className="flex justify-between items-start mb-6">
+                         <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors">
+                            <span className="text-[9px] uppercase font-bold text-amber-500 group-hover:text-white">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+                            <span className="text-2xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
+                         </div>
+                         <span className="px-4 py-2 bg-green-50 text-green-700 text-[8px] font-bold uppercase rounded-full border border-green-100">Confermato</span>
                       </div>
                       <div>
-                        <h5 className="font-bold text-lg">{a.services?.name}</h5>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Con {a.team_member_name} alle {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                        <h4 className="text-2xl font-luxury font-bold mb-1">{a.services?.name}</h4>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Con {a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                        <button onClick={() => handleUpdateAppointmentStatus(a.id, 'cancelled')} className="text-[9px] font-bold uppercase text-red-400 hover:text-red-600 transition-colors">Richiedi Annullamento</button>
                       </div>
-                    </div>
-                    <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase ${a.status === 'confirmed' ? 'bg-green-100 text-green-700' : a.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {a.status}
-                    </span>
-                 </div>
-               )) : (
-                 <div className="p-20 text-center bg-white rounded-[4rem] border border-dashed border-gray-200">
-                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.2em]">Non avete ancora Ritual programmati</p>
-                 </div>
-               )}
-             </div>
+                   </div>
+                 )) : (
+                   <div className="col-span-full py-16 text-center bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
+                     <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna sessione programmata</p>
+                   </div>
+                 )}
+               </div>
+             </section>
+
+             {/* CRONOLOGIA PASSATA */}
+             <section className="space-y-8">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">Archivio Bellezza</h3>
+                <div className="bg-white rounded-[3.5rem] border border-gray-50 overflow-hidden shadow-sm">
+                   {groupedGuestAppointments.past.length > 0 ? groupedGuestAppointments.past.map((a, i) => (
+                     <div key={a.id} className={`p-8 flex items-center justify-between transition-colors ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/30'} ${a.status === 'noshow' ? 'opacity-60 grayscale' : ''}`}>
+                        <div className="flex items-center gap-6">
+                           <div className="text-center w-12">
+                              <p className="text-lg font-luxury font-bold">{new Date(a.date).getDate()}</p>
+                              <p className="text-[7px] font-bold text-gray-400 uppercase tracking-widest">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
+                           </div>
+                           <div>
+                              <p className="font-bold text-sm">{a.services?.name}</p>
+                              <p className="text-[9px] text-gray-400 uppercase">{a.team_member_name} • {new Date(a.date).getFullYear()}</p>
+                           </div>
+                        </div>
+                        {a.status === 'noshow' && <span className="text-[8px] font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-100 uppercase">Non Effettuato</span>}
+                        <p className="font-luxury font-bold text-sm">CHF {a.services?.price}</p>
+                     </div>
+                   )) : (
+                     <div className="p-12 text-center text-gray-300 italic text-xs">Nessun rituale storico</div>
+                   )}
+                </div>
+             </section>
+
+             {/* ANNULLATI */}
+             {groupedGuestAppointments.cancelled.length > 0 && (
+               <section className="space-y-4 opacity-50">
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300 pl-4">Annullati</h3>
+                  <div className="space-y-2">
+                    {groupedGuestAppointments.cancelled.slice(0, 3).map(a => (
+                      <div key={a.id} className="p-4 bg-white rounded-2xl border border-gray-50 flex justify-between items-center line-through">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(a.date).toLocaleDateString()} - {a.services?.name}</span>
+                        <span className="text-[8px] font-bold text-gray-300">CANCELLED</span>
+                      </div>
+                    ))}
+                  </div>
+               </section>
+             )}
           </div>
         )}
 
@@ -327,125 +407,75 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'vacation_planning' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-            <header>
-               <h2 className="text-4xl font-luxury font-bold">Vacanze & Chiusure</h2>
-               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Gestione ferie staff e festività atelier</p>
-            </header>
-
-            <div className="grid lg:grid-cols-2 gap-10">
-               <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 flex items-center gap-3">
-                     <i className="fas fa-ribbon text-amber-600"></i> Nuova Festività Atelier
-                  </h4>
-                  <div className="space-y-6">
-                    <input id="h-name" type="text" placeholder="Nome Festività" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
-                    <input id="h-date" type="date" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
-                    <button onClick={async () => {
-                      const n = (document.getElementById('h-name') as HTMLInputElement).value;
-                      const d = (document.getElementById('h-date') as HTMLInputElement).value;
-                      if(n && d) {
-                        const updated = [...salonClosures, { name: n, date: d }];
-                        await db.salonClosures.save(updated);
-                        setSalonClosures(updated);
-                        showToast("Chiusura aggiunta.");
-                      }
-                    }} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Aggiungi Chiusura</button>
-                    
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-                       {salonClosures.map(c => (
-                         <div key={c.date} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl">
-                            <div>
-                               <p className="text-[10px] font-bold">{c.name}</p>
-                               <p className="text-[8px] text-amber-600 uppercase font-bold">{new Date(c.date).toLocaleDateString()}</p>
-                            </div>
-                            <button onClick={async () => {
-                               const updated = salonClosures.filter(x => x.date !== c.date);
-                               await db.salonClosures.save(updated);
-                               setSalonClosures(updated);
-                            }} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
-                         </div>
-                       ))}
-                    </div>
-                  </div>
-               </div>
-
-               <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Approvazione Richieste Staff</h4>
-                  <RequestManagement requests={requests} onAction={async (id, action) => {
-                    await db.requests.update(id, { status: action });
-                    if (action === 'approved') {
-                      const req = requests.find(r => r.id === id);
-                      if (req) {
-                        const member = team.find(m => m.name === req.member_name);
-                        if (member) {
-                          const updatedAbsences = [...(member.absences_json || []), {
-                            id: req.id, startDate: req.start_date, endDate: req.end_date, type: req.type, isFullDay: req.is_full_day
-                          }];
-                          await db.team.upsert({ ...member, absences_json: updatedAbsences });
-                        }
-                      }
-                    }
-                    refreshData();
-                    showToast(`Richiesta ${action}.`);
-                  }} />
-               </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'impostazioni' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
+          <div className="space-y-16 animate-in fade-in">
              <header>
-               <h2 className="text-4xl font-luxury font-bold">Impostazioni</h2>
-               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Configurazione Funzionalità Atelier</p>
+               <h2 className="text-5xl font-luxury font-bold">Impostazioni</h2>
+               <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Centro di Controllo Atelier</p>
              </header>
 
              <div className="grid md:grid-cols-2 gap-10">
-                <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4">Moduli Attivi</h4>
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                {/* MODULI CORE */}
+                <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm space-y-10">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-6 flex items-center gap-3">
+                     <i className="fas fa-layer-group text-amber-600"></i> Funzionalità Sistema
+                  </h4>
+                  <div className="space-y-8">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-amber-600 text-white rounded-2xl flex items-center justify-center"><i className="fas fa-sparkles"></i></div>
-                        <div><p className="text-sm font-bold">AI Assistant</p><p className="text-[8px] text-gray-400 font-bold uppercase">Kristal Virtual Consultant</p></div>
+                        <div className="w-12 h-12 bg-amber-600 text-white rounded-2xl flex items-center justify-center shadow-lg"><i className="fas fa-sparkles text-lg"></i></div>
+                        <div>
+                          <p className="text-sm font-bold">Kristal AI Assistant</p>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">Virtual Consultant attivo</p>
+                        </div>
                       </div>
-                      <button onClick={() => saveSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-12 h-6 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}>
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-7' : 'left-1'}`}></div>
+                      <button onClick={() => saveSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-14 h-8 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}>
+                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-7' : 'left-1'}`}></div>
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center"><i className="fas fa-envelope"></i></div>
-                        <div><p className="text-sm font-bold">Notifiche Email</p><p className="text-[8px] text-gray-400 font-bold uppercase">Conferme auto agli ospiti</p></div>
+                        <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg"><i className="fas fa-envelope text-lg"></i></div>
+                        <div>
+                          <p className="text-sm font-bold">Notifiche Email</p>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">Conferme auto attive</p>
+                        </div>
                       </div>
-                      <button onClick={() => saveSettings({...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled})} className={`w-12 h-6 rounded-full transition-all relative ${settings.emailNotificationsEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}>
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-7' : 'left-1'}`}></div>
+                      <button onClick={() => saveSettings({...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled})} className={`w-14 h-8 rounded-full transition-all relative ${settings.emailNotificationsEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}>
+                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-7' : 'left-1'}`}></div>
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                   <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4">Integrazione Instagram</h4>
-                   <div className="space-y-4">
-                      <p className="text-[10px] text-gray-400 leading-relaxed italic">Inserisci il "User Access Token" di Instagram Graph API per mostrare i lavori recenti nella dashboard degli ospiti.</p>
-                      <input 
-                        type="password" 
-                        placeholder="Instagram Access Token..." 
-                        value={settings.instagramToken} 
-                        onChange={(e) => setSettings({...settings, instagramToken: e.target.value})}
-                        className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs"
-                      />
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                         <span className="text-[10px] font-bold uppercase">Mostra Gallery</span>
-                         <button onClick={() => saveSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})} className={`w-12 h-6 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}>
-                           <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-7' : 'left-1'}`}></div>
+                {/* INSTAGRAM CONFIG */}
+                <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm space-y-10">
+                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-6 flex items-center gap-3">
+                      <i className="fab fa-instagram text-amber-600 text-lg"></i> Integrazione Portfolio
+                   </h4>
+                   <div className="space-y-8">
+                      <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
+                         <p className="text-[10px] font-bold uppercase text-gray-400 mb-3">Guida Rapida</p>
+                         <p className="text-[11px] leading-relaxed text-gray-600">Per visualizzare i post, incolla l'<strong>Access Token</strong> ottenuto da <em>developers.facebook.com</em>. Assicurati che l'account sia Instagram Business.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Instagram User Token</label>
+                        <input 
+                          type="password" 
+                          placeholder="IGQV..." 
+                          value={settings.instagramToken} 
+                          onChange={(e) => setSettings({...settings, instagramToken: e.target.value})}
+                          className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                         <span className="text-[10px] font-bold uppercase tracking-widest">Attiva Gallery Dashboard</span>
+                         <button onClick={() => saveSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})} className={`w-14 h-8 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}>
+                           <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-7' : 'left-1'}`}></div>
                          </button>
                       </div>
-                      <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase">Salva Configurazione</button>
+                      <button onClick={() => saveSettings(settings)} className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-amber-700 transition-all">Sincronizza Instagram</button>
                    </div>
                 </div>
              </div>
@@ -476,7 +506,7 @@ const App: React.FC = () => {
 
       {settings.aiAssistantEnabled && <AIAssistant />}
 
-      {/* Modale Appuntamento */}
+      {/* Modale Appuntamento con Logging integrato nell'onSave */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -488,7 +518,12 @@ const App: React.FC = () => {
                onSave={async (a) => { 
                  const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
                  const isUpdate = !!a.id;
-                 await db.appointments.upsert({ ...a, client_id }); 
+                 const saved = await db.appointments.upsert({ ...a, client_id }); 
+                 
+                 // Log operazione
+                 const serviceName = services.find(s => s.id === a.service_id)?.name || 'Ritual';
+                 await logOperation(client_id, isUpdate ? 'MODIFICA RITUAL' : 'PRENOTAZIONE RITUAL', `${serviceName} con ${a.team_member_name} il ${new Date(a.date!).toLocaleString()}`);
+                 
                  setIsFormOpen(false); setFormInitialData(null); await refreshData(); 
                  showToast(isUpdate ? "Ritual aggiornato." : "Ritual programmato.");
                  sendEmailNotification(a, isUpdate ? 'update' : 'new');
@@ -515,6 +550,7 @@ const App: React.FC = () => {
              <div className="grid grid-cols-2 gap-4">
                <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Modifica</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Annulla</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'noshow')} className="col-span-2 py-4 bg-gray-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Segna come No-Show</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Conferma Ritual</button>
              </div>
           </div>
