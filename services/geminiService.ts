@@ -1,68 +1,37 @@
+
 import { GoogleGenAI } from "@google/genai";
-import { SERVICES } from "../constants";
-import { User } from "../types";
 
-const getApiKey = () =>
-  (typeof import.meta !== "undefined" ? (import.meta as any).env?.VITE_GEMINI_API_KEY : "") ||
-  (typeof window !== "undefined" ? (window as any)?.process?.env?.VITE_GEMINI_API_KEY : "") ||
-  "";
+// Initialization of Google GenAI SDK
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export async function getAIConsultation(userPrompt: string, userProfile?: User) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    console.warn("Gemini API key mancante: risposta di fallback.");
-    return "Siamo qui per voi. Prenotate un Ritual e vi accogliamo in atelier con una consulenza dedicata.";
-  }
+// Professional system instruction for the AI consultant
+const SYSTEM_INSTRUCTION = `You are "Kristal AI", the expert beauty consultant for 'Kristal Atelier', a prestigious luxury beauty salon. 
+Your tone is sophisticated, elegant, and professional yet warm. 
+You specialize in hair care, Balayage techniques, keratin treatments, and high-end aesthetics.
+Always maintain the brand's 'rituals' theme. 
+Encourage users to book a ritual using the application's interface. 
+If asked about services, reference typical salon offerings:
+- Balayage/Meches (Partial) from CHF 125
+- Keratin Treatment from CHF 250
+- Manicure from CHF 65
+Keep responses concise but luxurious. Use Italian as the primary language.`;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const serviceList = SERVICES.map((s) => `${s.name} (${s.category}) - CHF ${s.price}`).join(", ");
-
-  let historyContext = "";
-  if (userProfile?.treatment_history?.length) {
-    historyContext = `L'ospite si chiama ${userProfile.fullName}. Storico trattamenti: ${userProfile.treatment_history
-      .slice(-2)
-      .map((h) => `${h.service}`)
-      .join(", ")}.`;
-  }
-
-  const systemInstruction = `Sei la Concierge AI di "Kristal", atelier di bellezza luxury a salonekristal.ch.
-  Menu Servizi: ${serviceList}.
-  Staff: Melk (Colorista Creativo), Maurizio (Senior Stylist), Romina (Master Esthetician).
-  
-  ${historyContext}
-
-  REGOLE DI RISPOSTA:
-  1. Tono: Sofisticato, accogliente, professionale.
-  2. Rispondi in modo CONCISO (max 3-4 frasi).
-  3. Usa il grassetto (**) per SERVIZI, PREZZI e MEMBRI DEL TEAM.
-  4. Se l'utente chiede trend o informazioni esterne, usa Google Search per fornire risposte verificate.
-  5. Se il cliente sembra interessato, invita a prenotare un Ritual direttamente in app.`;
-
+export async function chatWithGemini(message: string, history: { role: string; parts: { text: string }[] }[] = []) {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
-      contents: [{ parts: [{ text: userPrompt }] }],
+      model: "gemini-3-flash-preview",
+      contents: [...history, { role: "user", parts: [{ text: message }] }],
       config: {
-        systemInstruction,
-        tools: [{ googleSearch: {} }],
+        systemInstruction: SYSTEM_INSTRUCTION,
+        temperature: 0.8,
+        topP: 0.9,
       },
     });
-
-    const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    let text = response.text || "La vostra bellezza merita silenzio e cura. Vi aspettiamo in atelier.";
-
-    if (grounding?.length) {
-      const sources = grounding
-        .map((chunk: any) => chunk.web)
-        .filter(Boolean)
-        .map((web: any) => `\n- [${web.title}](${web.uri})`)
-        .join("");
-      if (sources) text += `\n\nFonti ed approfondimenti:${sources}`;
-    }
-
-    return text;
+    
+    // Extracting generated text directly from response.text property
+    return response.text;
   } catch (error) {
-    console.error("Gemini Error:", error);
-    return "Siamo a vostra completa disposizione per una consulenza personalizzata direttamente in atelier.";
+    console.error("Gemini API Consultation Error:", error);
+    return "Mi scusi, gentile ospite. Il rituale di consultazione digitale è temporaneamente sospeso. La prego di riprovare tra un istante.";
   }
 }
