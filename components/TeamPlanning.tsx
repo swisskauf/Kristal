@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { TeamMember, Appointment } from '../types';
+import { TeamMember, Appointment, SalonClosure } from '../types';
 
 interface TeamPlanningProps {
   team: TeamMember[];
@@ -11,7 +11,7 @@ interface TeamPlanningProps {
   currentUserMemberName?: string;
   requests?: any[];
   isCollaborator?: boolean;
-  salonClosures?: string[];
+  salonClosures?: string[]; // Date stringhe per controllo veloce
 }
 
 const TeamPlanning: React.FC<TeamPlanningProps> = ({ 
@@ -142,7 +142,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         .break-pattern { background-image: repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(251, 191, 36, 0.05) 8px, rgba(251, 191, 36, 0.05) 16px); background-color: #fffbeb; }
         .closure-pattern { background-image: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); background-color: #f9fafb; }
         .vacation-pattern { background-image: repeating-linear-gradient(45deg, #fef3c7, #fef3c7 10px, #fde68a 10px, #fde68a 20px); background-color: #fffbeb; }
-        .salon-closure-pattern { background-image: repeating-linear-gradient(45deg, #fef2f2, #fef2f2 10px, #fee2e2 10px, #fee2e2 20px); background-color: #fef2f2; }
+        .salon-closure-pattern { background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); background-color: #fee2e2; }
         .appointment-anim { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
       `}</style>
 
@@ -184,7 +184,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                    </div>
                 </div>
               )) : weekDays.map(date => (
-                <div key={date} className={`text-center pb-4 border-b ${salonClosures.includes(date) ? 'border-red-200 bg-red-50/20' : 'border-gray-50'} rounded-t-2xl`}>
+                <div key={date} className={`text-center pb-4 border-b ${salonClosures.includes(date) ? 'border-red-300 bg-red-100/30' : 'border-gray-50'} rounded-t-2xl transition-all`}>
                   <p className="text-[8px] font-bold text-amber-600 uppercase">{new Date(`${date}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
                   <p className="text-sm font-luxury font-bold text-gray-900">{new Date(`${date}T12:00:00`).getDate()}</p>
                 </div>
@@ -204,8 +204,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       let extraClass = "";
 
                       if (status?.type === 'SALON_CLOSURE') {
-                        extraClass = "salon-closure-pattern border-red-100 opacity-80 cursor-not-allowed";
-                        content = <span className="text-[5px] font-bold text-red-600 uppercase">FESTIVITÀ</span>;
+                        extraClass = "salon-closure-pattern border-red-200 opacity-90 cursor-not-allowed";
+                        content = <span className="text-[5px] font-bold text-red-700 uppercase">FESTIVITÀ</span>;
                       } else if (status?.type === 'APPOINTMENT') {
                         const appt = status.appt;
                         const catColor = getCategoryColor((appt as any).services?.category);
@@ -250,7 +250,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       return (
                         <div key={`${date}-${hour}`} className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center ${isSalonClosure ? 'salon-closure-pattern' : 'bg-white'}`}>
                           {isSalonClosure ? (
-                             <i className="fas fa-ribbon text-[8px] text-red-200"></i>
+                             <i className="fas fa-ribbon text-[8px] text-red-400"></i>
                           ) : apptsAtHour.length > 0 && (
                              <div className="w-2 h-2 rounded-full bg-black"></div>
                           )}
