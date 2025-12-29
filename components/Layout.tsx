@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const collaboratorNav = [
     { id: 'dashboard', label: 'Dashboard', icon: 'fa-user-clock' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
+    { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
   ];
 
   const adminNav = [
@@ -34,6 +35,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
     { id: 'services_management', label: 'Servizi', icon: 'fa-book-open' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
     { id: 'vacation_planning', label: 'Vacanze', icon: 'fa-plane-departure' },
+    { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
+    { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
     { id: 'impostazioni', label: 'Impostazioni', icon: 'fa-cog' },
   ];
 
@@ -48,7 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-gray-50 sticky top-0 h-screen z-40">
         <div className="p-12">
           <h1 className="text-3xl font-luxury font-bold text-gray-900 tracking-tighter cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-            SALONE<span className="text-amber-600 text-[8px] font-normal uppercase block tracking-[0.4em] mt-1">Beauty Atelier</span>
+            KRISTAL<span className="text-amber-600 text-[8px] font-normal uppercase block tracking-[0.4em] mt-1">Beauty Atelier</span>
           </h1>
         </div>
         
@@ -102,13 +105,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
       {/* MOBILE HEADER */}
       <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full">
-        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>SALONE</h1>
+        <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
         )}
         {!isGuest && (
           <div className="flex items-center gap-3">
-             <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-8 h-8 rounded-full border border-gray-100" />
+             <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-10 h-10 rounded-full border-2 border-amber-500" />
           </div>
         )}
       </div>
@@ -133,12 +136,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
             <span className="text-[6px] font-bold uppercase tracking-widest">{item.label}</span>
           </button>
         ))}
-        {!isGuest && (
-          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300 hover:text-red-500 flex-1">
-            <i className="fas fa-sign-out-alt text-lg"></i>
-            <span className="text-[6px] font-bold uppercase tracking-widest">Esci</span>
-          </button>
-        )}
       </nav>
     </div>
   );
