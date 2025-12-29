@@ -55,7 +55,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
           </h1>
         </div>
         
-        <nav className="flex-1 px-8 space-y-1">
+        <nav className="flex-1 px-8 space-y-1 overflow-y-auto scrollbar-hide">
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -104,14 +104,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       </aside>
 
       {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full">
+      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full shadow-sm">
         <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
         )}
         {!isGuest && (
           <div className="flex items-center gap-3">
-             <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-10 h-10 rounded-full border-2 border-amber-500" />
+             <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.fullName}&background=000&color=fff`} className="w-10 h-10 rounded-full border border-gray-100" />
           </div>
         )}
       </div>
@@ -124,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
 
       {/* BOTTOM NAV MOBILE */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-2 py-3 flex justify-around items-center z-[500] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        {navItems.map((item) => (
+        {navItems.slice(0, 5).map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
