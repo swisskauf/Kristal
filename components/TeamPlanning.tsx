@@ -7,6 +7,7 @@ interface TeamPlanningProps {
   appointments: Appointment[];
   onToggleVacation: (memberName: string, date: string) => void;
   onSlotClick?: (memberName: string, date: string, hour: string) => void;
+  onAppointmentClick?: (appt: Appointment) => void;
   currentUserMemberName?: string;
   requests?: any[];
   isCollaborator?: boolean;
@@ -17,6 +18,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   appointments, 
   onToggleVacation, 
   onSlotClick,
+  onAppointmentClick,
   currentUserMemberName, 
   requests = [], 
   isCollaborator = false 
@@ -64,6 +66,17 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     if (viewMode === 'weekly') d.setDate(d.getDate() + (offset * 7));
     else d.setDate(d.getDate() + offset);
     setViewDate(d);
+  };
+
+  const getCategoryColor = (category?: string) => {
+    switch(category) {
+      case 'Donna': return 'bg-amber-50 border-amber-200 text-amber-900';
+      case 'Colore': return 'bg-purple-50 border-purple-200 text-purple-900';
+      case 'Trattamenti': return 'bg-emerald-50 border-emerald-200 text-emerald-900';
+      case 'Uomo': return 'bg-slate-50 border-slate-200 text-slate-900';
+      case 'Estetica': return 'bg-rose-50 border-rose-200 text-rose-900';
+      default: return 'bg-gray-50 border-gray-200 text-gray-900';
+    }
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
@@ -178,11 +191,14 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       let extraClass = "";
 
                       if (status?.type === 'APPOINTMENT') {
-                        extraClass = "bg-black border-black text-white shadow-md z-10";
+                        const appt = status.appt;
+                        const catColor = getCategoryColor((appt as any).services?.category);
+                        extraClass = `${catColor} shadow-sm z-10 border-l-4`;
                         if (status.isStart) {
                           content = (
-                            <div className="text-center p-1 w-full truncate px-2">
-                               <p className="text-[7px] font-bold uppercase truncate">{(status.appt as any).profiles?.full_name || 'Ospite'}</p>
+                            <div className="text-center p-1 w-full truncate px-2" onClick={() => onAppointmentClick && onAppointmentClick(appt as any)}>
+                               <p className="text-[7px] font-extrabold uppercase truncate">{(appt as any).profiles?.full_name || 'Ospite'}</p>
+                               <p className="text-[5px] font-bold opacity-60 truncate">{(appt as any).services?.name}</p>
                             </div>
                           );
                         }
