@@ -1,7 +1,8 @@
 
 {
-  "name": "Kristal - Luxury Beauty Salon",
+  "name": "Salone Kristal",
   "version": "1.0.4",
-  "description": "Piattaforma di gestione per l'atelier Kristal a salonekristal.ch. AI-powered consultations, team scheduling e prenotazioni luxury.",
-  "domain": "salonekristal.ch"
+  "description": "Piattaforma di gestione professionale per l'atelier Kristal a salonekristal.ch. Team scheduling, gestione congedi e prenotazioni luxury.",
+  "domain": "salonekristal.ch",
+  "requestFramePermissions": []
 }
