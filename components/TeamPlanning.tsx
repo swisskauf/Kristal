@@ -88,6 +88,14 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const member = team.find(t => t.name === memberName);
     if (!member) return null;
 
+    // Controllo assenze approvate (Vacanze)
+    const isAbsent = member.absences_json?.some(abs => {
+      const start = new Date(abs.startDate).toISOString().split('T')[0];
+      const end = new Date(abs.endDate).toISOString().split('T')[0];
+      return dateStr >= start && dateStr <= end;
+    });
+    if (isAbsent) return { type: 'VACATION' };
+
     const d = new Date(`${dateStr}T12:00:00`);
     if ((member.weekly_closures || []).includes(d.getDay())) return { type: 'CLOSURE' };
     if (member.unavailable_dates?.includes(dateStr)) return { type: 'VACATION' };
@@ -107,14 +115,15 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     <div className="space-y-8 animate-in fade-in">
       <style>{`
         .salon-closure-pattern { background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); }
+        .vacation-pattern { background-image: repeating-linear-gradient(135deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); opacity: 0.6; }
         .appointment-dot { transition: all 0.2s ease; }
         .appointment-dot:hover { transform: scale(1.3); filter: brightness(1.1); }
       `}</style>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <button onClick={() => moveTime(-1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400"><i className="fas fa-chevron-left text-[10px]"></i></button>
-          <div className="text-center min-w-[220px]">
+          <button onClick={() => moveTime(-1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-left text-[10px]"></i></button>
+          <div className="text-center min-w-[250px]">
             <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Planning Atelier</h4>
             <p className="text-[9px] font-bold text-amber-600 uppercase tracking-[0.2em]">
                {viewMode === 'weekly' 
@@ -122,7 +131,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                  : viewDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <button onClick={() => moveTime(1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400"><i className="fas fa-chevron-right text-[10px]"></i></button>
+          <button onClick={() => moveTime(1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-right text-[10px]"></i></button>
         </div>
         <div className="flex bg-gray-50/80 p-1 rounded-2xl border border-gray-100">
           <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Settimana</button>
@@ -156,14 +165,14 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     return (
                       <div 
                         key={`${m.name}-${hour}`} 
-                        onClick={() => status?.type === 'APPOINTMENT' ? onAppointmentClick?.(status.appt) : onSlotClick?.(m.name, weekDays[0], hour)}
+                        onClick={() => status?.type === 'APPOINTMENT' ? onAppointmentClick?.(status.appt) : (status?.type !== 'VACATION' && status?.type !== 'SALON_CLOSURE' && onSlotClick?.(m.name, weekDays[0], hour))}
                         className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white' : 'hover:bg-amber-50/10'}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
                            <div className="text-[6px] font-bold uppercase truncate px-2">{status.appt.profiles?.full_name}</div>
                          )}
                          {status?.type === 'SALON_CLOSURE' && <div className="w-full h-full salon-closure-pattern opacity-30 rounded-xl"></div>}
-                         {status?.type === 'VACATION' && <div className="text-[7px] font-bold text-gray-300 uppercase">Assente</div>}
+                         {status?.type === 'VACATION' && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-xl"><span className="text-[6px] font-bold text-gray-400 uppercase">Assente</span></div>}
                       </div>
                     );
                   }) : weekDays.map(date => {
