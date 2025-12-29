@@ -70,7 +70,7 @@ export interface Appointment {
   date: string;
   status: 'confirmed' | 'pending' | 'cancelled' | 'noshow';
   services?: { name: string; price: number; duration: number; category: string };
-  profiles?: { full_name: string; phone: string; email?: string };
+  profiles?: { full_name: string; phone: string; email?: string; treatment_history?: any[] };
   created_at: string;
 }
 
@@ -81,14 +81,13 @@ export interface TeamMember {
   avatar?: string;
   profile_id?: string; 
   absences_json?: AbsenceEntry[];
-  unavailable_dates?: string[]; // Date specifiche (vacanze)
-  weekly_closures?: number[]; // 0-6 (0=Domenica, 1=Lunedì, ecc.)
+  unavailable_dates?: string[];
+  weekly_closures?: number[];
   total_vacation_days?: number;
   work_start_time?: string; 
   work_end_time?: string;
   break_start_time?: string;
   break_end_time?: string;
-  // Dati Sensibili Admin
   address?: string;
   avs_number?: string;
   iban?: string;
