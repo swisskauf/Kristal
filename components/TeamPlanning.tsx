@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { TeamMember, Appointment, SalonClosure } from '../types';
+import { TeamMember, Appointment } from '../types';
 
 interface TeamPlanningProps {
   team: TeamMember[];
@@ -11,7 +11,7 @@ interface TeamPlanningProps {
   currentUserMemberName?: string;
   requests?: any[];
   isCollaborator?: boolean;
-  salonClosures?: string[]; // Date stringhe per controllo veloce
+  salonClosures?: string[]; 
 }
 
 const TeamPlanning: React.FC<TeamPlanningProps> = ({ 
@@ -88,7 +88,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
-    // 1. Chiusura Salone (Festività Globale)
     if (salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const [h, m] = hour.split(':').map(Number);
@@ -248,11 +247,15 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       });
                       
                       return (
-                        <div key={`${date}-${hour}`} className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center ${isSalonClosure ? 'salon-closure-pattern' : 'bg-white'}`}>
+                        <div 
+                          key={`${date}-${hour}`} 
+                          onClick={() => apptsAtHour.length > 0 && onAppointmentClick && onAppointmentClick(apptsAtHour[0])}
+                          className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center transition-all cursor-pointer ${isSalonClosure ? 'salon-closure-pattern' : 'bg-white hover:bg-amber-50/10'}`}
+                        >
                           {isSalonClosure ? (
                              <i className="fas fa-ribbon text-[8px] text-red-400"></i>
                           ) : apptsAtHour.length > 0 && (
-                             <div className="w-2 h-2 rounded-full bg-black"></div>
+                             <div className="w-2.5 h-2.5 rounded-full bg-black shadow-lg animate-pulse"></div>
                           )}
                         </div>
                       )
