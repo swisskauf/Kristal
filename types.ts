@@ -76,6 +76,7 @@ export interface Appointment {
 
 export interface TeamMember {
   name: string;
+  email: string; // Obbligatorio per login e invito
   role: string;
   bio?: string;
   avatar?: string;
