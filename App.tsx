@@ -83,17 +83,17 @@ const App: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast("Evento aggiunto alla coda del calendario.");
+    showToast("Evento aggiunto al calendario.");
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v13');
+    const savedSettings = localStorage.getItem('kristal_settings_v15');
     if (savedSettings) setSettings(JSON.parse(savedSettings));
   }, []);
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v13', JSON.stringify(newSettings));
+    localStorage.setItem('kristal_settings_v15', JSON.stringify(newSettings));
     showToast("Configurazione salvata.");
   };
 
@@ -267,6 +267,84 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'my_rituals' && user && (
+          <div className="space-y-16 animate-in fade-in">
+             <header className="flex items-center justify-between">
+               <div>
+                  <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
+                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">La vostra storia in Atelier</p>
+               </div>
+               <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
+             </header>
+
+             <section className="space-y-8">
+               <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600 border-l-4 border-amber-600 pl-4">Prossime Sessioni</h3>
+               <div className="grid md:grid-cols-2 gap-8">
+                 {groupedGuestAppointments.upcoming.length > 0 ? groupedGuestAppointments.upcoming.map(a => (
+                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-gray-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group">
+                      <div className="flex justify-between items-start mb-10">
+                         <div className="w-20 h-20 bg-black text-white rounded-[2rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors shadow-lg">
+                            <span className="text-[10px] uppercase font-bold text-amber-500 group-hover:text-white">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+                            <span className="text-3xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
+                         </div>
+                         <div className="text-right flex flex-col items-end gap-3">
+                            <span className="px-4 py-2 bg-green-50 text-green-700 text-[9px] font-bold uppercase rounded-full border border-green-100">Confermato</span>
+                            <button onClick={() => downloadICS(a)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2 hover:text-black transition-colors"><i className="fas fa-calendar-plus"></i> Calendario</button>
+                         </div>
+                      </div>
+                      <div className="space-y-6">
+                        <h4 className="text-3xl font-luxury font-bold text-gray-900">{a.services?.name}</h4>
+                        <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-[11px] font-bold text-amber-600">{a.team_member_name[0]}</div>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                        </div>
+                        <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
+                           <div className="space-y-1">
+                              <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Assistenza Atelier:</p>
+                              <a href={`tel:${SALON_PHONE.replace(/[^\d+]/g, '')}`} className="text-gray-900 font-bold text-xs hover:text-amber-600 transition-colors">{SALON_PHONE}</a>
+                           </div>
+                           <a href={`tel:${SALON_PHONE.replace(/[^\d+]/g, '')}`} className="w-14 h-14 bg-black text-white rounded-[1.5rem] flex items-center justify-center hover:bg-amber-600 transition-all shadow-xl shadow-black/10">
+                              <i className="fas fa-phone-alt text-lg"></i>
+                           </a>
+                        </div>
+                      </div>
+                   </div>
+                 )) : (
+                   <div className="col-span-full py-24 text-center bg-gray-50/50 rounded-[4rem] border border-dashed border-gray-200">
+                     <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Nessuna sessione programmata</p>
+                   </div>
+                 )}
+               </div>
+             </section>
+
+             <section className="space-y-8">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">I Vostri Momenti</h3>
+                <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
+                   {groupedGuestAppointments.history.length > 0 ? groupedGuestAppointments.history.map((a, i) => (
+                     <div key={a.id} className={`p-10 flex items-center justify-between transition-colors border-b border-gray-50 last:border-none ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/20'} ${a.status === 'noshow' ? 'opacity-50 grayscale' : ''}`}>
+                        <div className="flex items-center gap-10">
+                           <div className="text-center w-16">
+                              <p className="text-3xl font-luxury font-bold text-gray-900">{new Date(a.date).getDate()}</p>
+                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
+                           </div>
+                           <div className="space-y-1">
+                              <p className="font-bold text-lg text-gray-900">{a.services?.name}</p>
+                              <p className="text-[9px] text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).getFullYear()}</p>
+                           </div>
+                        </div>
+                        <div className="flex items-center gap-8">
+                           {a.status === 'noshow' && <span className="text-[8px] font-bold text-red-600 bg-red-50 px-4 py-1.5 rounded-full border border-red-100 uppercase tracking-widest">Non Effettuato</span>}
+                           <p className="font-luxury font-bold text-xl text-gray-900">CHF {a.services?.price}</p>
+                        </div>
+                     </div>
+                   )) : (
+                     <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">Nessun rituale nell'archivio personale</div>
+                   )}
+                </div>
+             </section>
+          </div>
+        )}
+
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <header className="flex items-center justify-between">
@@ -283,7 +361,6 @@ const App: React.FC = () => {
                         <span className="px-4 py-1.5 bg-gray-50 text-[8px] font-bold uppercase tracking-widest rounded-full">{s.category}</span>
                         <div className="flex gap-2">
                            <button onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="w-8 h-8 bg-gray-50 text-gray-400 rounded-xl hover:text-black transition-colors"><i className="fas fa-edit text-xs"></i></button>
-                           <button onClick={async () => { if(confirm('Eliminare rituale?')) { /* logic to delete */ refreshData(); } }} className="w-8 h-8 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all"><i className="fas fa-trash text-xs"></i></button>
                         </div>
                      </div>
                      <h4 className="text-xl font-luxury font-bold text-gray-900 mb-1">{s.name}</h4>
@@ -327,8 +404,8 @@ const App: React.FC = () => {
                    <div className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm space-y-8">
                       <div className="space-y-4">
                          <div className="grid grid-cols-2 gap-4">
-                            <input type="date" id="salon-close-date" className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
-                            <input type="text" id="salon-close-name" placeholder="Nome Festività (es. Pasqua)" className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+                            <input type="date" id="salon-close-date" className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
+                            <input type="text" id="salon-close-name" placeholder="Nome Festività" className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
                          </div>
                          <button onClick={async () => {
                             const date = (document.getElementById('salon-close-date') as HTMLInputElement).value;
@@ -341,7 +418,7 @@ const App: React.FC = () => {
                                refreshData();
                                showToast("Festività registrata.");
                             }
-                         }} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg">Registra Chiusura</button>
+                         }} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all">Registra Chiusura</button>
                       </div>
                       <div className="grid gap-3 max-h-[300px] overflow-y-auto scrollbar-hide pr-2">
                          {salonClosures.map(c => (
@@ -373,9 +450,9 @@ const App: React.FC = () => {
              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
                 {team.map(m => (
                    <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group">
-                      <div className="relative mb-8">
-                         <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2.5rem] object-cover border-4 border-white shadow-xl mx-auto" />
-                         <div className="absolute -bottom-2 right-1/2 translate-x-12 w-10 h-10 bg-black text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-amber-600 transition-colors"><i className="fas fa-cog text-xs"></i></div>
+                      <div className="relative mb-8 text-center">
+                         <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white shadow-xl mx-auto" />
+                         <div className="absolute -bottom-2 right-1/2 translate-x-12 w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center shadow-lg group-hover:bg-amber-600 transition-colors"><i className="fas fa-cog text-xs"></i></div>
                       </div>
                       <div className="text-center">
                          <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
@@ -468,7 +545,7 @@ const App: React.FC = () => {
 
       {isServiceFormOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
              <ServiceForm 
                initialData={selectedServiceToEdit} 
@@ -497,11 +574,11 @@ const App: React.FC = () => {
 
       {isGuestEditorOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsGuestEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
              <NewGuestForm 
                initialData={selectedGuestToEdit} 
-               onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(); showToast("Ospite salvato."); }} 
+               onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(); showToast("Profilo ospite salvato."); }} 
                onCancel={() => setIsGuestEditorOpen(false)} 
              />
           </div>
@@ -519,7 +596,7 @@ const App: React.FC = () => {
                  await db.appointments.upsert({ ...a, client_id }); 
                  setIsFormOpen(false); setFormInitialData(null); await refreshData(); 
                  showToast("Rituale programmato con successo.");
-                 if (confirm("Vuoi aggiungere questo rituale al calendario del tuo telefono?")) {
+                 if (confirm("Desideri scaricare l'appuntamento nel calendario del telefono?")) {
                     const fullAppt = { ...a, services: services.find(s => s.id === a.service_id) };
                     downloadICS(fullAppt);
                  }
