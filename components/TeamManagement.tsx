@@ -45,6 +45,17 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     }
   }, [member]);
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const stats = useMemo(() => {
     const memberAppts = appointments.filter(a => a.team_member_name === member.name && a.status === 'confirmed');
     const revenue = memberAppts.reduce((acc, a) => acc + (a.services?.price || 0), 0);
@@ -97,7 +108,16 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
     <div className="flex flex-col animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-10">
         <div className="flex items-center gap-8">
-          <img src={avatar || `https://ui-avatars.com/api/?name=${name || 'K'}`} className="w-24 h-24 rounded-[2rem] shadow-xl border-4 border-white object-cover" />
+          <div className="relative group cursor-pointer w-24 h-24">
+            <img 
+              src={avatar || `https://ui-avatars.com/api/?name=${name || 'K'}&background=f3f4f6&color=9ca3af`} 
+              className="w-full h-full rounded-[2rem] shadow-xl border-4 border-white object-cover transition-all group-hover:opacity-80" 
+            />
+            <label className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer bg-black/20 rounded-[2rem]">
+              <i className="fas fa-camera text-xl text-white"></i>
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            </label>
+          </div>
           <div>
             <h3 className="text-3xl font-luxury font-bold text-gray-900">{name || 'Artista'}</h3>
             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{role}</p>
@@ -192,10 +212,23 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, appointments, s
 
         {activeSubTab === 'admin' && (
           <div className="space-y-6">
-            <input placeholder="Indirizzo" type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Nome</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Indirizzo</label>
+              <input placeholder="Indirizzo" type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+            </div>
             <div className="grid grid-cols-2 gap-6">
-              <input placeholder="AVS" type="text" value={avsNumber} onChange={e => setAvsNumber(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
-              <input placeholder="IBAN" type="text" value={iban} onChange={e => setIban(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">AVS</label>
+                <input placeholder="AVS" type="text" value={avsNumber} onChange={e => setAvsNumber(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">IBAN</label>
+                <input placeholder="IBAN" type="text" value={iban} onChange={e => setIban(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+              </div>
             </div>
             <button onClick={handleUpdateProfile} className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Salva Anagrafica</button>
           </div>
