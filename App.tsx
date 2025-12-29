@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const [formInitialData, setFormInitialData] = useState<any>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
-  const [selectedClientDetail, setSelectedClientDetail] = useState<any | null>(null);
   const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<any | null>(null);
   const [selectedServiceToEdit, setSelectedServiceToEdit] = useState<Service | undefined>(undefined);
   
@@ -43,11 +42,24 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 5000);
   };
 
+  // Simulazione invio notifica email
+  const simulateEmailNotification = (appointment: any, type: 'new' | 'update') => {
+    const profile = profiles.find(p => p.id === appointment.client_id);
+    const guestName = profile?.full_name || 'Ospite';
+    const guestEmail = profile?.email || 'email@esempio.com';
+    
+    console.log(`[KRISTAL NOTIFY] Invio email a ${guestName} (${guestEmail}) per ${type === 'new' ? 'nuovo appuntamento' : 'modifica orario/artista'}.`);
+    
+    // Mostriamo un toast dedicato alla notifica
+    setTimeout(() => {
+      showToast(`Email di ${type === 'new' ? 'conferma' : 'aggiornamento'} inviata a ${guestName}.`, 'info');
+    }, 1500);
+  };
+
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
 
-  // Assicura che ci siano dati base (Seed) se il DB è vuoto
   const ensureDataSeeding = useCallback(async () => {
     try {
       const existingServices = await db.services.getAll();
@@ -149,21 +161,13 @@ const App: React.FC = () => {
     return cats.length > 0 ? cats : ['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'];
   }, [services]);
 
-  const myClientAppointments = useMemo(() => {
-    if (!user) return [];
-    return appointments
-      .filter(a => a.client_id === user.id)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [appointments, user]);
-
-  const upcomingAppointments = myClientAppointments.filter(a => a.status !== 'cancelled' && new Date(a.date) >= new Date());
-
   const handleUpdateAppointmentStatus = async (id: string, status: 'confirmed' | 'cancelled') => {
     try {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
         showToast(`Rituale ${status === 'confirmed' ? 'confermato' : 'annullato'} con successo.`);
+        if (status === 'confirmed' && isAdmin) simulateEmailNotification(appt, 'update');
         refreshData();
         setSelectedAppointmentDetail(null);
       }
@@ -172,7 +176,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Implement handleServiceClick to open appointment form with pre-selected service
   const handleServiceClick = (service: Service) => {
     if (isGuest) {
       setIsAuthOpen(true);
@@ -182,7 +185,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Implement handleOpenSlotForm to pre-fill member, date, and time in appointment form
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
       team_member_name: memberName,
@@ -191,7 +193,6 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  // Implement handleAppointmentClick to show detailed ritual information
   const handleAppointmentClick = (appt: Appointment) => {
     setSelectedAppointmentDetail(appt);
   };
@@ -213,9 +214,11 @@ const App: React.FC = () => {
       {toast && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[3000] animate-in slide-in-from-top-4 duration-500 w-full max-w-md px-4">
           <div className={`px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-md ${
-            toast.type === 'error' ? 'bg-red-900/90 text-white border-red-800' : 'bg-black/90 text-white border-amber-500/30'
+            toast.type === 'error' ? 'bg-red-900/90 text-white border-red-800' : 
+            toast.type === 'info' ? 'bg-slate-900/90 text-white border-slate-800' : 
+            'bg-black/90 text-white border-amber-500/30'
           }`}>
-            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'} text-amber-500`}></i>
+            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : toast.type === 'info' ? 'fa-paper-plane' : 'fa-check-circle'} text-amber-500`}></i>
             <p className="text-[11px] font-bold uppercase tracking-widest">{toast.message}</p>
           </div>
         </div>
@@ -287,7 +290,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Resto dei tab ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <div className="flex justify-between items-center">
@@ -312,7 +314,7 @@ const App: React.FC = () => {
 
       <AIAssistant />
 
-      {/* Modali migliorate */}
+      {/* Modale Appuntamento con Fix Update e Notifica */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -322,10 +324,28 @@ const App: React.FC = () => {
              <AppointmentForm 
                services={services} team={team} existingAppointments={appointments} 
                onSave={async (a) => { 
-                 await db.appointments.upsert({ ...a, client_id: isAdmin || isCollaborator ? (a.client_id || user?.id) : user?.id }); 
-                 setIsFormOpen(false); setFormInitialData(null); refreshData(); 
-                 showToast("Ritual programmato con successo.");
-                 setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'dashboard');
+                 try {
+                   // Assicuriamo che client_id sia preservato correttamente
+                   const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
+                   
+                   const isUpdate = !!a.id;
+                   const updatedAppt = await db.appointments.upsert({ ...a, client_id }); 
+                   
+                   setIsFormOpen(false); 
+                   setFormInitialData(null); 
+                   await refreshData(); 
+                   
+                   showToast(isUpdate ? "Ritual aggiornato con successo." : "Ritual programmato con successo.");
+                   
+                   // Notifica email se l'admin sta operando
+                   if (isAdmin) {
+                     simulateEmailNotification(a, isUpdate ? 'update' : 'new');
+                   }
+
+                   setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'dashboard');
+                 } catch (err) {
+                   showToast("Errore durante il salvataggio. Riprovare.", "error");
+                 }
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
@@ -346,9 +366,13 @@ const App: React.FC = () => {
                <p className="text-sm font-bold mt-2 text-gray-500">Ospite: {(selectedAppointmentDetail as any).profiles?.full_name}</p>
              </header>
              <div className="grid grid-cols-2 gap-4">
-               <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Riprogramma</button>
+               <button onClick={() => { 
+                 setFormInitialData(selectedAppointmentDetail); 
+                 setSelectedAppointmentDetail(null); 
+                 setIsFormOpen(true); 
+               }} className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Modifica / Riprogramma</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Annulla</button>
-               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Conferma ed Esci</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Conferma Ritual</button>
              </div>
           </div>
         </div>
