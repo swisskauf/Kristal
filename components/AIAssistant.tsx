@@ -1,21 +1,15 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { getAIConsultation } from '../services/geminiService';
-import { ChatMessage, User } from '../types';
+import { chatWithGemini } from '../services/geminiService';
 
-interface AIAssistantProps {
-  user?: User | null;
-}
-
-const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
-  const firstName = user?.fullName ? user.fullName.split(' ')[0] : undefined;
+const AIAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', content: `Benvenuta in **Kristal**${firstName ? `, ${firstName}` : ''}. In che modo posso rendere unico il vostro momento di bellezza oggi?` }
-  ]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Ensuring chat stays focused on the most recent message
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -25,105 +19,109 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ user }) => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMsg = input;
+    const userText = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setMessages(prev => [...prev, { role: 'user', text: userText }]);
     setIsLoading(true);
 
-    try {
-      const response = await getAIConsultation(userMsg, user || undefined);
-      setMessages(prev => [...prev, { role: 'model', content: response }]);
-    } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'model', content: 'Mi dispiace, ho incontrato un problema tecnico. Riprova tra poco.' }]);
-      console.error('AI consultation error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // Formatting conversation history for the SDK
+    const history = messages.map(m => ({
+      role: m.role,
+      parts: [{ text: m.text }]
+    }));
 
-  const renderContent = (content: string) => {
-    const parts = content.split(/(\*\*.*?\*\*|\[.*?\]\(.*?\))/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-bold text-gray-900">{part.slice(2, -2)}</strong>;
-      }
-      if (part.startsWith('[') && part.includes('](')) {
-        const title = part.match(/\[(.*?)\]/)?.[1];
-        const url = part.match(/\((.*?)\)/)?.[1];
-        return <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-amber-600 underline hover:text-amber-700 mx-1">{title}</a>;
-      }
-      return part;
-    });
+    const response = await chatWithGemini(userText, history);
+    
+    setMessages(prev => [...prev, { role: 'model', text: response || '' }]);
+    setIsLoading(false);
   };
 
   return (
-    <>
-      {/* AI Trigger Button - Moved to Top Right to avoid covering nav */}
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-20 right-4 md:top-10 md:right-10 w-12 h-12 md:w-16 md:h-16 bg-black text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
-      >
-        <i className={`fas ${isOpen ? 'fa-times' : 'fa-sparkles'} text-base md:text-lg`}></i>
-      </button>
-
-      {isOpen && (
-        <div className="fixed top-36 right-4 left-4 md:left-auto md:right-10 md:w-[400px] h-[70vh] md:h-[550px] bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-[0_40px_80px_rgba(0,0,0,0.15)] border border-gray-50 flex flex-col z-[1200] animate-in fade-in slide-in-from-top-2">
-          <div className="bg-white p-6 md:p-8 border-b border-gray-50 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-600/20">
-                <i className="fas fa-magic text-white text-[10px]"></i>
+    <div className="fixed bottom-24 md:bottom-10 right-6 z-[3000]">
+      {isOpen ? (
+        <div className="bg-white w-[90vw] md:w-96 h-[550px] max-h-[75vh] rounded-[3.5rem] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 duration-500">
+          <header className="bg-black p-8 flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-amber-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                <i className="fas fa-sparkles"></i>
               </div>
               <div>
-                <span className="font-luxury font-bold text-xs md:text-sm tracking-tight text-gray-900 block">Beauty Concierge</span>
-                <span className="text-[7px] md:text-[8px] font-bold text-amber-600 uppercase tracking-widest">Kristal Atelier AI</span>
+                <h4 className="text-white font-luxury font-bold text-lg tracking-tight">Kristal AI</h4>
+                <p className="text-amber-500 text-[7px] font-bold uppercase tracking-[0.4em]">Beauty Expert</p>
               </div>
             </div>
-          </div>
-          
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 bg-[#fdfdfd] scrollbar-hide">
+            <button onClick={() => setIsOpen(false)} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all">
+              <i className="fas fa-times text-xs"></i>
+            </button>
+          </header>
+
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-[#fcfcfc]">
+            {messages.length === 0 && (
+              <div className="text-center py-10 space-y-4">
+                <div className="w-16 h-16 bg-white rounded-[2.5rem] flex items-center justify-center mx-auto text-amber-600 shadow-sm border border-gray-50">
+                  <i className="fas fa-magic text-2xl"></i>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">Sincronizzazione Kristal</p>
+                  <p className="text-[9px] text-gray-400 font-medium px-6">Posso guidarvi nella scelta del vostro prossimo rituale di bellezza.</p>
+                </div>
+              </div>
+            )}
+            
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[90%] md:max-w-[85%] p-4 md:p-5 rounded-[1.5rem] md:rounded-[2rem] text-[11px] md:text-[12px] leading-relaxed luxury-shadow ${
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
+                <div className={`max-w-[85%] p-5 rounded-[2.2rem] text-[11px] leading-relaxed font-medium shadow-sm ${
                   m.role === 'user' 
                     ? 'bg-black text-white rounded-tr-none' 
-                    : 'bg-white border border-gray-50 text-gray-700 rounded-tl-none'
+                    : 'bg-white text-gray-800 border border-gray-50 rounded-tl-none'
                 }`}>
-                  {renderContent(m.content)}
+                  {m.text}
                 </div>
               </div>
             ))}
+            
             {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-white px-4 py-2 rounded-full border border-gray-50 flex space-x-1 items-center">
-                  <div className="w-1 h-1 bg-amber-600 rounded-full animate-bounce"></div>
-                  <div className="w-1 h-1 bg-amber-600 rounded-full animate-bounce [animation-delay:-0.2s]"></div>
-                  <div className="w-1 h-1 bg-amber-600 rounded-full animate-bounce [animation-delay:-0.4s]"></div>
+              <div className="flex justify-start animate-pulse">
+                <div className="bg-white border border-gray-50 p-5 rounded-[2rem] rounded-tl-none flex gap-1.5 items-center">
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="p-6 md:p-8 bg-white border-t border-gray-50">
-            <div className="flex bg-gray-50 rounded-full p-1.5 border border-gray-100 items-center shadow-inner">
+          <div className="p-6 border-t border-gray-50 bg-white">
+            <div className="flex gap-3 bg-gray-50 p-2 rounded-3xl border border-gray-100 shadow-inner">
               <input 
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="In cosa posso aiutarvi?"
-                className="flex-1 text-[11px] md:text-[12px] px-4 py-2 bg-transparent outline-none text-gray-700 placeholder-gray-300"
+                type="text" 
+                value={input} 
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSend()}
+                placeholder="Come posso aiutarvi?"
+                className="flex-1 bg-transparent px-4 py-3 border-none text-[11px] font-bold outline-none placeholder:text-gray-300"
               />
               <button 
                 onClick={handleSend}
                 disabled={isLoading || !input.trim()}
-                className="w-8 h-8 md:w-10 md:h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-amber-600 disabled:opacity-20 transition-all shadow-lg"
+                className="w-10 h-10 bg-black text-white rounded-2xl flex items-center justify-center hover:bg-amber-600 disabled:bg-gray-200 transition-all shadow-lg active:scale-95"
               >
-                <i className="fas fa-paper-plane text-[9px]"></i>
+                <i className="fas fa-paper-plane text-[10px]"></i>
               </button>
             </div>
           </div>
         </div>
+      ) : (
+        <button 
+          onClick={() => setIsOpen(true)}
+          className="w-16 h-16 bg-black text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all group relative border-4 border-white"
+        >
+          <div className="absolute inset-0 bg-gradient-to-tr from-amber-600/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <i className="fas fa-comment-dots text-xl relative z-10"></i>
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-600 border-2 border-white rounded-full animate-pulse"></span>
+        </button>
       )}
-    </>
+    </div>
   );
 };
 
