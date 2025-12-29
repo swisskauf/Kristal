@@ -64,10 +64,9 @@ export interface Appointment {
   team_member_name: TeamMemberName;
   date: string;
   status: 'confirmed' | 'pending' | 'cancelled' | 'noshow';
-  services?: { name: string; price: number; duration: number };
+  services?: { name: string; price: number; duration: number; category: string };
   profiles?: { full_name: string; phone: string; email?: string };
-  // Added created_at to resolve type error in supabaseMock.ts
-  created_at?: string;
+  created_at: string;
 }
 
 export interface TeamMember {
