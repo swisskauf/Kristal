@@ -78,79 +78,103 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     return days;
   }, []);
 
-  const availableSlots = useMemo(() => {
-    if (!selectedMember || !selectedDate || !selectedService) return [];
+  const getSlotValidation = (timeStr: string) => {
+    if (!selectedMember || !selectedDate || !selectedService) return { valid: false, reason: 'Dati incompleti' };
 
-    const d = new Date(`${selectedDate}T12:00:00`);
-    const dayOfWeek = d.getDay();
-    const closures = selectedMember.weekly_closures || [];
-    
-    if (closures.includes(dayOfWeek)) return [];
-    if (selectedMember.unavailable_dates?.includes(selectedDate)) return [];
-
-    const startH = parseInt((selectedMember.work_start_time || '08:30').split(':')[0], 10);
-    const endH = parseInt((selectedMember.work_end_time || '19:00').split(':')[0], 10);
+    const [h, m] = timeStr.split(':').map(Number);
+    const slotStart = h * 60 + m;
     const duration = selectedService.duration || 30;
+    const slotEnd = slotStart + duration;
 
-    const isSlotAvailable = (timeStr: string) => {
-      const [h, m] = timeStr.split(':').map(Number);
-      const slotStart = h * 60 + m;
-      const slotEnd = slotStart + duration;
-
-      // Inibiamo slot passati per il giorno odierno
-      if (selectedDate === todayStr) {
-        const now = new Date();
-        if (slotStart <= now.getHours() * 60 + now.getMinutes() + 15) return false;
+    // 1. Controllo orario passato per oggi
+    if (selectedDate === todayStr) {
+      const now = new Date();
+      if (slotStart <= now.getHours() * 60 + now.getMinutes() + 15) {
+        return { valid: false, reason: 'Orario passato' };
       }
+    }
 
-      // Gestione pausa
-      if (selectedMember.break_start_time && selectedMember.break_end_time) {
-        const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
-        const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
-        const bStart = bsH * 60 + bsM;
-        const bEnd = beH * 60 + beM;
-        if (slotStart < bEnd && slotEnd > bStart) return false;
+    // 2. Orari di lavoro
+    const [whS, wmS] = (selectedMember.work_start_time || '08:30').split(':').map(Number);
+    const [whE, wmE] = (selectedMember.work_end_time || '18:30').split(':').map(Number);
+    const workStart = whS * 60 + wmS;
+    const workEnd = whE * 60 + wmE;
+
+    if (slotStart < workStart || slotEnd > workEnd) {
+      return { valid: false, reason: 'Fuori orario lavorativo' };
+    }
+
+    // 3. Pausa pranzo
+    if (selectedMember.break_start_time && selectedMember.break_end_time) {
+      const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
+      const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
+      const bStart = bsH * 60 + bsM;
+      const bEnd = beH * 60 + beM;
+      // Se l'appuntamento si sovrappone in qualunque modo alla pausa
+      if (slotStart < bEnd && slotEnd > bStart) {
+        return { valid: false, reason: 'Sovrapposizione con pausa' };
       }
+    }
 
-      const [whE, wmE] = (selectedMember.work_end_time || '19:00').split(':').map(Number);
-      if (slotEnd > whE * 60 + wmE) return false;
+    // 4. Conflitti con altri appuntamenti
+    const conflict = existingAppointments.find((app) => {
+      if (app.id === initialData?.id || app.status === 'cancelled') return false;
+      if (app.team_member_name !== teamMemberName) return false;
+      
+      const appD = new Date(app.date);
+      if (appD.toLocaleDateString('en-CA') !== selectedDate) return false;
 
-      // Conflitti con altri appuntamenti
-      const hasConflict = existingAppointments.some((app) => {
-        if (app.id === initialData?.id || app.status === 'cancelled') return false;
-        if (app.team_member_name !== teamMemberName) return false;
-        
-        const appD = new Date(app.date);
-        if (appD.toLocaleDateString('en-CA') !== selectedDate) return false;
+      const appStart = appD.getHours() * 60 + appD.getMinutes();
+      const appDuration = (app as any).services?.duration || (app as any).duration || 30;
+      const appEnd = appStart + appDuration;
 
-        const appStart = appD.getHours() * 60 + appD.getMinutes();
-        const appDuration = (app as any).services?.duration || (app as any).duration || 30;
-        const appEnd = appStart + appDuration;
+      return slotStart < appEnd && slotEnd > appStart;
+    });
 
-        return slotStart < appEnd && slotEnd > appStart;
-      });
+    if (conflict) {
+      return { valid: false, reason: `Conflitto con ${conflict.services?.name || 'altro rituale'}` };
+    }
 
-      return !hasConflict;
-    };
+    return { valid: true };
+  };
 
-    const slots: string[] = [];
-    for (let h = startH; h <= endH; h++) {
+  const availableSlots = useMemo(() => {
+    if (!selectedMember) return [];
+    
+    const slots: { time: string; valid: boolean; reason?: string }[] = [];
+    // Generiamo slot dalle 07:00 alle 20:30 per permettere flessibilità all'admin
+    for (let h = 7; h <= 20; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
-        // Se l'orario è quello originale dell'appuntamento che stiamo modificando, lo mostriamo come disponibile
-        if (isSlotAvailable(t) || (initialData?.id && t === new Date(initialData.date!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) && selectedDate === new Date(initialData.date!).toLocaleDateString('en-CA') && teamMemberName === initialData.team_member_name)) {
-          slots.push(t);
+        const validation = getSlotValidation(t);
+        
+        // Per gli ospiti mostriamo solo quelli validi
+        // Per l'admin mostriamo tutto ciò che non è un conflitto diretto, 
+        // ma evidenziamo quelli fuori orario o in pausa
+        if (isAdminOrStaff || validation.valid) {
+          slots.push({ time: t, ...validation });
         }
       }
     }
     return slots;
-  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData, teamMemberName]);
+  }, [selectedMember, selectedDate, selectedService, existingAppointments, isAdminOrStaff]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedService || isSubmitting) return;
     if (isAdminOrStaff && !clientId && !initialData?.id) { alert('Scegliere un Ospite.'); return; }
     if (!selectedTime) { alert('Scegliere un orario.'); return; }
+
+    const validation = getSlotValidation(selectedTime);
+    if (!validation.valid) {
+      if (isAdminOrStaff) {
+        const confirmMsg = `Attenzione: l'orario scelto (${selectedTime}) presenta delle criticità:\n"${validation.reason}"\n\nDesideri procedere comunque con l'inserimento manuale forzato?`;
+        if (!window.confirm(confirmMsg)) return;
+      } else {
+        alert(`Spiacenti, l'orario selezionato non è valido: ${validation.reason}`);
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     try {
@@ -168,7 +192,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       });
     } catch (err) {
       console.error("Form Submit Error:", err);
-      setIsSubmitting(false); // Sblocchiamo il pulsante in caso di errore
+      setIsSubmitting(false);
     }
   };
 
@@ -279,19 +303,30 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
 
           <div className="space-y-4">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Orario</label>
+            <div className="flex justify-between items-center ml-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Orario</label>
+              <p className="text-[8px] font-bold text-gray-300 uppercase italic">Durata prevista: {selectedService?.duration} min</p>
+            </div>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
               {availableSlots.length > 0 ? (
                 availableSlots.map((slot) => (
                   <button
-                    key={slot}
+                    key={slot.time}
                     type="button"
-                    onClick={() => setSelectedTime(slot)}
-                    className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 ${
-                      selectedTime === slot ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-gray-100 text-gray-700 hover:border-amber-200'
+                    onClick={() => setSelectedTime(slot.time)}
+                    title={slot.valid ? 'Disponibile' : slot.reason}
+                    className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 relative overflow-hidden ${
+                      selectedTime === slot.time 
+                        ? 'bg-amber-600 border-amber-600 text-white shadow-md' 
+                        : slot.valid
+                        ? 'bg-white border-gray-100 text-gray-700 hover:border-amber-200'
+                        : 'bg-red-50 border-red-100 text-red-400 opacity-60'
                     }`}
                   >
-                    {slot}
+                    {slot.time}
+                    {!slot.valid && isAdminOrStaff && (
+                      <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-bl-full"></div>
+                    )}
                   </button>
                 ))
               ) : (
