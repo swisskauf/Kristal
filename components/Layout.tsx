@@ -27,16 +27,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const collaboratorNav = [
     { id: 'dashboard', label: 'Dashboard', icon: 'fa-user-clock' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
-    { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
   ];
 
   const adminNav = [
     { id: 'dashboard', label: 'Vision', icon: 'fa-chart-line' },
     { id: 'services_management', label: 'Servizi', icon: 'fa-book-open' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
-    { id: 'vacation_planning', label: 'Vacanze & Chiusure', icon: 'fa-plane-departure' },
-    { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
-    { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
+    { id: 'vacation_planning', label: 'Vacanze', icon: 'fa-plane-departure' },
+    { id: 'impostazioni', label: 'Impostazioni', icon: 'fa-cog' },
   ];
 
   let navItems = guestNav;
