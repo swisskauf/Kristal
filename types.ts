@@ -14,6 +14,11 @@ export type AbsenceType =
   | 'availability_change'
   | 'permit';
 
+export interface SalonClosure {
+  date: string;
+  name: string;
+}
+
 export interface LeaveRequest {
   id: string;
   member_name: TeamMemberName;
