@@ -97,7 +97,10 @@ const App: React.FC = () => {
       }
       const existingTeam = await db.team.getAll();
       if (!existingTeam || existingTeam.length === 0) {
-        for (const m of DEFAULT_TEAM) await db.team.upsert(m);
+        // Garantiamo email fittizie per i membri predefiniti se mancano
+        for (const m of DEFAULT_TEAM) {
+          await db.team.upsert({ ...m, email: m.email || `${m.name.toLowerCase()}@kristalatelier.ch` } as any);
+        }
       }
     } catch (e) {
       console.warn("Seeding error:", e);
@@ -200,13 +203,24 @@ const App: React.FC = () => {
 
   const handleSaveStaff = async (staffData: TeamMember) => {
     try {
+      // In un'app reale qui verrebbe lanciato un invito Auth di Supabase
+      // Per il mock, salviamo semplicemente il profilo e mostriamo successo
       await db.team.upsert(staffData);
-      showToast("Membro dello staff aggiunto.");
+      showToast(`Artista ${staffData.name} creato. Invito inviato a ${staffData.email}`);
       setIsNewStaffModalOpen(false);
       refreshData();
     } catch (e) {
-      showToast("Errore durante il salvataggio.", "error");
+      showToast("Errore nel salvataggio del nuovo membro.", "error");
     }
+  };
+
+  /**
+   * Fix for missing saveSettings function.
+   * Persists settings updates and triggers success feedback.
+   */
+  const saveSettings = (newSettings: typeof settings) => {
+    setSettings(newSettings);
+    showToast("Configurazione salvata con successo.");
   };
 
   if (loading && !user) {
@@ -358,64 +372,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'team_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <header className="flex items-center justify-between">
-                <div>
-                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Il Tuo Team</h2>
-                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Gestione Profili Artisti</p>
-                </div>
-                <button onClick={() => setIsNewStaffModalOpen(true)} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all">
-                  <i className="fas fa-plus"></i>
-                </button>
-             </header>
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
-                {team.map(m => (
-                   <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group">
-                      <div className="relative mb-8 text-center">
-                         <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white shadow-xl mx-auto" />
-                         <div className="absolute -bottom-2 right-1/2 translate-x-12 w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center shadow-lg group-hover:bg-amber-600 transition-colors"><i className="fas fa-cog text-xs"></i></div>
-                      </div>
-                      <div className="text-center">
-                         <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
-                         <p className="text-[9px] text-amber-600 font-bold uppercase tracking-[0.3em] mt-1">{m.role}</p>
-                         <div className="mt-8 pt-8 border-t border-gray-50 flex justify-center gap-6">
-                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_start_time || '08:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Inizio</p></div>
-                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_end_time || '18:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Fine</p></div>
-                         </div>
-                      </div>
-                   </div>
-                ))}
-             </div>
-          </div>
-        )}
-
-        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
-          <div className="animate-in fade-in">
-             <GuestManagement 
-               profiles={profiles} 
-               appointments={appointments} 
-               onRefresh={refreshData} 
-               onEditGuest={(guest) => { setSelectedGuestToEdit(guest); setIsGuestEditorOpen(true); }}
-               onAddGuest={() => { setSelectedGuestToEdit(null); setIsGuestEditorOpen(true); }}
-             />
-          </div>
-        )}
-
-        {/* ... Altri Tab (Planning, Servizi, Vacanze, Impostazioni) ... */}
-        {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
-          <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Agenda Atelier</h2>
-            <TeamPlanning 
-              team={team} appointments={appointments} onToggleVacation={() => {}} 
-              onSlotClick={(memberName, date, hour) => { setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() }); setIsFormOpen(true); }} 
-              onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
-              currentUserMemberName={currentMember?.name} isCollaborator={isCollaborator}
-              salonClosures={salonClosures.map(c => c.date)}
-            />
-          </div>
-        )}
-
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <header className="flex items-center justify-between">
@@ -512,9 +468,115 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'team_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <header className="flex items-center justify-between">
+                <div>
+                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Il Tuo Team</h2>
+                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Gestione Profili Artisti</p>
+                </div>
+                <button onClick={() => setIsNewStaffModalOpen(true)} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all">
+                  <i className="fas fa-plus"></i>
+                </button>
+             </header>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+                {team.map(m => (
+                   <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group">
+                      <div className="relative mb-8 text-center">
+                         <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white shadow-xl mx-auto" />
+                         <div className="absolute -bottom-2 right-1/2 translate-x-12 w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center shadow-lg group-hover:bg-amber-600 transition-colors"><i className="fas fa-cog text-xs"></i></div>
+                      </div>
+                      <div className="text-center">
+                         <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
+                         <p className="text-[9px] text-amber-600 font-bold uppercase tracking-[0.3em] mt-1">{m.role}</p>
+                         <p className="text-[8px] text-gray-400 font-medium lowercase tracking-tighter mt-1">{m.email}</p>
+                         <div className="mt-8 pt-8 border-t border-gray-50 flex justify-center gap-6">
+                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_start_time || '08:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Inizio</p></div>
+                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_end_time || '18:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Fine</p></div>
+                         </div>
+                      </div>
+                   </div>
+                ))}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
+          <div className="animate-in fade-in">
+             <GuestManagement 
+               profiles={profiles} 
+               appointments={appointments} 
+               onRefresh={refreshData} 
+               onEditGuest={(guest) => { setSelectedGuestToEdit(guest); setIsGuestEditorOpen(true); }}
+               onAddGuest={() => { setSelectedGuestToEdit(null); setIsGuestEditorOpen(true); }}
+             />
+          </div>
+        )}
+
+        {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
+          <div className="space-y-12 animate-in fade-in">
+            <h2 className="text-4xl font-luxury font-bold">Agenda Atelier</h2>
+            <TeamPlanning 
+              team={team} appointments={appointments} onToggleVacation={() => {}} 
+              onSlotClick={(memberName, date, hour) => { setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() }); setIsFormOpen(true); }} 
+              onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
+              currentUserMemberName={currentMember?.name} isCollaborator={isCollaborator}
+              salonClosures={salonClosures.map(c => c.date)}
+            />
+          </div>
+        )}
+
+        {activeTab === 'impostazioni' && isAdmin && (
+          <div className="space-y-16 animate-in fade-in">
+             <header>
+               <h2 className="text-5xl font-luxury font-bold text-gray-900">Configurazione</h2>
+               <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Centro Controllo Kristal</p>
+             </header>
+             <div className="grid md:grid-cols-2 gap-12">
+                <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-14">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8 flex items-center gap-4"><i className="fas fa-sliders-h text-amber-600"></i> Moduli & Contatto</h4>
+                  <div className="space-y-12">
+                    <div className="flex items-center justify-between px-6">
+                      <div className="flex items-center gap-6">
+                        <div className="w-16 h-16 bg-amber-600 text-white rounded-[1.8rem] flex items-center justify-center shadow-xl"><i className="fas fa-sparkles text-2xl"></i></div>
+                        <div><p className="text-lg font-bold">Kristal AI Assistant</p><p className="text-[10px] text-gray-400 font-bold uppercase">Consulente virtuale</p></div>
+                      </div>
+                      <button onClick={() => setSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
+                    </div>
+                    <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100">
+                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Numero Emergenze Atelier</p>
+                       <p className="text-xl font-luxury font-bold text-gray-900">{SALON_PHONE}</p>
+                    </div>
+                    <button onClick={() => saveSettings(settings)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Salva Configurazione</button>
+                  </div>
+                </div>
+                <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-12">
+                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8 flex items-center gap-4"><i className="fab fa-instagram text-amber-600 text-2xl"></i> Social Integration</h4>
+                   <div className="space-y-8">
+                      <div className="p-10 bg-gray-50 rounded-[3rem] border border-gray-100">
+                        <p className="text-[10px] font-bold uppercase text-amber-600 mb-4 tracking-widest">Guida Token</p>
+                        <ol className="text-[11px] leading-relaxed text-gray-600 space-y-3 list-decimal ml-4">
+                          <li>Accedi a developers.facebook.com</li>
+                          <li>Crea app "Consumer"</li>
+                          <li>Instagram Basic Display - Genera Token</li>
+                        </ol>
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[9px] font-bold uppercase text-gray-400 ml-4">Access Token</label>
+                        <input type="password" placeholder="IGQV..." value={settings.instagramToken} onChange={(e) => setSettings({...settings, instagramToken: e.target.value})} className="w-full p-6 rounded-[2rem] bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 outline-none" />
+                      </div>
+                      <div className="flex items-center justify-between px-6"><span className="text-[10px] font-bold uppercase tracking-[0.3em]">Attiva Portfolio Gallery</span><button onClick={() => setSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-9' : 'left-1.5'}`}></div></button></div>
+                      <button onClick={() => saveSettings(settings)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Sincronizza Social</button>
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
       </Layout>
 
       {/* Modali */}
+      {settings.aiAssistantEnabled && <AIAssistant />}
+
       {isNewStaffModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
@@ -543,6 +605,32 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {isGuestEditorOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
+             <button onClick={() => setIsGuestEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
+             <NewGuestForm 
+               initialData={selectedGuestToEdit} 
+               onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(); showToast("Profilo ospite salvato."); }} 
+               onCancel={() => setIsGuestEditorOpen(false)} 
+             />
+          </div>
+        </div>
+      )}
+
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
+             <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
+             <ServiceForm 
+               initialData={selectedServiceToEdit} 
+               onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); showToast("Ritual salvato."); }} 
+               onCancel={() => setIsServiceFormOpen(false)} 
+             />
+          </div>
+        </div>
+      )}
+
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1800] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-3xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
@@ -566,7 +654,25 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ... Altri Modali esistenti (Auth, GuestEditor, etc.) ... */}
+      {selectedAppointmentDetail && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2000] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative animate-in zoom-in-95">
+             <button onClick={() => setSelectedAppointmentDetail(null)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
+             <header className="mb-12 text-center">
+               <p className="text-amber-600 font-bold text-[10px] uppercase tracking-[0.4em] mb-3">Dettaglio Ritual</p>
+               <h3 className="text-4xl font-luxury font-bold text-gray-900">{(selectedAppointmentDetail as any).services?.name}</h3>
+               <p className="text-base font-bold mt-4 text-gray-500">{(selectedAppointmentDetail as any).profiles?.full_name}</p>
+             </header>
+             <div className="grid grid-cols-2 gap-6">
+               <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-5 bg-gray-50 text-black border border-gray-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:shadow-lg transition-all">Modifica</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-5 bg-red-50 text-red-600 border border-red-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Annulla</button>
+               <button onClick={() => downloadICS(selectedAppointmentDetail)} className="col-span-2 py-5 bg-amber-50 text-amber-600 rounded-3xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-3"><i className="fas fa-calendar-plus"></i> Aggiungi al Calendario</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-6 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-2xl shadow-black/20 hover:bg-amber-700 transition-all">Conferma Ritual</button>
+             </div>
+          </div>
+        </div>
+      )}
+
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[2000] flex items-center justify-center p-6">
           <div className="w-full max-w-xl relative animate-in zoom-in-95">
