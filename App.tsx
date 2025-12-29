@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Feature Settings con persistenza
+  // Feature Settings con persistenza (Versione 7 per forzare aggiornamento)
   const [settings, setSettings] = useState({
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
@@ -51,7 +51,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v6');
+    const savedSettings = localStorage.getItem('kristal_settings_v7');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -59,7 +59,7 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v6', JSON.stringify(newSettings));
+    localStorage.setItem('kristal_settings_v7', JSON.stringify(newSettings));
     showToast("Impostazioni salvate e sincronizzate.");
   };
 
@@ -282,11 +282,12 @@ const App: React.FC = () => {
                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                         </div>
                         <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
-                           <p className="text-[10px] text-gray-400 font-medium leading-relaxed max-w-[200px]">
-                              Per modifiche o annullamenti, chiamate: <strong className="text-gray-900 block mt-1">{settings.salonPhone}</strong>
-                           </p>
+                           <div className="space-y-1">
+                              <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Per modifiche o annullamenti:</p>
+                              <a href={`tel:${settings.salonPhone.replace(/[^\d+]/g, '')}`} className="text-gray-900 font-bold text-xs hover:text-amber-600 transition-colors">{settings.salonPhone}</a>
+                           </div>
                            <a 
-                             href={`tel:${settings.salonPhone.replace(/\s+/g, '')}`} 
+                             href={`tel:${settings.salonPhone.replace(/[^\d+]/g, '')}`} 
                              className="w-14 h-14 bg-black text-white rounded-[1.8rem] flex items-center justify-center hover:bg-amber-600 transition-all shadow-xl shadow-black/10 active:scale-95"
                            >
                               <i className="fas fa-phone-alt text-lg"></i>
@@ -438,7 +439,14 @@ const App: React.FC = () => {
                 <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-12">
                    <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8 flex items-center gap-4"><i className="fab fa-instagram text-amber-600 text-2xl"></i> Social Integration</h4>
                    <div className="space-y-8">
-                      <div className="p-10 bg-gray-50 rounded-[3rem] border border-gray-100"><p className="text-[10px] font-bold uppercase text-amber-600 mb-4 tracking-widest">Guida Token</p><ol className="text-[11px] leading-relaxed text-gray-600 space-y-3 list-decimal ml-4"><li>Accedi a <em>developers.facebook.com</em></li><li>Crea app "Consumer"</li><li>Instagram Basic Display -> Genera Token</li></ol></div>
+                      <div className="p-10 bg-gray-50 rounded-[3rem] border border-gray-100">
+                        <p className="text-[10px] font-bold uppercase text-amber-600 mb-4 tracking-widest">Guida Token</p>
+                        <ol className="text-[11px] leading-relaxed text-gray-600 space-y-3 list-decimal ml-4">
+                          <li>Accedi a <em>developers.facebook.com</em></li>
+                          <li>Crea app "Consumer"</li>
+                          <li>Instagram Basic Display &rarr; Genera Token</li>
+                        </ol>
+                      </div>
                       <div className="space-y-3">
                         <label className="text-[9px] font-bold uppercase text-gray-400 ml-4">Access Token</label>
                         <input type="password" placeholder="IGQV..." value={settings.instagramToken} onChange={(e) => setSettings({...settings, instagramToken: e.target.value})} className="w-full p-6 rounded-[2rem] bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 outline-none" />
