@@ -118,7 +118,6 @@ export const db = {
         appts = data || [];
       }
       
-      // In modalità mock, carichiamo i riferimenti manualmente
       if (useMock || (appts.length > 0 && !appts[0].services)) {
         const svcs = await db.services.getAll();
         const profs = await db.profiles.getAll();
@@ -141,5 +140,9 @@ export const db = {
     create: async (r: any) => useMock ? supabaseMock.requests.create(r) : (await client.from('leave_requests').insert(r)).data,
     update: async (id: string, u: any) => useMock ? supabaseMock.requests.update(id, u) : (await client.from('leave_requests').update(u).eq('id', id)).data,
     delete: async (id: string) => useMock ? supabaseMock.requests.delete(id) : (await client.from('leave_requests').delete().eq('id', id))
+  },
+  salonClosures: {
+    getAll: async () => useMock ? supabaseMock.salonClosures.getAll() : (await client.from('salon_closures').select('*')).data || [],
+    save: async (dates: string[]) => useMock ? supabaseMock.salonClosures.save(dates) : (await client.from('salon_closures').upsert(dates)).data
   }
 };
