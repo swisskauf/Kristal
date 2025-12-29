@@ -25,7 +25,8 @@ const App: React.FC = () => {
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
     instagramToken: '',
-    emailNotificationsEnabled: true
+    emailNotificationsEnabled: true,
+    salonPhone: '+41 00 000 00 00' // Default salon phone
   });
 
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -51,7 +52,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v4');
+    const savedSettings = localStorage.getItem('kristal_settings_v5');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -59,7 +60,7 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v4', JSON.stringify(newSettings));
+    localStorage.setItem('kristal_settings_v5', JSON.stringify(newSettings));
     showToast("Impostazioni salvate con successo.");
   };
 
@@ -349,8 +350,8 @@ const App: React.FC = () => {
                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                         </div>
                         <div className="pt-6 border-t border-gray-50 flex items-center justify-between">
-                           <p className="text-[9px] text-gray-400 font-medium">Per modifiche, contattate l'Atelier.</p>
-                           <a href="tel:+41000000000" className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center hover:text-black transition-all"><i className="fas fa-phone-alt text-xs"></i></a>
+                           <p className="text-[9px] text-gray-400 font-medium">Per modifiche, contattate l'Atelier: <strong className="text-gray-900">{settings.salonPhone}</strong></p>
+                           <a href={`tel:${settings.salonPhone.replace(/\s+/g, '')}`} className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-amber-600 transition-all shadow-lg shadow-black/10"><i className="fas fa-phone-alt text-xs"></i></a>
                         </div>
                       </div>
                    </div>
@@ -498,13 +499,28 @@ const App: React.FC = () => {
              </header>
 
              <div className="grid md:grid-cols-2 gap-10">
-                {/* MODULI CORE */}
+                {/* MODULI CORE & CONTATTI */}
                 <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm space-y-12">
                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-6 flex items-center gap-3">
-                     <i className="fas fa-cog text-amber-600"></i> Moduli Sistema
+                     <i className="fas fa-cog text-amber-600"></i> Moduli & Contatti
                   </h4>
                   <div className="space-y-10">
-                    <div className="flex items-center justify-between">
+                    {/* Salon Phone Setting */}
+                    <div className="space-y-4 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
+                        <label className="text-[9px] font-bold uppercase text-amber-600 tracking-widest ml-1 flex items-center gap-2">
+                           <i className="fas fa-phone-alt"></i> Telefono Atelier per Annullamenti
+                        </label>
+                        <input 
+                          type="text" 
+                          placeholder="+41 00 000 00 00" 
+                          value={settings.salonPhone} 
+                          onChange={(e) => setSettings({...settings, salonPhone: e.target.value})}
+                          className="w-full p-5 rounded-3xl bg-white border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                        />
+                        <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tighter leading-relaxed">Questo numero verrà mostrato agli ospiti per le richieste di modifica ritual.</p>
+                    </div>
+
+                    <div className="flex items-center justify-between px-4">
                       <div className="flex items-center gap-6">
                         <div className="w-14 h-14 bg-amber-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg"><i className="fas fa-sparkles text-xl"></i></div>
                         <div>
@@ -517,7 +533,7 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between px-4">
                       <div className="flex items-center gap-6">
                         <div className="w-14 h-14 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg"><i className="fas fa-envelope text-xl"></i></div>
                         <div>
@@ -529,6 +545,8 @@ const App: React.FC = () => {
                         <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-9' : 'left-1'}`}></div>
                       </button>
                     </div>
+
+                    <button onClick={() => saveSettings(settings)} className="w-full py-5 bg-black text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-amber-700 transition-all">Salva Moduli & Contatto</button>
                   </div>
                 </div>
 
