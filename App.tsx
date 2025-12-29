@@ -181,7 +181,7 @@ const App: React.FC = () => {
       const client = profiles.find(p => p.id === appt.client_id);
       
       showToast(
-        `Ritual aggiornato: ${status.toUpperCase()}. Una mail di notifica è stata inviata a ${client?.full_name || 'ospite'} e lo stato è aggiornato nell'app.`,
+        `Feedback Ritual: ${status === 'cancelled' ? 'CANCELLAZIONE' : 'CONFERMA'}. Email inviata con successo a ${client?.full_name || 'Ospite'}.`,
         status === 'cancelled' ? 'info' : 'success'
       );
       
@@ -205,13 +205,12 @@ const App: React.FC = () => {
     try {
       await db.salonClosures.save(closures);
       setSalonClosures(closures);
-      showToast("Festività e chiusure del salone aggiornate.");
+      showToast("Agenda Atelier sincronizzata: Festività aggiornate.");
     } catch (e) {
       showToast("Errore nel salvataggio.", "error");
     }
   };
 
-  // Funzione helper per estrarre solo le date dalle chiusure
   const closureDatesOnly = useMemo(() => salonClosures.map(c => c.date), [salonClosures]);
 
   if (loading) {
@@ -309,7 +308,7 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <header>
                <h2 className="text-4xl font-luxury font-bold">I Miei Ritual</h2>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Prenotazioni ordinate per data di creazione</p>
+               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Le tue prenotazioni in ordine cronologico di creazione</p>
             </header>
 
             <section className="space-y-8">
@@ -355,7 +354,7 @@ const App: React.FC = () => {
 
             {pastAppointments.length > 0 && (
               <section className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">Storico & Cancellati</h4>
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">Storico & Annullati</h4>
                 <div className="space-y-4">
                    {pastAppointments.map(app => (
                      <div key={app.id} className={`flex justify-between items-center p-8 rounded-[3rem] border border-gray-50 transition-opacity ${app.status === 'cancelled' ? 'bg-red-50/20 opacity-40' : 'bg-white opacity-60 hover:opacity-100'}`}>
@@ -366,9 +365,9 @@ const App: React.FC = () => {
                            <div>
                               <h6 className="font-bold text-lg text-gray-900">{app.services?.name}</h6>
                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
-                                {app.status === 'cancelled' ? 'ANNULLATO' : `Eseguito il ${new Date(app.date).toLocaleDateString()}`} • {app.team_member_name}
+                                {app.status === 'cancelled' ? 'RITUAL ANNULLATO' : `Eseguito il ${new Date(app.date).toLocaleDateString()}`} • {app.team_member_name}
                               </p>
-                              <p className="text-[7px] text-gray-300 font-bold uppercase mt-1">Prenotazione del {new Date(app.created_at).toLocaleDateString()}</p>
+                              <p className="text-[7px] text-gray-300 font-bold uppercase mt-1">Creato il {new Date(app.created_at).toLocaleDateString()}</p>
                            </div>
                         </div>
                         <p className="text-lg font-luxury font-bold">CHF {app.services?.price}</p>
@@ -382,7 +381,7 @@ const App: React.FC = () => {
 
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Planning Atelier</h2>
+            <h2 className="text-4xl font-luxury font-bold">Atelier Planning</h2>
             <TeamPlanning 
               team={team} 
               appointments={appointments} 
@@ -399,22 +398,24 @@ const App: React.FC = () => {
         {activeTab === 'vacation_planning' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
             <header>
-               <h2 className="text-4xl font-luxury font-bold">Gestione Chiusure & Agenda Atelier</h2>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Amministrazione festività del salone e congedi staff</p>
+               <h2 className="text-4xl font-luxury font-bold text-gray-900 tracking-tighter">Agenda Atelier Admin</h2>
+               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Gestione centralizzata festività, congedi e disponibilità staff</p>
             </header>
 
             <div className="grid lg:grid-cols-3 gap-10">
-               {/* FORM CHIUSURE SALONE */}
+               {/* FORM CHIUSURE SALONE LUXURY */}
                <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8 lg:col-span-1">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600 border-b pb-4">Nuova Festività Salone</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 flex items-center gap-3">
+                     <i className="fas fa-ribbon text-amber-600"></i> Nuova Festività
+                  </h4>
                   <div className="space-y-6">
                      <div className="space-y-2">
-                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Nome Festività</label>
-                        <input id="holiday-name" type="text" placeholder="es. Natale, Chiusura Estiva..." className="w-full p-4 rounded-xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Nome Festività / Chiusura</label>
+                        <input id="holiday-name" type="text" placeholder="es. San Silvestro, Pasqua..." className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-1 focus:ring-amber-500" />
                      </div>
                      <div className="space-y-2">
-                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Data</label>
-                        <input id="holiday-date" type="date" className="w-full p-4 rounded-xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Data Evento</label>
+                        <input id="holiday-date" type="date" className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-1 focus:ring-amber-500" />
                      </div>
                      <button 
                        onClick={() => {
@@ -427,72 +428,75 @@ const App: React.FC = () => {
                              nameInput.value = '';
                              dateInput.value = '';
                            } else {
-                             showToast("Esiste già una chiusura per questa data.", "error");
+                             showToast("Data già occupata.", "error");
                            }
                          } else {
-                           showToast("Inserire nome e data.", "error");
+                           showToast("Dati mancanti.", "error");
                          }
                        }}
                        className="w-full py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all shadow-xl"
                      >
-                       Aggiungi a Agenda
+                       Sincronizza Festività
                      </button>
 
                      <div className="pt-8 border-t border-gray-50">
-                        <h5 className="text-[10px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Chiusure Registrate</h5>
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
+                        <h5 className="text-[10px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Festività in Agenda</h5>
+                        <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
                            {salonClosures.map(c => (
-                             <div key={c.date} className="bg-gray-50 px-5 py-4 rounded-2xl flex justify-between items-center group animate-in zoom-in-95 border border-transparent hover:border-amber-100 transition-all">
+                             <div key={c.date} className="bg-gray-50 px-6 py-5 rounded-[2rem] flex justify-between items-center group animate-in zoom-in-95 border border-transparent hover:border-amber-100 transition-all">
                                <div>
-                                 <p className="text-[10px] font-bold text-gray-900">{c.name}</p>
-                                 <p className="text-[8px] font-bold text-amber-600 uppercase mt-0.5">{new Date(c.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                 <p className="text-[11px] font-bold text-gray-900">{c.name}</p>
+                                 <p className="text-[9px] font-bold text-amber-600 uppercase mt-0.5">{new Date(c.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                                </div>
                                <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x.date !== c.date))} className="text-gray-300 hover:text-red-500 transition-colors">
                                  <i className="fas fa-trash-alt text-xs"></i>
                                </button>
                              </div>
                            ))}
-                           {salonClosures.length === 0 && <p className="text-center text-[9px] text-gray-400 italic py-4">Nessuna festività registrata.</p>}
+                           {salonClosures.length === 0 && <p className="text-center text-[10px] text-gray-400 italic py-8 bg-gray-50 rounded-3xl border border-dashed">Nessuna festività registrata.</p>}
                         </div>
                      </div>
                   </div>
                </div>
 
-               {/* AGENDA ATELIER - STAFF ABSENCES */}
+               {/* AGENDA ATELIER - STAFF STATUS */}
                <div className="lg:col-span-2 space-y-10">
                   <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
                      <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 mb-8 flex items-center gap-3">
-                        <i className="fas fa-calendar-check text-amber-600"></i> Agenda Atelier - Stato Staff
+                        <i className="fas fa-user-friends text-amber-600"></i> Stato Collaboratori
                      </h4>
-                     <div className="space-y-4">
+                     <div className="grid md:grid-cols-2 gap-4">
                         {team.map(m => {
                            const absences = m.absences_json || [];
                            return (
-                             <div key={m.name} className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:shadow-md transition-all group">
-                                <div className="flex items-center justify-between mb-4">
-                                   <div className="flex items-center gap-4">
-                                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
+                             <div key={m.name} className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 hover:bg-white hover:shadow-xl transition-all group">
+                                <div className="flex items-center justify-between mb-6">
+                                   <div className="flex items-center gap-5">
+                                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-14 h-14 rounded-[1.5rem] object-cover border-2 border-white shadow-md" />
                                       <div>
-                                         <h5 className="font-bold text-sm text-gray-900">{m.name}</h5>
-                                         <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{m.role}</p>
+                                         <h5 className="font-bold text-lg text-gray-900">{m.name}</h5>
+                                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{m.role}</p>
                                       </div>
                                    </div>
                                    <button 
                                      onClick={() => setSelectedMemberToManage(m)}
-                                     className="px-4 py-2 bg-white rounded-xl text-[8px] font-bold uppercase border border-gray-200 hover:bg-black hover:text-white transition-all"
+                                     className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-gray-100 hover:bg-black hover:text-white transition-all shadow-sm"
                                    >
-                                     Gestisci Vacanze
+                                     <i className="fas fa-cog text-xs"></i>
                                    </button>
                                 </div>
-                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                   {absences.length > 0 ? absences.slice(-3).map(a => (
-                                     <div key={a.id} className="flex-shrink-0 px-4 py-2 bg-amber-100 text-amber-800 rounded-xl border border-amber-200 flex items-center gap-2">
-                                        <i className="fas fa-plane text-[8px]"></i>
-                                        <span className="text-[9px] font-bold uppercase">{a.type}: {new Date(a.startDate).toLocaleDateString()}</span>
-                                     </div>
-                                   )) : (
-                                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest italic px-2">Nessun congedo imminente</p>
-                                   )}
+                                <div className="space-y-2">
+                                   <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Ultime Assenze / Congedi</p>
+                                   <div className="flex flex-wrap gap-2">
+                                      {absences.length > 0 ? absences.slice(-3).reverse().map(a => (
+                                        <div key={a.id} className="px-4 py-2 bg-amber-100 text-amber-800 rounded-xl border border-amber-200 flex items-center gap-2">
+                                           <i className={`fas ${a.type === 'vacation' ? 'fa-plane' : 'fa-calendar'} text-[9px]`}></i>
+                                           <span className="text-[9px] font-bold uppercase">{new Date(a.startDate).toLocaleDateString()}</span>
+                                        </div>
+                                      )) : (
+                                        <p className="text-[10px] text-gray-400 italic px-2">Nessun congedo registrato</p>
+                                      )}
+                                   </div>
                                 </div>
                              </div>
                            );
@@ -501,7 +505,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                     <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Approvazione Richieste Online</h4>
+                     <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Approvazione Richieste Staff</h4>
                      <RequestManagement requests={requests} onAction={async (id, action) => {
                        await db.requests.update(id, { status: action });
                        if (action === 'approved') {
@@ -522,7 +526,7 @@ const App: React.FC = () => {
                           }
                        }
                        refreshData();
-                       showToast(`Richiesta ${action === 'approved' ? 'approvata' : 'rifiutata'}.`);
+                       showToast(`Richiesta ${action === 'approved' ? 'approvata e sincronizzata' : 'rifiutata'}.`);
                      }} />
                   </div>
                </div>
@@ -530,10 +534,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Mantenimento altri tab */}
+        {/* Clients management */}
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
+            <h2 className="text-4xl font-luxury font-bold">Registro Ospiti Atelier</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                {profiles.filter(p => p.role === 'client').map(p => {
                  const clientAppts = appointments.filter(a => a.client_id === p.id);
@@ -556,12 +560,13 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Team list */}
         {activeTab === 'team_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <h2 className="text-4xl font-luxury font-bold">Gestione Staff</h2>
              <div className="grid md:grid-cols-3 gap-8">
                {team.map(m => (
-                 <button key={m.name} onClick={() => setSelectedMemberToManage(m)} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm flex flex-col items-center gap-6 hover:shadow-xl transition-all">
+                 <button key={m.name} onClick={() => setSelectedMemberToManage(m)} className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm flex flex-col items-center gap-6 hover:shadow-xl transition-all">
                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-28 h-28 rounded-full object-cover shadow-2xl border-4 border-white" />
                    <div className="text-center">
                      <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
@@ -573,17 +578,18 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Services */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <div className="flex justify-between items-center">
-               <h2 className="text-4xl font-luxury font-bold">Menu Servizi</h2>
-               <button onClick={() => setIsFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px]">Aggiungi Ritual</button>
+               <h2 className="text-4xl font-luxury font-bold">Menu Ritual</h2>
+               <button onClick={() => setIsFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest">Crea Ritual</button>
              </div>
              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                {services.map(s => (
-                 <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm">
-                   <h4 className="font-bold text-lg mb-1">{s.name}</h4>
-                   <p className="text-[9px] text-amber-600 font-bold uppercase mb-4">{s.category}</p>
+                 <div key={s.id} className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all">
+                   <h4 className="font-bold text-xl mb-1">{s.name}</h4>
+                   <p className="text-[10px] text-amber-600 font-bold uppercase mb-4 tracking-widest">{s.category}</p>
                    <div className="flex justify-between items-end">
                      <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
                      <p className="text-[10px] text-gray-400 font-bold">{s.duration} min</p>
@@ -597,7 +603,7 @@ const App: React.FC = () => {
 
       <AIAssistant user={user} />
       
-      {/* Appointment Detail Modal */}
+      {/* Appointment detail modal */}
       {selectedAppointmentDetail && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative animate-in zoom-in-95">
@@ -620,6 +626,10 @@ const App: React.FC = () => {
                    <i className="fas fa-magic text-amber-600 w-6 text-center"></i>
                    <span>Artista: {selectedAppointmentDetail.team_member_name}</span>
                 </div>
+                <div className="p-4 bg-gray-900 text-white rounded-2xl border border-black text-center">
+                   <p className="text-[8px] font-bold text-amber-500 uppercase tracking-widest">Creato il</p>
+                   <p className="text-[11px] font-bold">{new Date(selectedAppointmentDetail.created_at).toLocaleString('it-IT')}</p>
+                </div>
              </div>
 
              <div className="grid grid-cols-2 gap-4">
@@ -632,7 +642,7 @@ const App: React.FC = () => {
                    setSelectedAppointmentDetail(null);
                    setIsFormOpen(true);
                  }}
-                 className="py-4 bg-gray-900 text-white rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-black transition-all shadow-xl"
+                 className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-100 shadow-sm"
                >
                  Riprogramma Ritual
                </button>
@@ -646,14 +656,14 @@ const App: React.FC = () => {
                  onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')}
                  className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
                >
-                 Invia Notifica Conferma
+                 Invia Notifica Feedback
                </button>
              </div>
           </div>
         </div>
       )}
 
-      {/* Auth Modal */}
+      {/* Other modals */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -665,7 +675,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Team Management Modal */}
       {selectedMemberToManage && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -681,7 +690,7 @@ const App: React.FC = () => {
                 await db.team.upsert(m);
                 await refreshData();
                 setSelectedMemberToManage(null);
-                showToast("Profilo Staff aggiornato e sincronizzato.");
+                showToast("Dati Collaboratore sincronizzati.");
               }}
               onClose={() => setSelectedMemberToManage(null)}
             />
@@ -689,7 +698,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Appointment Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -712,7 +720,7 @@ const App: React.FC = () => {
                  await refreshData(); 
                  
                  const client = profiles.find(p => p.id === finalData.client_id);
-                 showToast(`Ritual ${a.id ? 'riprogrammato' : 'registrato'} con successo per ${client?.full_name || 'ospite'}. Una mail di notifica è stata generata.`);
+                 showToast(`Ritual ${a.id ? 'modificato' : 'confermato'} per ${client?.full_name || 'Ospite'}. Email di feedback inviata.`);
                  
                  setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'my_rituals');
                }} 
@@ -725,7 +733,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Guest Detail Modal */}
       {selectedClientDetail && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
@@ -737,7 +744,7 @@ const App: React.FC = () => {
                <img src={selectedClientDetail.avatar || `https://ui-avatars.com/api/?name=${selectedClientDetail.full_name}`} className="w-24 h-24 rounded-[2rem] object-cover shadow-2xl border-4 border-white" />
                <div>
                  <h3 className="text-4xl font-luxury font-bold">{selectedClientDetail.full_name}</h3>
-                 <p className="text-amber-600 font-bold text-[10px] uppercase tracking-widest">{selectedClientDetail.email || 'Email non fornita'}</p>
+                 <p className="text-amber-600 font-bold text-[10px] uppercase tracking-widest">{selectedClientDetail.email || 'Profilo Digital Kristal'}</p>
                </div>
              </header>
 
@@ -747,9 +754,9 @@ const App: React.FC = () => {
                   <p className="text-sm font-bold">{selectedClientDetail.phone || 'N/A'}</p>
                </div>
                <div className="p-6 bg-gray-50 rounded-3xl">
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-2">Dati Anagrafici</p>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-2">Anagrafica</p>
                   <p className="text-sm font-bold">
-                    {selectedClientDetail.gender === 'F' ? 'Donna' : selectedClientDetail.gender === 'M' ? 'Uomo' : 'Altro'} 
+                    {selectedClientDetail.gender === 'F' ? 'Donna' : selectedClientDetail.gender === 'M' ? 'Uomo' : 'Ospite'} 
                     {selectedClientDetail.dob ? ` • ${new Date(selectedClientDetail.dob).toLocaleDateString()}` : ''}
                   </p>
                </div>
