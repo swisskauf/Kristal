@@ -1,5 +1,5 @@
 
-import { Appointment, User, Service, TeamMember, LeaveRequest } from '../types';
+import { Appointment, User, Service, TeamMember, LeaveRequest, SalonClosure } from '../types';
 import { SERVICES as INITIAL_SERVICES, TEAM as INITIAL_TEAM } from '../constants';
 
 const STORAGE_KEY_APPOINTMENTS = 'kristal_appointments';
@@ -151,13 +151,16 @@ export const supabaseMock = {
     }
   },
   salonClosures: {
-    getAll: (): string[] => {
+    getAll: (): SalonClosure[] => {
       const data = localStorage.getItem(STORAGE_KEY_SALON_CLOSURES);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      // Migrazione dati se necessario
+      return parsed.map((c: any) => typeof c === 'string' ? { date: c, name: 'Chiusura Straordinaria' } : c);
     },
-    save: (dates: string[]) => {
-      localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(dates));
-      return dates;
+    save: (closures: SalonClosure[]) => {
+      localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(closures));
+      return closures;
     }
   }
 };
