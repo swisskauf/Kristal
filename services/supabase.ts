@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
+import { SalonClosure } from '../types';
 
 const getEnv = (key: string): string => {
   if (typeof window === 'undefined') return '';
@@ -143,6 +144,6 @@ export const db = {
   },
   salonClosures: {
     getAll: async () => useMock ? supabaseMock.salonClosures.getAll() : (await client.from('salon_closures').select('*')).data || [],
-    save: async (dates: string[]) => useMock ? supabaseMock.salonClosures.save(dates) : (await client.from('salon_closures').upsert(dates)).data
+    save: async (closures: SalonClosure[]) => useMock ? supabaseMock.salonClosures.save(closures) : (await client.from('salon_closures').upsert(closures)).data
   }
 };
