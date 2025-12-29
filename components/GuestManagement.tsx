@@ -30,6 +30,20 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
     return appointments.filter(a => a.client_id === selectedGuest.id).sort((a, b) => b.date.localeCompare(a.date));
   }, [selectedGuest, appointments]);
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && selectedGuest) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        await db.profiles.upsert({ ...selectedGuest, avatar: base64 });
+        onRefresh();
+        setSelectedGuest({ ...selectedGuest, avatar: base64 });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddNote = async () => {
     if (!selectedGuest || !newNote.content.trim()) return;
     const technical_sheets = [...(selectedGuest.technical_sheets || []), {
@@ -42,7 +56,6 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
     await db.profiles.upsert({ ...selectedGuest, technical_sheets });
     setNewNote({ category: 'Colore', content: '' });
     onRefresh();
-    // Aggiorniamo la vista locale
     setSelectedGuest({ ...selectedGuest, technical_sheets });
   };
 
@@ -97,7 +110,16 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
             <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-12 space-y-12 animate-in slide-in-from-right-4">
                <header className="flex items-start justify-between">
                   <div className="flex items-center gap-8">
-                    <img src={selectedGuest.avatar || `https://ui-avatars.com/api/?name=${selectedGuest.full_name}`} className="w-24 h-24 rounded-[2.5rem] object-cover border-4 border-white shadow-xl" />
+                    <div className="relative group cursor-pointer w-24 h-24">
+                      <img 
+                        src={selectedGuest.avatar || `https://ui-avatars.com/api/?name=${selectedGuest.full_name}`} 
+                        className="w-full h-full rounded-[2.5rem] object-cover border-4 border-white shadow-xl transition-all group-hover:opacity-80" 
+                      />
+                      <label className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer bg-black/20 rounded-[2.5rem]">
+                        <i className="fas fa-camera text-xl text-white"></i>
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      </label>
+                    </div>
                     <div>
                        <h3 className="text-4xl font-luxury font-bold text-gray-900">{selectedGuest.full_name}</h3>
                        <p className="text-amber-600 text-[9px] font-bold uppercase tracking-widest mt-1">Ospite d'onore dal {new Date(selectedGuest.created_at || Date.now()).getFullYear()}</p>
