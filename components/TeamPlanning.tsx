@@ -68,14 +68,21 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     setViewDate(d);
   };
 
+  // Funzione per generare colori unici per ogni collaboratore per differenziare l'agenda
+  const getMemberAccent = (name: string) => {
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const colors = ['border-amber-500', 'border-purple-500', 'border-emerald-500', 'border-sky-500', 'border-rose-500'];
+    return colors[hash % colors.length];
+  };
+
   const getCategoryColor = (category?: string) => {
     switch(category) {
-      case 'Donna': return 'bg-amber-100 border-amber-400 text-amber-900';
-      case 'Colore': return 'bg-purple-100 border-purple-400 text-purple-900';
-      case 'Trattamenti': return 'bg-emerald-100 border-emerald-400 text-emerald-900';
-      case 'Uomo': return 'bg-slate-200 border-slate-500 text-slate-900';
-      case 'Estetica': return 'bg-rose-100 border-rose-400 text-rose-900';
-      default: return 'bg-gray-100 border-gray-400 text-gray-900';
+      case 'Donna': return 'bg-amber-100 text-amber-900';
+      case 'Colore': return 'bg-purple-100 text-purple-900';
+      case 'Trattamenti': return 'bg-emerald-100 text-emerald-900';
+      case 'Uomo': return 'bg-slate-200 text-slate-900';
+      case 'Estetica': return 'bg-rose-100 text-rose-900';
+      default: return 'bg-gray-100 text-gray-900';
     }
   };
 
@@ -167,7 +174,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full object-cover shadow-sm border-2 border-white" />
                    <div className="text-center">
                       <h5 className="font-luxury font-bold text-[11px] text-gray-900">{m.name}</h5>
-                      <p className="text-[6px] font-bold text-amber-600 uppercase tracking-widest">{m.role}</p>
+                      <p className={`text-[6px] font-bold uppercase tracking-widest ${getMemberAccent(m.name).replace('border-', 'text-')}`}>{m.role}</p>
                    </div>
                 </div>
               )) : weekDays.map(date => (
@@ -193,7 +200,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       if (status?.type === 'APPOINTMENT') {
                         const appt = status.appt;
                         const catColor = getCategoryColor((appt as any).services?.category);
-                        extraClass = `${catColor} shadow-md z-10 border-l-4`;
+                        const memberAccent = getMemberAccent(m.name);
+                        extraClass = `${catColor} shadow-md z-10 border-l-4 ${memberAccent}`;
                         if (status.isStart) {
                           content = (
                             <div className="text-center p-1 w-full truncate px-2" onClick={() => onAppointmentClick && onAppointmentClick(appt as any)}>
