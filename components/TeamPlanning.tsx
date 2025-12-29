@@ -70,12 +70,12 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const getCategoryColor = (category?: string) => {
     switch(category) {
-      case 'Donna': return 'bg-amber-50 border-amber-200 text-amber-900';
-      case 'Colore': return 'bg-purple-50 border-purple-200 text-purple-900';
-      case 'Trattamenti': return 'bg-emerald-50 border-emerald-200 text-emerald-900';
-      case 'Uomo': return 'bg-slate-50 border-slate-200 text-slate-900';
-      case 'Estetica': return 'bg-rose-50 border-rose-200 text-rose-900';
-      default: return 'bg-gray-50 border-gray-200 text-gray-900';
+      case 'Donna': return 'bg-amber-100 border-amber-400 text-amber-900';
+      case 'Colore': return 'bg-purple-100 border-purple-400 text-purple-900';
+      case 'Trattamenti': return 'bg-emerald-100 border-emerald-400 text-emerald-900';
+      case 'Uomo': return 'bg-slate-200 border-slate-500 text-slate-900';
+      case 'Estetica': return 'bg-rose-100 border-rose-400 text-rose-900';
+      default: return 'bg-gray-100 border-gray-400 text-gray-900';
     }
   };
 
@@ -139,7 +139,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
             <i className="fas fa-chevron-left text-[10px]"></i>
           </button>
           <div className="text-center min-w-[180px]">
-            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Atelier Planning</h4>
+            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Agenda Atelier</h4>
             <p className="text-[8px] font-bold text-amber-600 uppercase tracking-[0.2em]">
               {viewMode === 'weekly' 
                 ? `${new Date(weekDays[0]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(weekDays[6]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`
@@ -193,12 +193,12 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       if (status?.type === 'APPOINTMENT') {
                         const appt = status.appt;
                         const catColor = getCategoryColor((appt as any).services?.category);
-                        extraClass = `${catColor} shadow-sm z-10 border-l-4`;
+                        extraClass = `${catColor} shadow-md z-10 border-l-4`;
                         if (status.isStart) {
                           content = (
                             <div className="text-center p-1 w-full truncate px-2" onClick={() => onAppointmentClick && onAppointmentClick(appt as any)}>
                                <p className="text-[7px] font-extrabold uppercase truncate">{(appt as any).profiles?.full_name || 'Ospite'}</p>
-                               <p className="text-[5px] font-bold opacity-60 truncate">{(appt as any).services?.name}</p>
+                               <p className="text-[5px] font-bold opacity-70 truncate">{(appt as any).services?.name}</p>
                             </div>
                           );
                         }
