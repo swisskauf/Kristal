@@ -114,9 +114,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <button onClick={() => moveTime(-1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400"><i className="fas fa-chevron-left text-[10px]"></i></button>
-          <div className="text-center min-w-[180px]">
+          <div className="text-center min-w-[220px]">
             <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Planning Atelier</h4>
-            <p className="text-[8px] font-bold text-amber-600 uppercase tracking-[0.2em]">{viewMode === 'weekly' ? 'Vista Settimana' : 'Vista Giorno'}</p>
+            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-[0.2em]">
+               {viewMode === 'weekly' 
+                 ? `Settimana ${weekDays[0].split('-')[2]} - ${weekDays[6].split('-')[2]} ${new Date(weekDays[0]).toLocaleDateString('it-IT', { month: 'long' })}` 
+                 : viewDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
           </div>
           <button onClick={() => moveTime(1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400"><i className="fas fa-chevron-right text-[10px]"></i></button>
         </div>
@@ -159,10 +163,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                            <div className="text-[6px] font-bold uppercase truncate px-2">{status.appt.profiles?.full_name}</div>
                          )}
                          {status?.type === 'SALON_CLOSURE' && <div className="w-full h-full salon-closure-pattern opacity-30 rounded-xl"></div>}
+                         {status?.type === 'VACATION' && <div className="text-[7px] font-bold text-gray-300 uppercase">Assente</div>}
                       </div>
                     );
                   }) : weekDays.map(date => {
-                    // Vista settimanale: mostra punti interattivi
                     const apptsAtHour = appointments.filter(a => {
                        const d = new Date(a.date).toISOString().split('T')[0];
                        const h = new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
@@ -180,7 +184,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                              key={a.id}
                              onClick={() => onAppointmentClick?.(a)}
                              className="appointment-dot w-3 h-3 rounded-full bg-black border-2 border-white shadow-sm -mx-1"
-                             title={`${a.team_member_name}: ${a.services?.name}`}
                            />
                          ))}
                       </div>
