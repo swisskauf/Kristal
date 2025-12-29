@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { TeamMember, Appointment } from '../types';
 
@@ -151,7 +150,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
             <i className="fas fa-chevron-left text-[10px]"></i>
           </button>
           <div className="text-center min-w-[180px]">
-            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Atelier Planning</h4>
+            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Agenda Atelier</h4>
             <p className="text-[8px] font-bold text-amber-600 uppercase tracking-[0.2em]">
               {viewMode === 'weekly' 
                 ? `${new Date(weekDays[0]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(weekDays[6]).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`
@@ -259,9 +258,12 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                         >
                           {isSalonClosure ? (
                              <i className="fas fa-ribbon text-[8px] text-red-400"></i>
-                          ) : apptsAtHour.length > 0 && (
-                             <div className="w-3 h-3 rounded-full bg-black shadow-lg animate-pulse border-2 border-white"></div>
-                          )}
+                          ) : apptsAtHour.length > 0 ? (
+                             <div className="relative flex items-center justify-center">
+                                <div className="w-3.5 h-3.5 rounded-full bg-black shadow-lg border-2 border-white animate-pulse"></div>
+                                <span className="absolute -top-4 text-[6px] font-bold text-black uppercase">{apptsAtHour.length > 1 ? `x${apptsAtHour.length}` : ''}</span>
+                             </div>
+                          ) : null}
                         </div>
                       )
                     })}
