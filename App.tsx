@@ -10,6 +10,7 @@ import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import VisionAnalytics from './components/VisionAnalytics';
 import AIAssistant from './components/AIAssistant';
+import InstagramGallery from './components/InstagramGallery';
 import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState({
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
+    instagramToken: '',
     emailNotificationsEnabled: true
   });
 
@@ -48,9 +50,8 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 5000);
   };
 
-  // Caricamento impostazioni da localStorage
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings');
+    const savedSettings = localStorage.getItem('kristal_settings_v2');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -58,43 +59,46 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings', JSON.stringify(newSettings));
+    localStorage.setItem('kristal_settings_v2', JSON.stringify(newSettings));
     showToast("Impostazioni salvate con successo.");
   };
 
-  // Sistema di notifica (Simulato per frontend)
   const sendEmailNotification = (appointment: any, type: 'new' | 'update') => {
     if (!settings.emailNotificationsEnabled) return;
 
-    const profile = profiles.find(p => p.id === appointment.client_id);
+    const profile = profiles.find(p => p.id === appointment.client_id) || appointment.profiles;
     const guestName = profile?.full_name || 'Ospite';
-    const guestEmail = profile?.email || 'email@kristal-atelier.com';
-    const date = new Date(appointment.date).toLocaleString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-    const stylist = appointment.team_member_name;
+    const guestEmail = profile?.email || 'notifica@kristal-atelier.ch';
+    const date = new Date(appointment.date).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    
+    // Logica di simulazione avanzata
+    console.group(`%c [KRISTAL MAIL SERVER] - ${type.toUpperCase()}`, 'background: #111; color: #d97706; padding: 4px; border-radius: 4px;');
+    console.log(`Destinatario: ${guestName} (${guestEmail})`);
+    console.log(`Oggetto: ${type === 'new' ? 'Conferma del tuo Ritual Kristal' : 'Aggiornamento del tuo appuntamento'}`);
+    console.log(`Corpo: Gentile ${guestName}, ti informiamo che il tuo rituale del ${date} è stato correttamente ${type === 'new' ? 'riservato' : 'aggiornato'}.`);
+    console.groupEnd();
 
-    // Logica di invio simulata
-    console.log(`%c [MAIL SERVER] Invio a: ${guestEmail}`, 'background: #000; color: #bada55');
-    console.log(`Oggetto: ${type === 'new' ? 'Conferma Prenotazione' : 'Aggiornamento Appuntamento'}`);
-    console.log(`Messaggio: Gentile ${guestName}, il tuo rituale del ${date} con ${stylist} è stato ${type === 'new' ? 'confermato' : 'aggiornato'}.`);
-
-    showToast(`Email di ${type === 'new' ? 'conferma' : 'aggiornamento'} inviata a ${guestName}.`, 'info');
+    showToast(`Notifica inviata a ${guestName}`, 'info');
   };
 
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
 
-  // Added currentMember useMemo to fix errors on lines 239, 241, 242, 292
   const currentMember = useMemo(() => {
     if (!user || user.role !== 'collaborator') return null;
-    return team.find(m => m.profile_id === user.id || m.name === user.fullName);
+    return team.find(m => m.profile_id === user.id || m.name === user.fullName.split(' ')[0]);
   }, [team, user]);
 
-  // Added categories useMemo to fix error on line 254
   const categories = useMemo(() => {
     const cats = services.map(s => s.category);
     return Array.from(new Set(cats));
   }, [services]);
+
+  const guestAppointments = useMemo(() => {
+    if (!user) return [];
+    return appointments.filter(a => a.client_id === user.id).sort((a,b) => b.date.localeCompare(a.date));
+  }, [appointments, user]);
 
   const ensureDataSeeding = useCallback(async () => {
     try {
@@ -178,41 +182,20 @@ const App: React.FC = () => {
     try {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
-        const updated = await db.appointments.upsert({ ...appt, status });
-        showToast(`Rituale ${status === 'confirmed' ? 'confermato' : 'annullato'} con successo.`);
+        await db.appointments.upsert({ ...appt, status });
+        showToast(`Rituale ${status === 'confirmed' ? 'confermato' : 'annullato'}.`);
         if (isAdmin || isCollaborator) sendEmailNotification(appt, 'update');
         refreshData();
         setSelectedAppointmentDetail(null);
       }
     } catch (e) {
-      showToast("Errore durante l'aggiornamento.", "error");
-    }
-  };
-
-  const handleServiceClick = (service: Service) => {
-    if (isGuest) setIsAuthOpen(true);
-    else {
-      setFormInitialData({ service_id: service.id });
-      setIsFormOpen(true);
+      showToast("Errore aggiornamento.", "error");
     }
   };
 
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
-    setFormInitialData({
-      team_member_name: memberName,
-      date: new Date(`${date}T${hour}:00`).toISOString()
-    });
+    setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() });
     setIsFormOpen(true);
-  };
-
-  const handleSaveSalonClosures = async (closures: SalonClosure[]) => {
-    try {
-      await db.salonClosures.save(closures);
-      setSalonClosures(closures);
-      showToast("Chiusure atelier salvate.");
-    } catch (e) {
-      showToast("Errore salvataggio chiusure.", "error");
-    }
   };
 
   if (loading) {
@@ -221,7 +204,7 @@ const App: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h1 className="text-2xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal Atelier</h1>
-          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Caricamento Ritual...</p>
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Sincronizzazione...</p>
         </div>
       </div>
     );
@@ -271,7 +254,10 @@ const App: React.FC = () => {
                             <div 
                               key={s.id} 
                               className="group p-6 bg-white rounded-[2.5rem] border border-gray-50 hover:shadow-xl transition-all flex justify-between items-center cursor-pointer active:scale-95" 
-                              onClick={() => handleServiceClick(s)}
+                              onClick={() => {
+                                if (isGuest) setIsAuthOpen(true);
+                                else { setFormInitialData({ service_id: s.id }); setIsFormOpen(true); }
+                              }}
                             >
                               <div className="flex-1">
                                 <h5 className="font-bold text-lg text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
@@ -287,8 +273,41 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
+
+                  {settings.instagramIntegrationEnabled && settings.instagramToken && (
+                    <InstagramGallery token={settings.instagramToken} />
+                  )}
                 </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'my_rituals' && user && (
+          <div className="space-y-10 animate-in fade-in">
+             <h2 className="text-4xl font-luxury font-bold">I Miei Ritual</h2>
+             <div className="grid gap-6">
+               {guestAppointments.length > 0 ? guestAppointments.map(a => (
+                 <div key={a.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-6">
+                      <div className="w-16 h-16 bg-black text-white rounded-[1.5rem] flex flex-col items-center justify-center">
+                        <span className="text-[8px] uppercase font-bold text-amber-500">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+                        <span className="text-xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-lg">{a.services?.name}</h5>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Con {a.team_member_name} alle {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                      </div>
+                    </div>
+                    <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase ${a.status === 'confirmed' ? 'bg-green-100 text-green-700' : a.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {a.status}
+                    </span>
+                 </div>
+               )) : (
+                 <div className="p-20 text-center bg-white rounded-[4rem] border border-dashed border-gray-200">
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.2em]">Non avete ancora Ritual programmati</p>
+                 </div>
+               )}
+             </div>
           </div>
         )}
 
@@ -323,10 +342,15 @@ const App: React.FC = () => {
                   <div className="space-y-6">
                     <input id="h-name" type="text" placeholder="Nome Festività" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
                     <input id="h-date" type="date" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
-                    <button onClick={() => {
+                    <button onClick={async () => {
                       const n = (document.getElementById('h-name') as HTMLInputElement).value;
                       const d = (document.getElementById('h-date') as HTMLInputElement).value;
-                      if(n && d) handleSaveSalonClosures([...salonClosures, { name: n, date: d }]);
+                      if(n && d) {
+                        const updated = [...salonClosures, { name: n, date: d }];
+                        await db.salonClosures.save(updated);
+                        setSalonClosures(updated);
+                        showToast("Chiusura aggiunta.");
+                      }
                     }} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Aggiungi Chiusura</button>
                     
                     <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
@@ -336,7 +360,11 @@ const App: React.FC = () => {
                                <p className="text-[10px] font-bold">{c.name}</p>
                                <p className="text-[8px] text-amber-600 uppercase font-bold">{new Date(c.date).toLocaleDateString()}</p>
                             </div>
-                            <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x.date !== c.date))} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                            <button onClick={async () => {
+                               const updated = salonClosures.filter(x => x.date !== c.date);
+                               await db.salonClosures.save(updated);
+                               setSalonClosures(updated);
+                            }} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
                          </div>
                        ))}
                     </div>
@@ -360,7 +388,7 @@ const App: React.FC = () => {
                       }
                     }
                     refreshData();
-                    showToast("Richiesta aggiornata.");
+                    showToast(`Richiesta ${action}.`);
                   }} />
                </div>
             </div>
@@ -374,67 +402,56 @@ const App: React.FC = () => {
                <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Configurazione Funzionalità Atelier</p>
              </header>
 
-             <div className="max-w-2xl bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                <div className="space-y-8">
-                  <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-amber-600 text-white rounded-2xl flex items-center justify-center">
-                        <i className="fas fa-sparkles"></i>
+             <div className="grid md:grid-cols-2 gap-10">
+                <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4">Moduli Attivi</h4>
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-amber-600 text-white rounded-2xl flex items-center justify-center"><i className="fas fa-sparkles"></i></div>
+                        <div><p className="text-sm font-bold">AI Assistant</p><p className="text-[8px] text-gray-400 font-bold uppercase">Kristal Virtual Consultant</p></div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold">Kristal AI Assistant</p>
-                        <p className="text-[9px] text-gray-400 uppercase font-bold">Supporto prenotazioni intelligente</p>
-                      </div>
+                      <button onClick={() => saveSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-12 h-6 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}>
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-7' : 'left-1'}`}></div>
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => saveSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})}
-                      className={`w-14 h-8 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
-                    >
-                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-7' : 'left-1'}`}></div>
-                    </button>
-                  </div>
 
-                  <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-tr from-purple-500 to-pink-500 text-white rounded-2xl flex items-center justify-center">
-                        <i className="fab fa-instagram"></i>
+                    <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center"><i className="fas fa-envelope"></i></div>
+                        <div><p className="text-sm font-bold">Notifiche Email</p><p className="text-[8px] text-gray-400 font-bold uppercase">Conferme auto agli ospiti</p></div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold">Integrazione Instagram</p>
-                        <p className="text-[9px] text-gray-400 uppercase font-bold">Visualizza portfolio lavori</p>
-                      </div>
+                      <button onClick={() => saveSettings({...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled})} className={`w-12 h-6 rounded-full transition-all relative ${settings.emailNotificationsEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}>
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-7' : 'left-1'}`}></div>
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => saveSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})}
-                      className={`w-14 h-8 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
-                    >
-                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-7' : 'left-1'}`}></div>
-                    </button>
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center">
-                        <i className="fas fa-envelope"></i>
+                <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+                   <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4">Integrazione Instagram</h4>
+                   <div className="space-y-4">
+                      <p className="text-[10px] text-gray-400 leading-relaxed italic">Inserisci il "User Access Token" di Instagram Graph API per mostrare i lavori recenti nella dashboard degli ospiti.</p>
+                      <input 
+                        type="password" 
+                        placeholder="Instagram Access Token..." 
+                        value={settings.instagramToken} 
+                        onChange={(e) => setSettings({...settings, instagramToken: e.target.value})}
+                        className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs"
+                      />
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                         <span className="text-[10px] font-bold uppercase">Mostra Gallery</span>
+                         <button onClick={() => saveSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})} className={`w-12 h-6 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}>
+                           <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-7' : 'left-1'}`}></div>
+                         </button>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold">Notifiche Email</p>
-                        <p className="text-[9px] text-gray-400 uppercase font-bold">Invia conferme automatiche agli ospiti</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => saveSettings({...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled})}
-                      className={`w-14 h-8 rounded-full transition-all relative ${settings.emailNotificationsEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
-                    >
-                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-7' : 'left-1'}`}></div>
-                    </button>
-                  </div>
+                      <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase">Salva Configurazione</button>
+                   </div>
                 </div>
              </div>
           </div>
         )}
 
-        {/* Altri tab: services_management, team_management, clients ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <div className="flex justify-between items-center">
@@ -519,15 +536,6 @@ const App: React.FC = () => {
              <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-2xl"></i></button>
              <h3 className="text-3xl font-luxury font-bold mb-10">Ritual Menu</h3>
              <ServiceForm initialData={selectedServiceToEdit} onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); showToast("Servizio aggiornato."); }} onCancel={() => setIsServiceFormOpen(false)} />
-          </div>
-        </div>
-      )}
-
-      {selectedMemberToManage && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-2xl"></i></button>
-            <TeamManagement member={selectedMemberToManage} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); refreshData(); setSelectedMemberToManage(null); showToast("Staff aggiornato."); }} onClose={() => setSelectedMemberToManage(null)} />
           </div>
         </div>
       )}
