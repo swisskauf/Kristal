@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Feature Settings con persistenza (Versione 7 per forzare aggiornamento)
+  // Feature Settings con persistenza (v8)
   const [settings, setSettings] = useState({
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
@@ -51,7 +51,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v7');
+    const savedSettings = localStorage.getItem('kristal_settings_v8');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -59,11 +59,25 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v7', JSON.stringify(newSettings));
+    localStorage.setItem('kristal_settings_v8', JSON.stringify(newSettings));
     showToast("Impostazioni salvate e sincronizzate.");
   };
 
-  // Logging avanzato richiesto: registra in treatment_history e technical_sheets
+  const ensureDataSeeding = useCallback(async () => {
+    try {
+      const existingServices = await db.services.getAll();
+      if (!existingServices || existingServices.length === 0) {
+        for (const s of DEFAULT_SERVICES) await db.services.upsert(s);
+      }
+      const existingTeam = await db.team.getAll();
+      if (!existingTeam || existingTeam.length === 0) {
+        for (const m of DEFAULT_TEAM) await db.team.upsert(m);
+      }
+    } catch (e) {
+      console.warn("Seeding error:", e);
+    }
+  }, []);
+
   const logOperation = async (clientId: string, action: string, details: string) => {
     const timestamp = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const logEntry = `[${timestamp}] ${action}: ${details}`;
@@ -97,11 +111,11 @@ const App: React.FC = () => {
   }, [team, user]);
 
   const categories = useMemo(() => {
+    if (!services || services.length === 0) return [];
     const cats = services.map(s => s.category);
     return Array.from(new Set(cats));
   }, [services]);
 
-  // Raggruppamento dinamico per "I Miei Ritual"
   const groupedGuestAppointments = useMemo(() => {
     if (!user) return { upcoming: [], history: [], cancelled: [] };
     const userAppts = appointments.filter(a => a.client_id === user.id);
@@ -116,6 +130,7 @@ const App: React.FC = () => {
 
   const refreshData = useCallback(async () => {
     try {
+      await ensureDataSeeding();
       const [svcs, tm, appts, reqs, profs, closures] = await Promise.all([
         db.services.getAll(),
         db.team.getAll(),
@@ -136,7 +151,7 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [ensureDataSeeding]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -223,7 +238,7 @@ const App: React.FC = () => {
                   </header>
 
                   <div className="grid md:grid-cols-2 gap-12">
-                    {categories.map(cat => (
+                    {categories.length > 0 ? categories.map(cat => (
                       <div key={cat} className="space-y-8">
                         <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-300 border-b border-gray-100 pb-4">{cat}</h4>
                         <div className="space-y-4">
@@ -241,7 +256,11 @@ const App: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                    ))}
+                    )) : (
+                      <div className="col-span-full py-20 text-center">
+                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Caricamento Menu Ritual...</p>
+                      </div>
+                    )}
                   </div>
                   {settings.instagramIntegrationEnabled && settings.instagramToken && <InstagramGallery token={settings.instagramToken} />}
                 </div>
@@ -259,7 +278,6 @@ const App: React.FC = () => {
                <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
              </header>
 
-             {/* PROSSIME SESSIONI */}
              <section className="space-y-8">
                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600 border-l-4 border-amber-600 pl-4">Prossime Sessioni</h3>
                <div className="grid md:grid-cols-2 gap-8">
@@ -283,7 +301,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
                            <div className="space-y-1">
-                              <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Per modifiche o annullamenti:</p>
+                              <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Per modifiche:</p>
                               <a href={`tel:${settings.salonPhone.replace(/[^\d+]/g, '')}`} className="text-gray-900 font-bold text-xs hover:text-amber-600 transition-colors">{settings.salonPhone}</a>
                            </div>
                            <a 
@@ -303,7 +321,6 @@ const App: React.FC = () => {
                </div>
              </section>
 
-             {/* CRONOLOGIA PASSATA */}
              <section className="space-y-8">
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">I Vostri Momenti</h3>
                 <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
@@ -329,21 +346,6 @@ const App: React.FC = () => {
                    )}
                 </div>
              </section>
-
-             {/* ANNULLATI */}
-             {groupedGuestAppointments.cancelled.length > 0 && (
-               <section className="space-y-4 opacity-30">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300 pl-4">Annullati</h3>
-                  <div className="space-y-3">
-                    {groupedGuestAppointments.cancelled.slice(0, 5).map(a => (
-                      <div key={a.id} className="p-8 bg-white rounded-[2.5rem] border border-gray-100 flex justify-between items-center grayscale">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{new Date(a.date).toLocaleDateString()} — {a.services?.name}</span>
-                        <span className="text-[9px] font-bold text-red-400 uppercase tracking-[0.3em]">Cancellato</span>
-                      </div>
-                    ))}
-                  </div>
-               </section>
-             )}
           </div>
         )}
 
@@ -356,57 +358,6 @@ const App: React.FC = () => {
               currentUserMemberName={currentMember?.name} isCollaborator={isCollaborator}
               salonClosures={salonClosures.map(c => c.date)}
             />
-          </div>
-        )}
-
-        {activeTab === 'vacation_planning' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Vacanze & Chiusure</h2>
-            <div className="grid lg:grid-cols-2 gap-10">
-               <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-6">Nuova Festività</h4>
-                  <div className="space-y-6">
-                    <input id="h-name" type="text" placeholder="Nome Festività" className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none" />
-                    <input id="h-date" type="date" className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none" />
-                    <button onClick={async () => {
-                      const n = (document.getElementById('h-name') as HTMLInputElement).value;
-                      const d = (document.getElementById('h-date') as HTMLInputElement).value;
-                      if(n && d) {
-                        const updated = [...salonClosures, { name: n, date: d }];
-                        await db.salonClosures.save(updated);
-                        setSalonClosures(updated);
-                        showToast("Chiusura atelier registrata.");
-                      }
-                    }} className="w-full py-5 bg-black text-white rounded-3xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Aggiungi Chiusura</button>
-                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
-                       {salonClosures.map(c => (
-                         <div key={c.date} className="flex justify-between items-center p-5 bg-gray-50 rounded-2xl">
-                            <div><p className="text-[11px] font-bold">{c.name}</p><p className="text-[8px] text-amber-600 uppercase font-bold">{new Date(c.date).toLocaleDateString()}</p></div>
-                            <button onClick={async () => { const u = salonClosures.filter(x => x.date !== c.date); await db.salonClosures.save(u); setSalonClosures(u); }} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash-alt"></i></button>
-                         </div>
-                       ))}
-                    </div>
-                  </div>
-               </div>
-               <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-6">Approvazione Staff</h4>
-                  <RequestManagement requests={requests} onAction={async (id, action) => {
-                    await db.requests.update(id, { status: action });
-                    if (action === 'approved') {
-                      const req = requests.find(r => r.id === id);
-                      if (req) {
-                        const member = team.find(m => m.name === req.member_name);
-                        if (member) {
-                          const updatedAbs = [...(member.absences_json || []), { id: req.id, startDate: req.start_date, endDate: req.end_date, type: req.type, isFullDay: req.is_full_day }];
-                          await db.team.upsert({ ...member, absences_json: updatedAbs });
-                        }
-                      }
-                    }
-                    refreshData();
-                    showToast(`Richiesta ${action}.`);
-                  }} />
-               </div>
-            </div>
           </div>
         )}
 
@@ -424,7 +375,7 @@ const App: React.FC = () => {
                         <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fas fa-phone-alt text-5xl"></i></div>
                         <label className="text-[10px] font-bold uppercase text-amber-600 tracking-widest ml-1 flex items-center gap-3"><i className="fas fa-phone-alt"></i> Telefono Atelier</label>
                         <input type="text" placeholder="+41 00 000 00 00" value={settings.salonPhone} onChange={(e) => setSettings({...settings, salonPhone: e.target.value})} className="w-full p-6 rounded-[2rem] bg-white border-none font-bold text-sm shadow-inner focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter leading-relaxed">Verrà mostrato agli ospiti per gestire i rituali.</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter leading-relaxed">Il numero salvato viene utilizzato per i tasti "Chiama" degli ospiti.</p>
                     </div>
                     <div className="flex items-center justify-between px-6">
                       <div className="flex items-center gap-6">
@@ -442,9 +393,9 @@ const App: React.FC = () => {
                       <div className="p-10 bg-gray-50 rounded-[3rem] border border-gray-100">
                         <p className="text-[10px] font-bold uppercase text-amber-600 mb-4 tracking-widest">Guida Token</p>
                         <ol className="text-[11px] leading-relaxed text-gray-600 space-y-3 list-decimal ml-4">
-                          <li>Accedi a <em>developers.facebook.com</em></li>
+                          <li>Accedi a developers.facebook.com</li>
                           <li>Crea app "Consumer"</li>
-                          <li>Instagram Basic Display &rarr; Genera Token</li>
+                          <li>Instagram Basic Display: Genera Token</li>
                         </ol>
                       </div>
                       <div className="space-y-3">
