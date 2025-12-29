@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Feature Settings con persistenza (v8)
+  // Feature Settings con persistenza aggiornata (v9)
   const [settings, setSettings] = useState({
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
@@ -50,8 +50,9 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 5000);
   };
 
+  // Caricamento impostazioni iniziali
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v8');
+    const savedSettings = localStorage.getItem('kristal_settings_v9');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -59,19 +60,24 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v8', JSON.stringify(newSettings));
-    showToast("Impostazioni salvate e sincronizzate.");
+    localStorage.setItem('kristal_settings_v9', JSON.stringify(newSettings));
+    showToast("Impostazioni salvate con successo.");
   };
 
+  // Funzione di popolamento dati se il DB è vuoto
   const ensureDataSeeding = useCallback(async () => {
     try {
       const existingServices = await db.services.getAll();
       if (!existingServices || existingServices.length === 0) {
-        for (const s of DEFAULT_SERVICES) await db.services.upsert(s);
+        for (const s of DEFAULT_SERVICES) {
+          await db.services.upsert(s);
+        }
       }
       const existingTeam = await db.team.getAll();
       if (!existingTeam || existingTeam.length === 0) {
-        for (const m of DEFAULT_TEAM) await db.team.upsert(m);
+        for (const m of DEFAULT_TEAM) {
+          await db.team.upsert(m);
+        }
       }
     } catch (e) {
       console.warn("Seeding error:", e);
@@ -258,7 +264,7 @@ const App: React.FC = () => {
                       </div>
                     )) : (
                       <div className="col-span-full py-20 text-center">
-                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Caricamento Menu Ritual...</p>
+                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Menu Ritual...</p>
                       </div>
                     )}
                   </div>
@@ -375,7 +381,7 @@ const App: React.FC = () => {
                         <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fas fa-phone-alt text-5xl"></i></div>
                         <label className="text-[10px] font-bold uppercase text-amber-600 tracking-widest ml-1 flex items-center gap-3"><i className="fas fa-phone-alt"></i> Telefono Atelier</label>
                         <input type="text" placeholder="+41 00 000 00 00" value={settings.salonPhone} onChange={(e) => setSettings({...settings, salonPhone: e.target.value})} className="w-full p-6 rounded-[2rem] bg-white border-none font-bold text-sm shadow-inner focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter leading-relaxed">Il numero salvato viene utilizzato per i tasti "Chiama" degli ospiti.</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter leading-relaxed">Il numero salvato viene sincronizzato istantaneamente con l'area ospite.</p>
                     </div>
                     <div className="flex items-center justify-between px-6">
                       <div className="flex items-center gap-6">
@@ -395,7 +401,7 @@ const App: React.FC = () => {
                         <ol className="text-[11px] leading-relaxed text-gray-600 space-y-3 list-decimal ml-4">
                           <li>Accedi a developers.facebook.com</li>
                           <li>Crea app "Consumer"</li>
-                          <li>Instagram Basic Display: Genera Token</li>
+                          <li>Instagram Basic Display - Genera Token</li>
                         </ol>
                       </div>
                       <div className="space-y-3">
