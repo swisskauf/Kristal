@@ -63,11 +63,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
+    // 1. Chiusura Atelier (Totale)
     if (salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
 
+    // 2. Appuntamenti
     const appts = appointments.filter(a => {
       if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
       const appDate = new Date(a.date);
@@ -88,7 +90,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const member = team.find(t => t.name === memberName);
     if (!member) return null;
 
-    // Controllo assenze approvate (Vacanze/Ferie)
+    // 3. Assenze Approvate (Vacanze/Ferie) - FIX: Controllo esteso
     const isAbsent = (member.absences_json || []).some(abs => {
       const start = new Date(abs.startDate).toISOString().split('T')[0];
       const end = new Date(abs.endDate).toISOString().split('T')[0];
@@ -96,10 +98,14 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     });
     if (isAbsent) return { type: 'VACATION' };
 
+    // 4. Chiusure Settimanali Ricorrenti
     const d = new Date(`${dateStr}T12:00:00`);
     if ((member.weekly_closures || []).includes(d.getDay())) return { type: 'CLOSURE' };
+    
+    // 5. Date Uniche di indisponibilità
     if ((member.unavailable_dates || []).includes(dateStr)) return { type: 'VACATION' };
 
+    // 6. Pause e Orari lavorativi
     if (member.break_start_time && member.break_end_time && hour >= member.break_start_time && hour < member.break_end_time) {
       return { type: 'BREAK' };
     }
@@ -145,7 +151,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
               <div className="sticky left-0 bg-white z-20"></div>
               {viewMode === 'daily' ? team.map(m => (
                 <div key={m.name} className="flex flex-col items-center gap-2 pb-4 border-b border-gray-50">
-                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
+                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-12 h-12 rounded-[1.2rem] object-cover border-2 border-white shadow-sm" />
                    <h5 className="font-luxury font-bold text-[11px] text-gray-900">{m.name}</h5>
                    <p className="text-[7px] text-gray-300 font-bold uppercase tracking-widest">{viewDate.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}</p>
                 </div>
@@ -167,15 +173,15 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                       <div 
                         key={`${m.name}-${hour}`} 
                         onClick={() => status?.type === 'APPOINTMENT' ? onAppointmentClick?.(status.appt) : (status?.type !== 'VACATION' && status?.type !== 'SALON_CLOSURE' && onSlotClick?.(m.name, weekDays[0], hour))}
-                        className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-sm' : 'hover:bg-amber-50/10'}`}
+                        className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-sm scale-[0.98]' : 'hover:bg-amber-50/10'}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
                            <div className="text-[6px] font-bold uppercase truncate px-2">{status.appt.profiles?.full_name}</div>
                          )}
                          {status?.type === 'SALON_CLOSURE' && <div className="w-full h-full salon-closure-pattern opacity-30 rounded-xl"></div>}
                          {status?.type === 'VACATION' && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-xl"><span className="text-[6px] font-bold text-gray-400 uppercase">Assente</span></div>}
-                         {status?.type === 'CLOSURE' && <div className="w-full h-full bg-gray-100/50 rounded-xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[8px] text-gray-300"></i></div>}
-                         {status?.type === 'BREAK' && <div className="w-full h-full bg-amber-50/30 rounded-xl flex items-center justify-center"><i className="fas fa-mug-hot text-[8px] text-amber-200"></i></div>}
+                         {status?.type === 'CLOSURE' && <div className="w-full h-full bg-gray-100/30 rounded-xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[8px] text-gray-300"></i></div>}
+                         {status?.type === 'BREAK' && <div className="w-full h-full bg-amber-50/20 rounded-xl flex items-center justify-center"><i className="fas fa-mug-hot text-[8px] text-amber-200"></i></div>}
                       </div>
                     );
                   }) : weekDays.map(date => {
