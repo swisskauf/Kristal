@@ -10,6 +10,7 @@ import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
+import AIAssistant from './components/AIAssistant';
 import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -20,20 +21,20 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
-  const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
+  const [services, setServices] = useState<Service[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<any>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isNewGuestOpen, setIsNewGuestOpen] = useState(false);
-  const [editingGuest, setEditingGuest] = useState<any | null>(null);
   const [selectedMemberToManage, setSelectedMemberToManage] = useState<TeamMember | null>(null);
   const [selectedClientDetail, setSelectedClientDetail] = useState<any | null>(null);
   const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<any | null>(null);
+  const [selectedServiceToEdit, setSelectedServiceToEdit] = useState<Service | undefined>(undefined);
   
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
 
@@ -46,29 +47,8 @@ const App: React.FC = () => {
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
 
-  const ensureSeedData = useCallback(async () => {
-    if (useMock) return;
-    try {
-      const [svcs, tm] = await Promise.all([
-        db.services.getAll(),
-        db.team.getAll()
-      ]);
-
-      if (!svcs || svcs.length === 0) {
-        await Promise.all(DEFAULT_SERVICES.map(s => db.services.upsert(s)));
-      }
-      if (!tm || tm.length === 0) {
-        await Promise.all(DEFAULT_TEAM.map(m => db.team.upsert(m)));
-      }
-    } catch (err) {
-      console.warn("Seed data process skipped or partial:", err);
-    }
-  }, []);
-
   const refreshData = useCallback(async () => {
     try {
-      if (!useMock) await ensureSeedData();
-
       const [svcs, tm, appts, reqs, profs, closures] = await Promise.all([
         db.services.getAll().catch(() => DEFAULT_SERVICES),
         db.team.getAll().catch(() => DEFAULT_TEAM),
@@ -78,8 +58,8 @@ const App: React.FC = () => {
         db.salonClosures.getAll().catch(() => [])
       ]);
       
-      setServices(svcs && svcs.length ? svcs : DEFAULT_SERVICES);
-      setTeam(tm && tm.length ? tm : DEFAULT_TEAM);
+      setServices(svcs || []);
+      setTeam(tm || []);
       setAppointments(appts || []);
       setRequests(reqs || []);
       setProfiles(profs || []);
@@ -103,7 +83,7 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, ensureSeedData]);
+  }, [user?.id]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -147,6 +127,11 @@ const App: React.FC = () => {
     return team.find(m => m.profile_id === user.id || m.name.toLowerCase() === user.fullName.split(' ')[0].toLowerCase());
   }, [user, team]);
 
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(services.map(s => s.category)));
+    return cats.length > 0 ? cats : ['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'];
+  }, [services]);
+
   const myClientAppointments = useMemo(() => {
     if (!user) return [];
     return appointments
@@ -171,26 +156,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateAppointmentStatus = async (id: string, status: any) => {
-    const appt = appointments.find(a => a.id === id);
-    if (!appt) return;
-    
-    try {
-      await db.appointments.upsert({ ...appt, status });
-      const client = profiles.find(p => p.id === appt.client_id);
-      
-      showToast(
-        `Ritual aggiornato con successo. Notifica inviata a ${client?.full_name || 'Ospite'}.`,
-        status === 'cancelled' ? 'info' : 'success'
-      );
-      
-      setSelectedAppointmentDetail(null);
-      await refreshData();
-    } catch (e) {
-      showToast("Errore durante l'aggiornamento.", "error");
-    }
-  };
-
   const handleServiceClick = (service: Service) => {
     if (isGuest) {
       setIsAuthOpen(true);
@@ -207,6 +172,22 @@ const App: React.FC = () => {
       showToast("Agenda Atelier sincronizzata: Festività aggiornate.");
     } catch (e) {
       showToast("Errore nel salvataggio.", "error");
+    }
+  };
+
+  // Fixed: Implemented missing handleUpdateAppointmentStatus function
+  const handleUpdateAppointmentStatus = async (id: string, status: 'confirmed' | 'cancelled') => {
+    try {
+      const appt = appointments.find(a => a.id === id);
+      if (appt) {
+        await db.appointments.upsert({ ...appt, status });
+        showToast(`Rituale ${status === 'confirmed' ? 'confermato' : 'annullato'}.`);
+        refreshData();
+        setSelectedAppointmentDetail(null);
+      }
+    } catch (e) {
+      console.error("Status Update Error", e);
+      showToast("Errore durante l'aggiornamento.", "error");
     }
   };
 
@@ -272,7 +253,7 @@ const App: React.FC = () => {
                     </header>
 
                     <div className="grid md:grid-cols-2 gap-10">
-                      {['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'].map(cat => (
+                      {categories.map(cat => (
                         <div key={cat} className="space-y-6">
                           <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">{cat}</h4>
                           <div className="space-y-4">
@@ -307,7 +288,6 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <header>
                <h2 className="text-4xl font-luxury font-bold">I Miei Ritual</h2>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Le tue prenotazioni in ordine cronologico di creazione</p>
             </header>
 
             <section className="space-y-8">
@@ -334,11 +314,6 @@ const App: React.FC = () => {
                               <span className="text-[11px] font-bold">Con {app.team_member_name}</span>
                             </div>
                           </div>
-                          <div className="pt-4 border-t border-white/10 flex justify-between items-center">
-                            <p className="text-[8px] text-white/40 uppercase font-bold tracking-widest">
-                              Prenotato il: {new Date(app.created_at).toLocaleString('it-IT')}
-                            </p>
-                          </div>
                         </div>
                       </div>
                     ))}
@@ -346,35 +321,9 @@ const App: React.FC = () => {
                ) : (
                  <div className="p-12 bg-white rounded-[3rem] border border-dashed border-gray-200 text-center">
                     <p className="text-gray-400 text-[10px] font-bold uppercase">Nessun rituale attivo.</p>
-                    <button onClick={() => setActiveTab('dashboard')} className="mt-4 text-amber-600 font-bold text-[9px] uppercase tracking-widest">Esplora il Menu</button>
                  </div>
                )}
             </section>
-
-            {pastAppointments.length > 0 && (
-              <section className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">Storico & Annullati</h4>
-                <div className="space-y-4">
-                   {pastAppointments.map(app => (
-                     <div key={app.id} className={`flex justify-between items-center p-8 rounded-[3rem] border border-gray-50 transition-opacity ${app.status === 'cancelled' ? 'bg-red-50/20 opacity-40' : 'bg-white opacity-60 hover:opacity-100'}`}>
-                        <div className="flex items-center gap-6">
-                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${app.status === 'cancelled' ? 'bg-red-100 text-red-400' : 'bg-gray-100 text-gray-400'}`}>
-                             <i className={`fas ${app.status === 'cancelled' ? 'fa-times' : 'fa-check'}`}></i>
-                           </div>
-                           <div>
-                              <h6 className="font-bold text-lg text-gray-900">{app.services?.name}</h6>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
-                                {app.status === 'cancelled' ? 'RITUAL ANNULLATO' : `Eseguito il ${new Date(app.date).toLocaleDateString()}`} • {app.team_member_name}
-                              </p>
-                              <p className="text-[7px] text-gray-300 font-bold uppercase mt-1">Creato il {new Date(app.created_at).toLocaleDateString()}</p>
-                           </div>
-                        </div>
-                        <p className="text-lg font-luxury font-bold">CHF {app.services?.price}</p>
-                     </div>
-                   ))}
-                </div>
-              </section>
-            )}
           </div>
         )}
 
@@ -394,82 +343,94 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <div className="flex justify-between items-center">
+               <h2 className="text-4xl font-luxury font-bold">Menu Ritual</h2>
+               <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest">Crea Ritual</button>
+             </div>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {services.length > 0 ? services.map(s => (
+                 <div key={s.id} onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all cursor-pointer">
+                   <h4 className="font-bold text-xl mb-1">{s.name}</h4>
+                   <p className="text-[10px] text-amber-600 font-bold uppercase mb-4 tracking-widest">{s.category}</p>
+                   <div className="flex justify-between items-end">
+                     <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
+                     <p className="text-[10px] text-gray-400 font-bold">{s.duration} min</p>
+                   </div>
+                 </div>
+               )) : (
+                 <div className="col-span-full p-20 bg-white rounded-[4rem] border border-dashed border-gray-200 text-center">
+                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nessun servizio caricato dal database SQL.</p>
+                 </div>
+               )}
+             </div>
+          </div>
+        )}
+
         {activeTab === 'vacation_planning' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
             <header>
                <h2 className="text-4xl font-luxury font-bold text-gray-900 tracking-tighter">Agenda Atelier Admin</h2>
-               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Gestione centralizzata festività, congedi e disponibilità staff</p>
+               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Gestione festività e congedi staff</p>
             </header>
 
             <div className="grid lg:grid-cols-3 gap-10">
-               {/* FORM CHIUSURE SALONE LUXURY */}
                <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8 lg:col-span-1">
                   <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 flex items-center gap-3">
                      <i className="fas fa-ribbon text-amber-600"></i> Nuova Festività
                   </h4>
                   <div className="space-y-6">
                      <div className="space-y-2">
-                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Nome Festività / Chiusura</label>
-                        <input id="holiday-name" type="text" placeholder="es. San Silvestro, Pasqua..." className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-1 focus:ring-amber-500" />
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Nome Festività</label>
+                        <input id="holiday-name" type="text" placeholder="es. Natale..." className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
                      </div>
                      <div className="space-y-2">
-                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Data Evento</label>
-                        <input id="holiday-date" type="date" className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-1 focus:ring-amber-500" />
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Data</label>
+                        <input id="holiday-date" type="date" className="w-full p-5 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
                      </div>
                      <button 
                        onClick={() => {
-                         const nameInput = document.getElementById('holiday-name') as HTMLInputElement;
-                         const dateInput = document.getElementById('holiday-date') as HTMLInputElement;
-                         if (nameInput.value && dateInput.value) {
-                           const exists = salonClosures.some(c => c.date === dateInput.value);
-                           if (!exists) {
-                             handleSaveSalonClosures([...salonClosures, { date: dateInput.value, name: nameInput.value }].sort((a,b) => a.date.localeCompare(b.date)));
-                             nameInput.value = '';
-                             dateInput.value = '';
-                           } else {
-                             showToast("Data già occupata.", "error");
-                           }
-                         } else {
-                           showToast("Dati mancanti.", "error");
+                         const n = (document.getElementById('holiday-name') as HTMLInputElement).value;
+                         const d = (document.getElementById('holiday-date') as HTMLInputElement).value;
+                         if (n && d) {
+                           handleSaveSalonClosures([...salonClosures, { date: d, name: n }]);
+                           (document.getElementById('holiday-name') as HTMLInputElement).value = '';
+                           (document.getElementById('holiday-date') as HTMLInputElement).value = '';
                          }
                        }}
-                       className="w-full py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all shadow-xl"
+                       className="w-full py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
                      >
-                       Sincronizza Festività
+                       Sincronizza
                      </button>
 
                      <div className="pt-8 border-t border-gray-50">
-                        <h5 className="text-[10px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Festività in Agenda</h5>
-                        <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
                            {salonClosures.map(c => (
-                             <div key={c.date} className="bg-gray-50 px-6 py-5 rounded-[2rem] flex justify-between items-center group animate-in zoom-in-95 border border-transparent hover:border-amber-100 transition-all">
+                             <div key={c.date} className="bg-gray-50 px-6 py-5 rounded-[2rem] flex justify-between items-center group border border-transparent hover:border-amber-100 transition-all">
                                <div>
                                  <p className="text-[11px] font-bold text-gray-900">{c.name}</p>
-                                 <p className="text-[9px] font-bold text-amber-600 uppercase mt-0.5">{new Date(c.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                 <p className="text-[9px] font-bold text-amber-600 uppercase">{new Date(c.date).toLocaleDateString('it-IT')}</p>
                                </div>
-                               <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x.date !== c.date))} className="text-gray-300 hover:text-red-500 transition-colors">
+                               <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x.date !== c.date))} className="text-gray-300 hover:text-red-500">
                                  <i className="fas fa-trash-alt text-xs"></i>
                                </button>
                              </div>
                            ))}
-                           {salonClosures.length === 0 && <p className="text-center text-[10px] text-gray-400 italic py-8 bg-gray-50 rounded-3xl border border-dashed">Nessuna festività registrata.</p>}
                         </div>
                      </div>
                   </div>
                </div>
 
-               {/* AGENDA ATELIER - STAFF STATUS */}
                <div className="lg:col-span-2 space-y-10">
                   <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
                      <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 mb-8 flex items-center gap-3">
                         <i className="fas fa-user-friends text-amber-600"></i> Stato Collaboratori
                      </h4>
                      <div className="grid md:grid-cols-2 gap-4">
-                        {team.map(m => {
-                           const absences = m.absences_json || [];
-                           return (
+                        {team.map(m => (
                              <div key={m.name} className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 hover:bg-white hover:shadow-xl transition-all group">
-                                <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center justify-between">
                                    <div className="flex items-center gap-5">
                                       <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-14 h-14 rounded-[1.5rem] object-cover border-2 border-white shadow-md" />
                                       <div>
@@ -477,34 +438,17 @@ const App: React.FC = () => {
                                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{m.role}</p>
                                       </div>
                                    </div>
-                                   <button 
-                                     onClick={() => setSelectedMemberToManage(m)}
-                                     className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-gray-100 hover:bg-black hover:text-white transition-all shadow-sm"
-                                   >
+                                   <button onClick={() => setSelectedMemberToManage(m)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-gray-100 hover:bg-black hover:text-white transition-all shadow-sm">
                                      <i className="fas fa-cog text-xs"></i>
                                    </button>
                                 </div>
-                                <div className="space-y-2">
-                                   <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Ultime Assenze / Congedi</p>
-                                   <div className="flex flex-wrap gap-2">
-                                      {absences.length > 0 ? absences.slice(-3).reverse().map(a => (
-                                        <div key={a.id} className="px-4 py-2 bg-amber-100 text-amber-800 rounded-xl border border-amber-200 flex items-center gap-2">
-                                           <i className={`fas ${a.type === 'vacation' ? 'fa-plane' : 'fa-calendar'} text-[9px]`}></i>
-                                           <span className="text-[9px] font-bold uppercase">{new Date(a.startDate).toLocaleDateString()}</span>
-                                        </div>
-                                      )) : (
-                                        <p className="text-[10px] text-gray-400 italic px-2">Nessun congedo registrato</p>
-                                      )}
-                                   </div>
-                                </div>
                              </div>
-                           );
-                        })}
+                        ))}
                      </div>
                   </div>
-
-                  <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                     <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Approvazione Richieste Staff</h4>
+                  
+                  <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
+                     <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4 mb-8">Approvazione Richieste Staff</h4>
                      <RequestManagement requests={requests} onAction={async (id, action) => {
                        await db.requests.update(id, { status: action });
                        if (action === 'approved') {
@@ -525,176 +469,19 @@ const App: React.FC = () => {
                           }
                        }
                        refreshData();
-                       showToast(`Richiesta ${action === 'approved' ? 'approvata e sincronizzata' : 'rifiutata'}.`);
+                       showToast(`Richiesta aggiornata.`);
                      }} />
                   </div>
                </div>
             </div>
           </div>
         )}
-
-        {/* Clients management */}
-        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
-          <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Registro Ospiti Atelier</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-               {profiles.filter(p => p.role === 'client').map(p => {
-                 const clientAppts = appointments.filter(a => a.client_id === p.id);
-                 return (
-                   <div key={p.id} onClick={() => setSelectedClientDetail(p)} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm flex flex-col items-center gap-6 hover:shadow-xl transition-all cursor-pointer group">
-                      <div className="relative">
-                        <img src={p.avatar || `https://ui-avatars.com/api/?name=${p.full_name}`} className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-white" />
-                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-black text-white rounded-full flex items-center justify-center text-[10px] border-4 border-white">
-                           {clientAppts.length}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                         <h4 className="text-xl font-luxury font-bold group-hover:text-amber-600 transition-colors">{p.full_name}</h4>
-                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{p.phone || 'Nessun telefono'}</p>
-                      </div>
-                   </div>
-                 );
-               })}
-            </div>
-          </div>
-        )}
-
-        {/* Team list */}
-        {activeTab === 'team_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <h2 className="text-4xl font-luxury font-bold">Gestione Staff</h2>
-             <div className="grid md:grid-cols-3 gap-8">
-               {team.map(m => (
-                 <button key={m.name} onClick={() => setSelectedMemberToManage(m)} className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm flex flex-col items-center gap-6 hover:shadow-xl transition-all">
-                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-28 h-28 rounded-full object-cover shadow-2xl border-4 border-white" />
-                   <div className="text-center">
-                     <h4 className="text-xl font-luxury font-bold">{m.name}</h4>
-                     <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{m.role}</p>
-                   </div>
-                 </button>
-               ))}
-             </div>
-          </div>
-        )}
-
-        {/* Services */}
-        {activeTab === 'services_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <div className="flex justify-between items-center">
-               <h2 className="text-4xl font-luxury font-bold">Menu Ritual</h2>
-               <button onClick={() => setIsFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest">Crea Ritual</button>
-             </div>
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {services.map(s => (
-                 <div key={s.id} className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all">
-                   <h4 className="font-bold text-xl mb-1">{s.name}</h4>
-                   <p className="text-[10px] text-amber-600 font-bold uppercase mb-4 tracking-widest">{s.category}</p>
-                   <div className="flex justify-between items-end">
-                     <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
-                     <p className="text-[10px] text-gray-400 font-bold">{s.duration} min</p>
-                   </div>
-                 </div>
-               ))}
-             </div>
-          </div>
-        )}
       </Layout>
 
-      {/* Appointment detail modal */}
-      {selectedAppointmentDetail && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative animate-in zoom-in-95">
-             <button onClick={() => setSelectedAppointmentDetail(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
-               <i className="fas fa-times text-2xl"></i>
-             </button>
-             
-             <header className="mb-10 text-center">
-               <p className="text-amber-600 font-bold text-[9px] uppercase tracking-widest mb-2">Gestione Ritual</p>
-               <h3 className="text-3xl font-luxury font-bold">{(selectedAppointmentDetail as any).services?.name}</h3>
-               <p className="text-sm font-bold mt-2 text-gray-500">Ospite: {(selectedAppointmentDetail as any).profiles?.full_name}</p>
-             </header>
+      {/* Integrated Gemini AI Beauty Assistant */}
+      <AIAssistant />
 
-             <div className="grid grid-cols-1 gap-6 mb-12">
-                <div className="flex items-center gap-4 text-sm font-bold bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                   <i className="fas fa-calendar text-amber-600 w-6 text-center"></i>
-                   <span>{new Date(selectedAppointmentDetail.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} alle {new Date(selectedAppointmentDetail.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                <div className="flex items-center gap-4 text-sm font-bold bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                   <i className="fas fa-magic text-amber-600 w-6 text-center"></i>
-                   <span>Artista: {selectedAppointmentDetail.team_member_name}</span>
-                </div>
-                <div className="p-4 bg-gray-900 text-white rounded-2xl border border-black text-center">
-                   <p className="text-[8px] font-bold text-amber-500 uppercase tracking-widest">Creato il</p>
-                   <p className="text-[11px] font-bold">{new Date(selectedAppointmentDetail.created_at).toLocaleString('it-IT')}</p>
-                </div>
-             </div>
-
-             <div className="grid grid-cols-2 gap-4">
-               <button 
-                 onClick={() => {
-                   setFormInitialData({
-                     ...selectedAppointmentDetail,
-                     client_id: selectedAppointmentDetail.client_id,
-                   });
-                   setSelectedAppointmentDetail(null);
-                   setIsFormOpen(true);
-                 }}
-                 className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-100 shadow-sm"
-               >
-                 Riprogramma Ritual
-               </button>
-               <button 
-                 onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')}
-                 className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
-               >
-                 Annulla Ritual
-               </button>
-               <button 
-                 onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')}
-                 className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
-               >
-                 Invia Notifica Conferma
-               </button>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Auth Modal */}
-      {isAuthOpen && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
-          <div className="w-full max-w-lg relative animate-in zoom-in-95">
-            <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white">
-              <i className="fas fa-times text-2xl"></i>
-            </button>
-            <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
-          </div>
-        </div>
-      )}
-
-      {selectedMemberToManage && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
-              <i className="fas fa-times text-2xl"></i>
-            </button>
-            <TeamManagement
-              member={selectedMemberToManage}
-              appointments={appointments}
-              services={services}
-              profiles={profiles}
-              onSave={async (m) => {
-                await db.team.upsert(m);
-                await refreshData();
-                setSelectedMemberToManage(null);
-                showToast("Dati Collaboratore sincronizzati.");
-              }}
-              onClose={() => setSelectedMemberToManage(null)}
-            />
-          </div>
-        </div>
-      )}
-
+      {/* Appointment Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -706,19 +493,9 @@ const App: React.FC = () => {
                team={team} 
                existingAppointments={appointments} 
                onSave={async (a) => { 
-                 const finalData = { 
-                   ...a, 
-                   client_id: isAdmin || isCollaborator ? (a.client_id || user?.id) : user?.id,
-                   created_at: a.created_at || new Date().toISOString()
-                 };
-                 await db.appointments.upsert(finalData); 
-                 setIsFormOpen(false); 
-                 setFormInitialData(null);
-                 await refreshData(); 
-                 
-                 const client = profiles.find(p => p.id === finalData.client_id);
-                 showToast(`Ritual ${a.id ? 'modificato' : 'confermato'} per ${client?.full_name || 'Ospite'}.`);
-                 
+                 await db.appointments.upsert({ ...a, client_id: isAdmin || isCollaborator ? (a.client_id || user?.id) : user?.id }); 
+                 setIsFormOpen(false); setFormInitialData(null); refreshData(); 
+                 showToast("Ritual programmato con successo.");
                  setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'my_rituals');
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
@@ -730,53 +507,63 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {selectedClientDetail && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
-             <button onClick={() => setSelectedClientDetail(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+      {/* Service Management Modal */}
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+             <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
                <i className="fas fa-times text-2xl"></i>
              </button>
-             
-             <header className="flex items-center gap-8 mb-12">
-               <img src={selectedClientDetail.avatar || `https://ui-avatars.com/api/?name=${selectedClientDetail.full_name}`} className="w-24 h-24 rounded-[2rem] object-cover shadow-2xl border-4 border-white" />
-               <div>
-                 <h3 className="text-4xl font-luxury font-bold">{selectedClientDetail.full_name}</h3>
-                 <p className="text-amber-600 font-bold text-[10px] uppercase tracking-widest">{selectedClientDetail.email || 'Profilo Digital Kristal'}</p>
-               </div>
+             <h3 className="text-3xl font-luxury font-bold mb-10">{selectedServiceToEdit ? 'Modifica Ritual' : 'Nuovo Ritual'}</h3>
+             <ServiceForm 
+               initialData={selectedServiceToEdit}
+               onSave={async (s) => {
+                 await db.services.upsert(s);
+                 setIsServiceFormOpen(false);
+                 refreshData();
+                 showToast("Servizio sincronizzato con il database.");
+               }}
+               onCancel={() => setIsServiceFormOpen(false)}
+             />
+          </div>
+        </div>
+      )}
+
+      {/* Other Modals (Auth, Team, Client, Appt Detail) */}
+      {selectedAppointmentDetail && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative animate-in zoom-in-95">
+             <button onClick={() => setSelectedAppointmentDetail(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black">
+               <i className="fas fa-times text-2xl"></i>
+             </button>
+             <header className="mb-10 text-center">
+               <p className="text-amber-600 font-bold text-[9px] uppercase tracking-widest mb-2">Gestione Ritual</p>
+               <h3 className="text-3xl font-luxury font-bold">{(selectedAppointmentDetail as any).services?.name}</h3>
+               <p className="text-sm font-bold mt-2 text-gray-500">Ospite: {(selectedAppointmentDetail as any).profiles?.full_name}</p>
              </header>
-
-             <div className="grid md:grid-cols-2 gap-8 mb-12">
-               <div className="p-6 bg-gray-50 rounded-3xl">
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-2">Contatti</p>
-                  <p className="text-sm font-bold">{selectedClientDetail.phone || 'N/A'}</p>
-               </div>
-               <div className="p-6 bg-gray-50 rounded-3xl">
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-2">Anagrafica</p>
-                  <p className="text-sm font-bold">
-                    {selectedClientDetail.gender === 'F' ? 'Donna' : selectedClientDetail.gender === 'M' ? 'Uomo' : 'Ospite'} 
-                    {selectedClientDetail.dob ? ` • ${new Date(selectedClientDetail.dob).toLocaleDateString()}` : ''}
-                  </p>
-               </div>
+             <div className="grid grid-cols-2 gap-4">
+               <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Riprogramma</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Annulla</button>
+               <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Conferma Ritual</button>
              </div>
+          </div>
+        </div>
+      )}
 
-             <section className="space-y-6">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-3">Diario Tecnico Kristal</h4>
-                <div className="space-y-4">
-                  {selectedClientDetail.technical_sheets && selectedClientDetail.technical_sheets.length > 0 ? (
-                    selectedClientDetail.technical_sheets.map((sheet: any, i: number) => (
-                      <div key={i} className="p-6 border border-gray-100 rounded-3xl bg-white shadow-sm">
-                        <div className="flex justify-between items-center mb-2">
-                           <span className="text-[9px] font-bold text-amber-600 uppercase">{sheet.category}</span>
-                           <span className="text-[9px] text-gray-400">{new Date(sheet.date).toLocaleDateString()}</span>
-                        </div>
-                        <p className="text-xs text-gray-700 leading-relaxed italic">"{sheet.content}"</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[10px] text-gray-400 italic">Nessuna scheda tecnica registrata per questo ospite.</p>
-                  )}
-                </div>
-             </section>
+      {isAuthOpen && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
+          <div className="w-full max-w-lg relative animate-in zoom-in-95">
+            <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white"><i className="fas fa-times text-2xl"></i></button>
+            <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
+          </div>
+        </div>
+      )}
+
+      {selectedMemberToManage && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-2xl"></i></button>
+            <TeamManagement member={selectedMemberToManage} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); refreshData(); setSelectedMemberToManage(null); showToast("Dati sincronizzati."); }} onClose={() => setSelectedMemberToManage(null)} />
           </div>
         </div>
       )}
