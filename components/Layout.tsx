@@ -34,6 +34,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
     { id: 'dashboard', label: 'Vision', icon: 'fa-chart-line' },
     { id: 'services_management', label: 'Servizi', icon: 'fa-book-open' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
+    { id: 'vacation_planning', label: 'Vacanze & Chiusure', icon: 'fa-plane-departure' },
     { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
     { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
   ];
