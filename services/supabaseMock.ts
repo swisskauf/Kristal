@@ -8,6 +8,7 @@ const STORAGE_KEY_SERVICES = 'kristal_services';
 const STORAGE_KEY_TEAM = 'kristal_team';
 const STORAGE_KEY_PROFILES = 'kristal_profiles';
 const STORAGE_KEY_REQUESTS = 'kristal_requests';
+const STORAGE_KEY_SALON_CLOSURES = 'kristal_salon_closures';
 
 export const supabaseMock = {
   auth: {
@@ -112,6 +113,12 @@ export const supabaseMock = {
       else current.push(appToSave);
       localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(current));
       return appToSave;
+    },
+    delete: (id: string) => {
+      const current = supabaseMock.appointments.getAll();
+      const filtered = current.filter(a => a.id !== id);
+      localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(filtered));
+      return { error: null };
     }
   },
   requests: {
@@ -126,7 +133,6 @@ export const supabaseMock = {
       localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(current));
       return newReq;
     },
-    // Added update method to mock requests for consistency and to fix TS errors in supabase.ts
     update: (id: string, u: any) => {
       const current = supabaseMock.requests.getAll();
       const idx = current.findIndex((r: any) => r.id === id);
@@ -137,12 +143,21 @@ export const supabaseMock = {
       }
       return null;
     },
-    // Added delete method to mock requests for consistency and to fix TS errors in supabase.ts
     delete: (id: string) => {
       const current = supabaseMock.requests.getAll();
       const filtered = current.filter((r: any) => r.id !== id);
       localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(filtered));
       return { error: null };
+    }
+  },
+  salonClosures: {
+    getAll: (): string[] => {
+      const data = localStorage.getItem(STORAGE_KEY_SALON_CLOSURES);
+      return data ? JSON.parse(data) : [];
+    },
+    save: (dates: string[]) => {
+      localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(dates));
+      return dates;
     }
   }
 };
