@@ -8,10 +8,9 @@ import TeamManagement from './components/TeamManagement';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
-import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
 import AIAssistant from './components/AIAssistant';
-import { supabase, db, useMock } from './services/supabase';
+import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
@@ -20,6 +19,13 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
+  // Feature Settings
+  const [settings, setSettings] = useState({
+    aiAssistantEnabled: false,
+    instagramIntegrationEnabled: false,
+    emailNotificationsEnabled: true
+  });
+
   const [appointments, setAppointments] = useState<any[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -42,23 +48,53 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 5000);
   };
 
-  // Simulazione invio notifica email
-  const simulateEmailNotification = (appointment: any, type: 'new' | 'update') => {
+  // Caricamento impostazioni da localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('kristal_settings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
+  }, []);
+
+  const saveSettings = (newSettings: typeof settings) => {
+    setSettings(newSettings);
+    localStorage.setItem('kristal_settings', JSON.stringify(newSettings));
+    showToast("Impostazioni salvate con successo.");
+  };
+
+  // Sistema di notifica (Simulato per frontend)
+  const sendEmailNotification = (appointment: any, type: 'new' | 'update') => {
+    if (!settings.emailNotificationsEnabled) return;
+
     const profile = profiles.find(p => p.id === appointment.client_id);
     const guestName = profile?.full_name || 'Ospite';
-    const guestEmail = profile?.email || 'email@esempio.com';
-    
-    console.log(`[KRISTAL NOTIFY] Invio email a ${guestName} (${guestEmail}) per ${type === 'new' ? 'nuovo appuntamento' : 'modifica orario/artista'}.`);
-    
-    // Mostriamo un toast dedicato alla notifica
-    setTimeout(() => {
-      showToast(`Email di ${type === 'new' ? 'conferma' : 'aggiornamento'} inviata a ${guestName}.`, 'info');
-    }, 1500);
+    const guestEmail = profile?.email || 'email@kristal-atelier.com';
+    const date = new Date(appointment.date).toLocaleString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    const stylist = appointment.team_member_name;
+
+    // Logica di invio simulata
+    console.log(`%c [MAIL SERVER] Invio a: ${guestEmail}`, 'background: #000; color: #bada55');
+    console.log(`Oggetto: ${type === 'new' ? 'Conferma Prenotazione' : 'Aggiornamento Appuntamento'}`);
+    console.log(`Messaggio: Gentile ${guestName}, il tuo rituale del ${date} con ${stylist} è stato ${type === 'new' ? 'confermato' : 'aggiornato'}.`);
+
+    showToast(`Email di ${type === 'new' ? 'conferma' : 'aggiornamento'} inviata a ${guestName}.`, 'info');
   };
 
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
+
+  // Added currentMember useMemo to fix errors on lines 239, 241, 242, 292
+  const currentMember = useMemo(() => {
+    if (!user || user.role !== 'collaborator') return null;
+    return team.find(m => m.profile_id === user.id || m.name === user.fullName);
+  }, [team, user]);
+
+  // Added categories useMemo to fix error on line 254
+  const categories = useMemo(() => {
+    const cats = services.map(s => s.category);
+    return Array.from(new Set(cats));
+  }, [services]);
 
   const ensureDataSeeding = useCallback(async () => {
     try {
@@ -71,7 +107,7 @@ const App: React.FC = () => {
         for (const m of DEFAULT_TEAM) await db.team.upsert(m);
       }
     } catch (e) {
-      console.warn("Seeding parziale o saltato:", e);
+      console.warn("Seeding error:", e);
     }
   }, []);
 
@@ -97,14 +133,7 @@ const App: React.FC = () => {
       if (user) {
         const myProfile = profs.find((p: any) => p.id === user.id);
         if (myProfile) {
-          setUser(prev => prev ? { 
-            ...prev, 
-            fullName: myProfile.full_name, 
-            avatar: myProfile.avatar, 
-            phone: myProfile.phone, 
-            technical_sheets: myProfile.technical_sheets || [],
-            treatment_history: myProfile.treatment_history || []
-          } : null);
+          setUser(prev => prev ? { ...prev, fullName: myProfile.full_name, avatar: myProfile.avatar, phone: myProfile.phone } : null);
         }
       }
     } catch (e) {
@@ -133,9 +162,7 @@ const App: React.FC = () => {
           fullName: profile?.full_name || 'Ospite Kristal', 
           phone: profile?.phone || '', 
           role, 
-          avatar: profile?.avatar,
-          technical_sheets: profile?.technical_sheets || [],
-          treatment_history: profile?.treatment_history || []
+          avatar: profile?.avatar 
         });
       }
       setLoading(false);
@@ -147,27 +174,13 @@ const App: React.FC = () => {
     if (!loading) refreshData();
   }, [loading, refreshData]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const currentMember = useMemo(() => {
-    if (!user) return null;
-    return team.find(m => m.profile_id === user.id || m.name.toLowerCase() === user.fullName.split(' ')[0].toLowerCase());
-  }, [user, team]);
-
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(services.map(s => s.category)));
-    return cats.length > 0 ? cats : ['Donna', 'Colore', 'Trattamenti', 'Uomo', 'Estetica'];
-  }, [services]);
-
   const handleUpdateAppointmentStatus = async (id: string, status: 'confirmed' | 'cancelled') => {
     try {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
-        await db.appointments.upsert({ ...appt, status });
+        const updated = await db.appointments.upsert({ ...appt, status });
         showToast(`Rituale ${status === 'confirmed' ? 'confermato' : 'annullato'} con successo.`);
-        if (status === 'confirmed' && isAdmin) simulateEmailNotification(appt, 'update');
+        if (isAdmin || isCollaborator) sendEmailNotification(appt, 'update');
         refreshData();
         setSelectedAppointmentDetail(null);
       }
@@ -177,9 +190,8 @@ const App: React.FC = () => {
   };
 
   const handleServiceClick = (service: Service) => {
-    if (isGuest) {
-      setIsAuthOpen(true);
-    } else {
+    if (isGuest) setIsAuthOpen(true);
+    else {
       setFormInitialData({ service_id: service.id });
       setIsFormOpen(true);
     }
@@ -193,8 +205,14 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const handleAppointmentClick = (appt: Appointment) => {
-    setSelectedAppointmentDetail(appt);
+  const handleSaveSalonClosures = async (closures: SalonClosure[]) => {
+    try {
+      await db.salonClosures.save(closures);
+      setSalonClosures(closures);
+      showToast("Chiusure atelier salvate.");
+    } catch (e) {
+      showToast("Errore salvataggio chiusure.", "error");
+    }
   };
 
   if (loading) {
@@ -203,7 +221,7 @@ const App: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h1 className="text-2xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal Atelier</h1>
-          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Sincronizzazione Agenda...</p>
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Caricamento Ritual...</p>
         </div>
       </div>
     );
@@ -224,7 +242,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
+      <Layout user={user} onLogout={() => supabase.auth.signOut()} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
         {activeTab === 'dashboard' && (
           <div className="space-y-12">
@@ -282,7 +300,7 @@ const App: React.FC = () => {
               appointments={appointments} 
               onToggleVacation={() => {}} 
               onSlotClick={handleOpenSlotForm}
-              onAppointmentClick={handleAppointmentClick}
+              onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
               currentUserMemberName={currentMember?.name} 
               isCollaborator={isCollaborator}
               salonClosures={salonClosures.map(c => c.date)}
@@ -290,6 +308,133 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'vacation_planning' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+            <header>
+               <h2 className="text-4xl font-luxury font-bold">Vacanze & Chiusure</h2>
+               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Gestione ferie staff e festività atelier</p>
+            </header>
+
+            <div className="grid lg:grid-cols-2 gap-10">
+               <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 flex items-center gap-3">
+                     <i className="fas fa-ribbon text-amber-600"></i> Nuova Festività Atelier
+                  </h4>
+                  <div className="space-y-6">
+                    <input id="h-name" type="text" placeholder="Nome Festività" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
+                    <input id="h-date" type="date" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm shadow-inner" />
+                    <button onClick={() => {
+                      const n = (document.getElementById('h-name') as HTMLInputElement).value;
+                      const d = (document.getElementById('h-date') as HTMLInputElement).value;
+                      if(n && d) handleSaveSalonClosures([...salonClosures, { name: n, date: d }]);
+                    }} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Aggiungi Chiusura</button>
+                    
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                       {salonClosures.map(c => (
+                         <div key={c.date} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl">
+                            <div>
+                               <p className="text-[10px] font-bold">{c.name}</p>
+                               <p className="text-[8px] text-amber-600 uppercase font-bold">{new Date(c.date).toLocaleDateString()}</p>
+                            </div>
+                            <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x.date !== c.date))} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+               </div>
+
+               <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Approvazione Richieste Staff</h4>
+                  <RequestManagement requests={requests} onAction={async (id, action) => {
+                    await db.requests.update(id, { status: action });
+                    if (action === 'approved') {
+                      const req = requests.find(r => r.id === id);
+                      if (req) {
+                        const member = team.find(m => m.name === req.member_name);
+                        if (member) {
+                          const updatedAbsences = [...(member.absences_json || []), {
+                            id: req.id, startDate: req.start_date, endDate: req.end_date, type: req.type, isFullDay: req.is_full_day
+                          }];
+                          await db.team.upsert({ ...member, absences_json: updatedAbsences });
+                        }
+                      }
+                    }
+                    refreshData();
+                    showToast("Richiesta aggiornata.");
+                  }} />
+               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'impostazioni' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <header>
+               <h2 className="text-4xl font-luxury font-bold">Impostazioni</h2>
+               <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-1">Configurazione Funzionalità Atelier</p>
+             </header>
+
+             <div className="max-w-2xl bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-amber-600 text-white rounded-2xl flex items-center justify-center">
+                        <i className="fas fa-sparkles"></i>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">Kristal AI Assistant</p>
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Supporto prenotazioni intelligente</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => saveSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})}
+                      className={`w-14 h-8 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
+                    >
+                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-7' : 'left-1'}`}></div>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-tr from-purple-500 to-pink-500 text-white rounded-2xl flex items-center justify-center">
+                        <i className="fab fa-instagram"></i>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">Integrazione Instagram</p>
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Visualizza portfolio lavori</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => saveSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})}
+                      className={`w-14 h-8 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
+                    >
+                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-7' : 'left-1'}`}></div>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center">
+                        <i className="fas fa-envelope"></i>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">Notifiche Email</p>
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Invia conferme automatiche agli ospiti</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => saveSettings({...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled})}
+                      className={`w-14 h-8 rounded-full transition-all relative ${settings.emailNotificationsEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
+                    >
+                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-7' : 'left-1'}`}></div>
+                    </button>
+                  </div>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {/* Altri tab: services_management, team_management, clients ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <div className="flex justify-between items-center">
@@ -312,9 +457,9 @@ const App: React.FC = () => {
         )}
       </Layout>
 
-      <AIAssistant />
+      {settings.aiAssistantEnabled && <AIAssistant />}
 
-      {/* Modale Appuntamento con Fix Update e Notifica */}
+      {/* Modale Appuntamento */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -324,28 +469,13 @@ const App: React.FC = () => {
              <AppointmentForm 
                services={services} team={team} existingAppointments={appointments} 
                onSave={async (a) => { 
-                 try {
-                   // Assicuriamo che client_id sia preservato correttamente
-                   const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
-                   
-                   const isUpdate = !!a.id;
-                   const updatedAppt = await db.appointments.upsert({ ...a, client_id }); 
-                   
-                   setIsFormOpen(false); 
-                   setFormInitialData(null); 
-                   await refreshData(); 
-                   
-                   showToast(isUpdate ? "Ritual aggiornato con successo." : "Ritual programmato con successo.");
-                   
-                   // Notifica email se l'admin sta operando
-                   if (isAdmin) {
-                     simulateEmailNotification(a, isUpdate ? 'update' : 'new');
-                   }
-
-                   setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'dashboard');
-                 } catch (err) {
-                   showToast("Errore durante il salvataggio. Riprovare.", "error");
-                 }
+                 const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
+                 const isUpdate = !!a.id;
+                 await db.appointments.upsert({ ...a, client_id }); 
+                 setIsFormOpen(false); setFormInitialData(null); await refreshData(); 
+                 showToast(isUpdate ? "Ritual aggiornato." : "Ritual programmato.");
+                 sendEmailNotification(a, isUpdate ? 'update' : 'new');
+                 setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'dashboard');
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
@@ -366,11 +496,7 @@ const App: React.FC = () => {
                <p className="text-sm font-bold mt-2 text-gray-500">Ospite: {(selectedAppointmentDetail as any).profiles?.full_name}</p>
              </header>
              <div className="grid grid-cols-2 gap-4">
-               <button onClick={() => { 
-                 setFormInitialData(selectedAppointmentDetail); 
-                 setSelectedAppointmentDetail(null); 
-                 setIsFormOpen(true); 
-               }} className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Modifica / Riprogramma</button>
+               <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Modifica</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest">Annulla</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Conferma Ritual</button>
              </div>
@@ -383,6 +509,25 @@ const App: React.FC = () => {
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
             <button onClick={() => setIsAuthOpen(false)} className="absolute -top-12 right-0 text-white/50 hover:text-white"><i className="fas fa-times text-2xl"></i></button>
             <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
+          </div>
+        </div>
+      )}
+
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative">
+             <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-8 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-2xl"></i></button>
+             <h3 className="text-3xl font-luxury font-bold mb-10">Ritual Menu</h3>
+             <ServiceForm initialData={selectedServiceToEdit} onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); showToast("Servizio aggiornato."); }} onCancel={() => setIsServiceFormOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {selectedMemberToManage && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setSelectedMemberToManage(null)} className="absolute top-8 right-10 text-gray-300 hover:text-black"><i className="fas fa-times text-2xl"></i></button>
+            <TeamManagement member={selectedMemberToManage} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); refreshData(); setSelectedMemberToManage(null); showToast("Staff aggiornato."); }} onClose={() => setSelectedMemberToManage(null)} />
           </div>
         </div>
       )}
