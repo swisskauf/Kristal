@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
 import AppointmentForm from './components/AppointmentForm';
+import ServiceForm from './components/ServiceForm';
+import TeamManagement from './components/TeamManagement';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
@@ -35,9 +37,15 @@ const App: React.FC = () => {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   
+  // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formInitialData, setFormInitialData] = useState<any>(null);
+  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
+  const [isTeamEditorOpen, setIsTeamEditorOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  
+  const [formInitialData, setFormInitialData] = useState<any>(null);
+  const [selectedServiceToEdit, setSelectedServiceToEdit] = useState<Service | undefined>(undefined);
+  const [selectedTeamMember, setSelectedTeamMember] = useState<TeamMember | null>(null);
   const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<any | null>(null);
   
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
@@ -48,16 +56,14 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v11');
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-    }
+    const savedSettings = localStorage.getItem('kristal_settings_v12');
+    if (savedSettings) setSettings(JSON.parse(savedSettings));
   }, []);
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v11', JSON.stringify(newSettings));
-    showToast("Impostazioni salvate.");
+    localStorage.setItem('kristal_settings_v12', JSON.stringify(newSettings));
+    showToast("Configurazione salvata.");
   };
 
   const ensureDataSeeding = useCallback(async () => {
@@ -126,7 +132,6 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [refreshData]);
 
-  // Caricamento forzato al montaggio per garantire i servizi anche in vista guest
   useEffect(() => {
     refreshData();
   }, [refreshData]);
@@ -163,21 +168,14 @@ const App: React.FC = () => {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
-        showToast(`Rituale ${status === 'confirmed' ? 'confermato' : status}.`);
+        showToast(`Rituale aggiornato.`);
         refreshData();
         setSelectedAppointmentDetail(null);
       }
     } catch (e) {
-      showToast("Errore durante l'aggiornamento.", "error");
+      showToast("Errore.", "error");
     }
   };
-
-  const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
-    setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() });
-    setIsFormOpen(true);
-  };
-
-  if (loading && services.length === 0) return <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center"><div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
     <>
@@ -232,13 +230,129 @@ const App: React.FC = () => {
                     )) : (
                       <div className="col-span-full py-20 text-center">
                          <div className="inline-block w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Atelier...</p>
+                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Menu Ritual...</p>
                       </div>
                     )}
                   </div>
                   {settings.instagramIntegrationEnabled && settings.instagramToken && <InstagramGallery token={settings.instagramToken} />}
                 </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <header className="flex items-center justify-between">
+                <div>
+                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Gestione Ritual</h2>
+                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Personalizza il Menù Esperienze</p>
+                </div>
+                <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
+             </header>
+
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {services.map(s => (
+                  <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all group">
+                     <div className="flex justify-between items-start mb-6">
+                        <span className="px-4 py-1.5 bg-gray-50 text-[8px] font-bold uppercase tracking-widest rounded-full">{s.category}</span>
+                        <div className="flex gap-2">
+                           <button onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="w-8 h-8 bg-gray-50 text-gray-400 rounded-xl hover:text-black transition-colors"><i className="fas fa-edit text-xs"></i></button>
+                        </div>
+                     </div>
+                     <h4 className="text-xl font-luxury font-bold text-gray-900 mb-1">{s.name}</h4>
+                     <p className="text-[10px] text-gray-400 font-bold uppercase mb-6">{s.duration} min</p>
+                     <div className="flex items-center justify-between pt-6 border-t border-gray-50">
+                        <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'vacation_planning' && isAdmin && (
+          <div className="space-y-16 animate-in fade-in">
+             <header>
+                <h2 className="text-5xl font-luxury font-bold text-gray-900">Centro Congedi</h2>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Gestione Assenze e Chiusure Atelier</p>
+             </header>
+
+             <div className="grid lg:grid-cols-2 gap-12">
+                <div className="space-y-8">
+                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-amber-600 pl-4">Richieste in Sospeso</h3>
+                   <RequestManagement 
+                     requests={requests} 
+                     onAction={async (id, action) => { 
+                       await db.requests.update(id, { status: action }); 
+                       if (action === 'approved') {
+                          const req = requests.find(r => r.id === id);
+                          const member = team.find(t => t.name === req?.member_name);
+                          if (member && req) {
+                             const newAbsence = { id: Math.random().toString(36).substr(2,9), startDate: req.start_date, endDate: req.end_date, type: req.type, isFullDay: req.is_full_day };
+                             await db.team.upsert({ ...member, absences_json: [...(member.absences_json || []), newAbsence] });
+                          }
+                       }
+                       refreshData(); 
+                     }} 
+                   />
+                </div>
+
+                <div className="space-y-8">
+                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-black pl-4">Chiusure Atelier</h3>
+                   <div className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm space-y-8">
+                      <div className="flex gap-4">
+                         <input type="date" id="salon-close-date" className="flex-1 p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+                         <button onClick={async () => {
+                            const date = (document.getElementById('salon-close-date') as HTMLInputElement).value;
+                            if (date) {
+                               const newClosures = [...salonClosures, { date, name: 'Chiusura Speciale' }];
+                               await db.salonClosures.save(newClosures);
+                               refreshData();
+                            }
+                         }} className="px-8 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest">Aggiungi</button>
+                      </div>
+                      <div className="grid gap-3">
+                         {salonClosures.map(c => (
+                           <div key={c.date} className="p-5 bg-gray-50 rounded-3xl flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-gray-900 uppercase">{new Date(c.date).toLocaleDateString('it-IT', {day:'numeric', month:'long', weekday:'long'})}</span>
+                              <button onClick={async () => {
+                                 const updated = salonClosures.filter(cl => cl.date !== c.date);
+                                 await db.salonClosures.save(updated);
+                                 refreshData();
+                              }} className="text-gray-300 hover:text-red-500 transition-colors"><i className="fas fa-trash"></i></button>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'team_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <header>
+                <h2 className="text-5xl font-luxury font-bold text-gray-900">Il Tuo Team</h2>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Gestione Profili Artisti</p>
+             </header>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+                {team.map(m => (
+                   <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group">
+                      <div className="relative mb-8">
+                         <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2.5rem] object-cover border-4 border-white shadow-xl mx-auto" />
+                         <div className="absolute -bottom-2 right-1/2 translate-x-12 w-10 h-10 bg-black text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-amber-600 transition-colors"><i className="fas fa-cog text-xs"></i></div>
+                      </div>
+                      <div className="text-center">
+                         <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
+                         <p className="text-[9px] text-amber-600 font-bold uppercase tracking-[0.3em] mt-1">{m.role}</p>
+                         <div className="mt-8 pt-8 border-t border-gray-50 flex justify-center gap-6">
+                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_start_time || '08:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Inizio</p></div>
+                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_end_time || '18:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Fine</p></div>
+                         </div>
+                      </div>
+                   </div>
+                ))}
+             </div>
           </div>
         )}
 
@@ -334,7 +448,8 @@ const App: React.FC = () => {
             <h2 className="text-4xl font-luxury font-bold">Agenda Atelier</h2>
             <TeamPlanning 
               team={team} appointments={appointments} onToggleVacation={() => {}} 
-              onSlotClick={handleOpenSlotForm} onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
+              onSlotClick={(memberName, date, hour) => { setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() }); setIsFormOpen(true); }} 
+              onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
               currentUserMemberName={currentMember?.name} isCollaborator={isCollaborator}
               salonClosures={salonClosures.map(c => c.date)}
             />
@@ -391,6 +506,35 @@ const App: React.FC = () => {
 
       {settings.aiAssistantEnabled && <AIAssistant />}
 
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative">
+             <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
+             <ServiceForm 
+               initialData={selectedServiceToEdit} 
+               onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); showToast("Ritual salvato."); }} 
+               onCancel={() => setIsServiceFormOpen(false)} 
+             />
+          </div>
+        </div>
+      )}
+
+      {isTeamEditorOpen && selectedTeamMember && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
+             <button onClick={() => setIsTeamEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
+             <TeamManagement 
+               member={selectedTeamMember} 
+               appointments={appointments} 
+               services={services} 
+               profiles={profiles} 
+               onSave={async (m) => { await db.team.upsert(m); setIsTeamEditorOpen(false); refreshData(); showToast("Profilo staff aggiornato."); }} 
+               onClose={() => setIsTeamEditorOpen(false)} 
+             />
+          </div>
+        </div>
+      )}
+
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1800] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-3xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
@@ -401,7 +545,7 @@ const App: React.FC = () => {
                  const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
                  await db.appointments.upsert({ ...a, client_id }); 
                  setIsFormOpen(false); setFormInitialData(null); await refreshData(); 
-                 showToast("Rituale programmato con successo.");
+                 showToast("Rituale programmato.");
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
