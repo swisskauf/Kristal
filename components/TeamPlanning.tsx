@@ -63,13 +63,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
-    // 1. Chiusura Atelier (Totale)
+    // 1. Chiusura Atelier
     if (salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
 
-    // 2. Appuntamenti
+    // 2. Appuntamenti confermati o no-show
     const appts = appointments.filter(a => {
       if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
       const appDate = new Date(a.date);
@@ -90,7 +90,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const member = team.find(t => t.name === memberName);
     if (!member) return null;
 
-    // 3. Assenze Approvate (Vacanze/Ferie) - FIX: Controllo esteso
+    // 3. Assenze Approvate (Vacanze/Ferie)
     const isAbsent = (member.absences_json || []).some(abs => {
       const start = new Date(abs.startDate).toISOString().split('T')[0];
       const end = new Date(abs.endDate).toISOString().split('T')[0];
@@ -98,18 +98,19 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     });
     if (isAbsent) return { type: 'VACATION' };
 
-    // 4. Chiusure Settimanali Ricorrenti
+    // 4. Chiusure Settimanali del collaboratore
     const d = new Date(`${dateStr}T12:00:00`);
     if ((member.weekly_closures || []).includes(d.getDay())) return { type: 'CLOSURE' };
     
-    // 5. Date Uniche di indisponibilità
+    // 5. Date Uniche ferie non strutturate
     if ((member.unavailable_dates || []).includes(dateStr)) return { type: 'VACATION' };
 
-    // 6. Pause e Orari lavorativi
+    // 6. Pause
     if (member.break_start_time && member.break_end_time && hour >= member.break_start_time && hour < member.break_end_time) {
       return { type: 'BREAK' };
     }
 
+    // 7. Orari fuori servizio
     if (hour < (member.work_start_time || '08:30') || hour >= (member.work_end_time || '19:00')) {
       return { type: 'NON_WORKING' };
     }
@@ -122,66 +123,67 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       <style>{`
         .salon-closure-pattern { background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); }
         .vacation-pattern { background-image: repeating-linear-gradient(135deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); opacity: 0.6; }
-        .appointment-dot { transition: all 0.2s ease; }
-        .appointment-dot:hover { transform: scale(1.3); filter: brightness(1.1); }
       `}</style>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <button onClick={() => moveTime(-1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-left text-[10px]"></i></button>
-          <div className="text-center min-w-[250px]">
-            <h4 className="font-luxury font-bold text-lg uppercase tracking-tight">Planning Atelier</h4>
-            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-[0.2em]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="flex items-center gap-6">
+          <button onClick={() => moveTime(-1)} className="w-12 h-12 rounded-[1.5rem] border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-left text-xs"></i></button>
+          <div className="text-center min-w-[280px]">
+            <h4 className="font-luxury font-bold text-2xl uppercase tracking-tight text-gray-900">Agenda Kristal</h4>
+            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.3em] mt-1">
                {viewMode === 'weekly' 
                  ? `Settimana ${weekDays[0].split('-')[2]} - ${weekDays[6].split('-')[2]} ${new Date(weekDays[0]).toLocaleDateString('it-IT', { month: 'long' })}` 
                  : viewDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <button onClick={() => moveTime(1)} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-right text-[10px]"></i></button>
+          <button onClick={() => moveTime(1)} className="w-12 h-12 rounded-[1.5rem] border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-right text-xs"></i></button>
         </div>
-        <div className="flex bg-gray-50/80 p-1 rounded-2xl border border-gray-100">
-          <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Settimana</button>
-          <button onClick={() => setViewMode('daily')} className={`px-4 py-2 text-[8px] font-bold uppercase rounded-xl transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-md' : 'text-gray-400'}`}>Giorno</button>
+        <div className="flex bg-gray-50/80 p-1.5 rounded-[1.8rem] border border-gray-100">
+          <button onClick={() => setViewMode('weekly')} className={`px-6 py-3 text-[10px] font-bold uppercase rounded-[1.2rem] transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-xl' : 'text-gray-400'}`}>Settimana</button>
+          <button onClick={() => setViewMode('daily')} className={`px-6 py-3 text-[10px] font-bold uppercase rounded-[1.2rem] transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-xl' : 'text-gray-400'}`}>Giorno</button>
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] border border-gray-50 shadow-sm p-4 md:p-8 overflow-x-auto scrollbar-hide">
-         <div className="min-w-[800px]">
-           <div className={`grid gap-2 ${viewMode === 'daily' ? `grid-cols-[70px_repeat(${team.length},1fr)]` : 'grid-cols-[70px_repeat(7,1fr)]'}`}>
+      <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-6 md:p-10 overflow-x-auto scrollbar-hide">
+         <div className="min-w-[900px]">
+           <div className={`grid gap-3 ${viewMode === 'daily' ? `grid-cols-[80px_repeat(${team.length},1fr)]` : 'grid-cols-[80px_repeat(7,1fr)]'}`}>
               <div className="sticky left-0 bg-white z-20"></div>
               {viewMode === 'daily' ? team.map(m => (
-                <div key={m.name} className="flex flex-col items-center gap-2 pb-4 border-b border-gray-50">
-                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-12 h-12 rounded-[1.2rem] object-cover border-2 border-white shadow-sm" />
-                   <h5 className="font-luxury font-bold text-[11px] text-gray-900">{m.name}</h5>
-                   <p className="text-[7px] text-gray-300 font-bold uppercase tracking-widest">{viewDate.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}</p>
+                <div key={m.name} className="flex flex-col items-center gap-3 pb-6 border-b border-gray-50">
+                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-14 h-14 rounded-[1.5rem] object-cover border-4 border-white shadow-sm" />
+                   <h5 className="font-luxury font-bold text-sm text-gray-900">{m.name}</h5>
+                   <p className="text-[8px] text-gray-300 font-bold uppercase tracking-widest">{viewDate.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}</p>
                 </div>
               )) : weekDays.map(date => (
-                <div key={date} className="text-center pb-4 border-b border-gray-50">
-                  <p className="text-[8px] font-bold text-amber-600 uppercase">{new Date(`${date}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
-                  <p className="text-sm font-luxury font-bold text-gray-900">{new Date(`${date}T12:00:00`).getDate()}</p>
+                <div key={date} className="text-center pb-6 border-b border-gray-50">
+                  <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{new Date(`${date}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
+                  <p className="text-xl font-luxury font-bold text-gray-900 mt-1">{new Date(`${date}T12:00:00`).getDate()}</p>
                 </div>
               ))}
 
               {hours.map(hour => (
                 <React.Fragment key={hour}>
-                  <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-4 h-12">
-                     <span className="text-[7px] font-bold text-gray-300 uppercase">{hour}</span>
+                  <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-6 h-14">
+                     <span className="text-[8px] font-bold text-gray-300 uppercase">{hour}</span>
                   </div>
                   {viewMode === 'daily' ? team.map(m => {
                     const status = getSlotStatus(m.name, weekDays[0], hour);
                     return (
                       <div 
                         key={`${m.name}-${hour}`} 
-                        onClick={() => status?.type === 'APPOINTMENT' ? onAppointmentClick?.(status.appt) : (status?.type !== 'VACATION' && status?.type !== 'SALON_CLOSURE' && onSlotClick?.(m.name, weekDays[0], hour))}
-                        className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-sm scale-[0.98]' : 'hover:bg-amber-50/10'}`}
+                        onClick={() => {
+                          if (status?.type === 'APPOINTMENT') onAppointmentClick?.(status.appt);
+                          else if (status?.type !== 'VACATION' && status?.type !== 'SALON_CLOSURE' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, weekDays[0], hour);
+                        }}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-md scale-[0.98]' : 'hover:bg-amber-50/10'}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
-                           <div className="text-[6px] font-bold uppercase truncate px-2">{status.appt.profiles?.full_name}</div>
+                           <div className="text-[7px] font-bold uppercase truncate px-3">{status.appt.profiles?.full_name}</div>
                          )}
-                         {status?.type === 'SALON_CLOSURE' && <div className="w-full h-full salon-closure-pattern opacity-30 rounded-xl"></div>}
-                         {status?.type === 'VACATION' && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-xl"><span className="text-[6px] font-bold text-gray-400 uppercase">Assente</span></div>}
-                         {status?.type === 'CLOSURE' && <div className="w-full h-full bg-gray-100/30 rounded-xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[8px] text-gray-300"></i></div>}
-                         {status?.type === 'BREAK' && <div className="w-full h-full bg-amber-50/20 rounded-xl flex items-center justify-center"><i className="fas fa-mug-hot text-[8px] text-amber-200"></i></div>}
+                         {status?.type === 'SALON_CLOSURE' && <div className="w-full h-full salon-closure-pattern opacity-30 rounded-2xl"></div>}
+                         {status?.type === 'VACATION' && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-2xl"><span className="text-[7px] font-bold text-gray-400 uppercase">Assente</span></div>}
+                         {status?.type === 'CLOSURE' && <div className="w-full h-full bg-gray-100/30 rounded-2xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[9px] text-gray-300"></i></div>}
+                         {status?.type === 'BREAK' && <div className="w-full h-full bg-amber-50/20 rounded-2xl flex items-center justify-center"><i className="fas fa-coffee text-[10px] text-amber-200"></i></div>}
                       </div>
                     );
                   }) : weekDays.map(date => {
@@ -195,14 +197,10 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     return (
                       <div 
                         key={`${date}-${hour}`} 
-                        className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center transition-all ${isSalonClosure ? 'salon-closure-pattern opacity-20' : 'hover:bg-amber-50/10'}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isSalonClosure ? 'salon-closure-pattern opacity-20' : 'hover:bg-amber-50/10'}`}
                       >
-                         {apptsAtHour.map((a, i) => (
-                           <button 
-                             key={a.id}
-                             onClick={() => onAppointmentClick?.(a)}
-                             className="appointment-dot w-3 h-3 rounded-full bg-black border-2 border-white shadow-sm -mx-1"
-                           />
+                         {apptsAtHour.map(a => (
+                           <button key={a.id} onClick={() => onAppointmentClick?.(a)} className="w-3.5 h-3.5 rounded-full bg-black border-2 border-white shadow-sm hover:scale-125 transition-transform" />
                          ))}
                       </div>
                     );
