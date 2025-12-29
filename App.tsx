@@ -12,7 +12,7 @@ import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
 import AIAssistant from './components/AIAssistant';
 import { supabase, db, useMock } from './services/supabase';
-import { Service, User, TeamMember, Appointment, LeaveRequest } from './types';
+import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
 const App: React.FC = () => {
@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [salonClosures, setSalonClosures] = useState<string[]>([]);
+  const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<any>(null);
@@ -180,8 +180,6 @@ const App: React.FC = () => {
       await db.appointments.upsert({ ...appt, status });
       const client = profiles.find(p => p.id === appt.client_id);
       
-      const emailStatus = status === 'cancelled' ? 'CANCELLATO' : 'CONFERMATO';
-      
       showToast(
         `Ritual aggiornato: ${status.toUpperCase()}. Una mail di notifica è stata inviata a ${client?.full_name || 'ospite'} e lo stato è aggiornato nell'app.`,
         status === 'cancelled' ? 'info' : 'success'
@@ -203,15 +201,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveSalonClosures = async (dates: string[]) => {
+  const handleSaveSalonClosures = async (closures: SalonClosure[]) => {
     try {
-      await db.salonClosures.save(dates);
-      setSalonClosures(dates);
-      showToast("Chiusure del salone salvate e sincronizzate con l'agenda.");
+      await db.salonClosures.save(closures);
+      setSalonClosures(closures);
+      showToast("Festività e chiusure del salone aggiornate.");
     } catch (e) {
       showToast("Errore nel salvataggio.", "error");
     }
   };
+
+  // Funzione helper per estrarre solo le date dalle chiusure
+  const closureDatesOnly = useMemo(() => salonClosures.map(c => c.date), [salonClosures]);
 
   if (loading) {
     return (
@@ -381,7 +382,7 @@ const App: React.FC = () => {
 
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Atelier Planning</h2>
+            <h2 className="text-4xl font-luxury font-bold">Planning Atelier</h2>
             <TeamPlanning 
               team={team} 
               appointments={appointments} 
@@ -390,7 +391,7 @@ const App: React.FC = () => {
               onAppointmentClick={handleAppointmentClick}
               currentUserMemberName={currentMember?.name} 
               isCollaborator={isCollaborator}
-              salonClosures={salonClosures}
+              salonClosures={closureDatesOnly}
             />
           </div>
         )}
@@ -398,69 +399,138 @@ const App: React.FC = () => {
         {activeTab === 'vacation_planning' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
             <header>
-               <h2 className="text-4xl font-luxury font-bold">Gestione Chiusure & Vacanze</h2>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Amministrazione ferie staff e chiusure festività del salone</p>
+               <h2 className="text-4xl font-luxury font-bold">Gestione Chiusure & Agenda Atelier</h2>
+               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Amministrazione festività del salone e congedi staff</p>
             </header>
 
-            <div className="grid md:grid-cols-2 gap-10">
-               <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600 border-b pb-4">Chiusure Salone (Festività)</h4>
+            <div className="grid lg:grid-cols-3 gap-10">
+               {/* FORM CHIUSURE SALONE */}
+               <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8 lg:col-span-1">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600 border-b pb-4">Nuova Festività Salone</h4>
                   <div className="space-y-6">
-                     <div className="flex gap-4">
-                        <input type="date" id="salon-closure-picker" className="flex-1 p-4 rounded-xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
-                        <button 
-                          onClick={() => {
-                            const input = document.getElementById('salon-closure-picker') as HTMLInputElement;
-                            if (input.value && !salonClosures.includes(input.value)) {
-                              handleSaveSalonClosures([...salonClosures, input.value].sort());
-                              input.value = '';
-                            }
-                          }}
-                          className="px-6 bg-black text-white rounded-xl text-[10px] font-bold uppercase hover:bg-amber-600 transition-all shadow-lg"
-                        >
-                          Aggiungi
-                        </button>
+                     <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Nome Festività</label>
+                        <input id="holiday-name" type="text" placeholder="es. Natale, Chiusura Estiva..." className="w-full p-4 rounded-xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
                      </div>
-                     <div className="grid grid-cols-2 gap-3 max-h-[200px] overflow-y-auto pr-2 scrollbar-hide">
-                        {salonClosures.map(d => (
-                          <div key={d} className="bg-amber-50 px-4 py-3 rounded-xl flex justify-between items-center group animate-in zoom-in-95">
-                            <span className="text-[10px] font-bold text-amber-900">{new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                            <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x !== d))} className="text-amber-300 hover:text-red-500"><i className="fas fa-times-circle"></i></button>
-                          </div>
-                        ))}
+                     <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Data</label>
+                        <input id="holiday-date" type="date" className="w-full p-4 rounded-xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
+                     </div>
+                     <button 
+                       onClick={() => {
+                         const nameInput = document.getElementById('holiday-name') as HTMLInputElement;
+                         const dateInput = document.getElementById('holiday-date') as HTMLInputElement;
+                         if (nameInput.value && dateInput.value) {
+                           const exists = salonClosures.some(c => c.date === dateInput.value);
+                           if (!exists) {
+                             handleSaveSalonClosures([...salonClosures, { date: dateInput.value, name: nameInput.value }].sort((a,b) => a.date.localeCompare(b.date)));
+                             nameInput.value = '';
+                             dateInput.value = '';
+                           } else {
+                             showToast("Esiste già una chiusura per questa data.", "error");
+                           }
+                         } else {
+                           showToast("Inserire nome e data.", "error");
+                         }
+                       }}
+                       className="w-full py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all shadow-xl"
+                     >
+                       Aggiungi a Agenda
+                     </button>
+
+                     <div className="pt-8 border-t border-gray-50">
+                        <h5 className="text-[10px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Chiusure Registrate</h5>
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
+                           {salonClosures.map(c => (
+                             <div key={c.date} className="bg-gray-50 px-5 py-4 rounded-2xl flex justify-between items-center group animate-in zoom-in-95 border border-transparent hover:border-amber-100 transition-all">
+                               <div>
+                                 <p className="text-[10px] font-bold text-gray-900">{c.name}</p>
+                                 <p className="text-[8px] font-bold text-amber-600 uppercase mt-0.5">{new Date(c.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                               </div>
+                               <button onClick={() => handleSaveSalonClosures(salonClosures.filter(x => x.date !== c.date))} className="text-gray-300 hover:text-red-500 transition-colors">
+                                 <i className="fas fa-trash-alt text-xs"></i>
+                               </button>
+                             </div>
+                           ))}
+                           {salonClosures.length === 0 && <p className="text-center text-[9px] text-gray-400 italic py-4">Nessuna festività registrata.</p>}
+                        </div>
                      </div>
                   </div>
                </div>
 
-               <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Richieste Staff in Attesa</h4>
-                  <RequestManagement requests={requests} onAction={async (id, action) => {
-                    await db.requests.update(id, { status: action });
-                    if (action === 'approved') {
-                       const req = requests.find(r => r.id === id);
-                       if (req) {
-                          const member = team.find(m => m.name === req.member_name);
-                          if (member) {
-                             const updatedAbsences = [...(member.absences_json || []), {
-                                id: req.id,
-                                startDate: req.start_date,
-                                endDate: req.end_date,
-                                type: req.type,
-                                isFullDay: req.is_full_day,
-                                notes: req.notes
-                             }];
-                             await db.team.upsert({ ...member, absences_json: updatedAbsences });
+               {/* AGENDA ATELIER - STAFF ABSENCES */}
+               <div className="lg:col-span-2 space-y-10">
+                  <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
+                     <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-b pb-4 mb-8 flex items-center gap-3">
+                        <i className="fas fa-calendar-check text-amber-600"></i> Agenda Atelier - Stato Staff
+                     </h4>
+                     <div className="space-y-4">
+                        {team.map(m => {
+                           const absences = m.absences_json || [];
+                           return (
+                             <div key={m.name} className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:shadow-md transition-all group">
+                                <div className="flex items-center justify-between mb-4">
+                                   <div className="flex items-center gap-4">
+                                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
+                                      <div>
+                                         <h5 className="font-bold text-sm text-gray-900">{m.name}</h5>
+                                         <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{m.role}</p>
+                                      </div>
+                                   </div>
+                                   <button 
+                                     onClick={() => setSelectedMemberToManage(m)}
+                                     className="px-4 py-2 bg-white rounded-xl text-[8px] font-bold uppercase border border-gray-200 hover:bg-black hover:text-white transition-all"
+                                   >
+                                     Gestisci Vacanze
+                                   </button>
+                                </div>
+                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                   {absences.length > 0 ? absences.slice(-3).map(a => (
+                                     <div key={a.id} className="flex-shrink-0 px-4 py-2 bg-amber-100 text-amber-800 rounded-xl border border-amber-200 flex items-center gap-2">
+                                        <i className="fas fa-plane text-[8px]"></i>
+                                        <span className="text-[9px] font-bold uppercase">{a.type}: {new Date(a.startDate).toLocaleDateString()}</span>
+                                     </div>
+                                   )) : (
+                                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest italic px-2">Nessun congedo imminente</p>
+                                   )}
+                                </div>
+                             </div>
+                           );
+                        })}
+                     </div>
+                  </div>
+
+                  <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+                     <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b pb-4">Approvazione Richieste Online</h4>
+                     <RequestManagement requests={requests} onAction={async (id, action) => {
+                       await db.requests.update(id, { status: action });
+                       if (action === 'approved') {
+                          const req = requests.find(r => r.id === id);
+                          if (req) {
+                             const member = team.find(m => m.name === req.member_name);
+                             if (member) {
+                                const updatedAbsences = [...(member.absences_json || []), {
+                                   id: req.id,
+                                   startDate: req.start_date,
+                                   endDate: req.end_date,
+                                   type: req.type,
+                                   isFullDay: req.is_full_day,
+                                   notes: req.notes
+                                }];
+                                await db.team.upsert({ ...member, absences_json: updatedAbsences });
+                             }
                           }
                        }
-                    }
-                    refreshData();
-                    showToast(`Richiesta ${action === 'approved' ? 'approvata' : 'rifiutata'}.`);
-                  }} />
+                       refreshData();
+                       showToast(`Richiesta ${action === 'approved' ? 'approvata' : 'rifiutata'}.`);
+                     }} />
+                  </div>
                </div>
             </div>
           </div>
         )}
 
+        {/* Mantenimento altri tab */}
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
@@ -486,7 +556,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Mantenimento altri tab admin */}
         {activeTab === 'team_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <h2 className="text-4xl font-luxury font-bold">Gestione Staff</h2>
@@ -503,12 +572,32 @@ const App: React.FC = () => {
              </div>
           </div>
         )}
+
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <div className="flex justify-between items-center">
+               <h2 className="text-4xl font-luxury font-bold">Menu Servizi</h2>
+               <button onClick={() => setIsFormOpen(true)} className="px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase text-[10px]">Aggiungi Ritual</button>
+             </div>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {services.map(s => (
+                 <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm">
+                   <h4 className="font-bold text-lg mb-1">{s.name}</h4>
+                   <p className="text-[9px] text-amber-600 font-bold uppercase mb-4">{s.category}</p>
+                   <div className="flex justify-between items-end">
+                     <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
+                     <p className="text-[10px] text-gray-400 font-bold">{s.duration} min</p>
+                   </div>
+                 </div>
+               ))}
+             </div>
+          </div>
+        )}
       </Layout>
 
-      {/* Modals & AI */}
       <AIAssistant user={user} />
       
-      {/* Sistema Modifica/Cancellazione Ritual */}
+      {/* Appointment Detail Modal */}
       {selectedAppointmentDetail && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-2xl relative animate-in zoom-in-95">
@@ -564,7 +653,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Auth, Form, Profiles modals... */}
+      {/* Auth Modal */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -576,6 +665,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Team Management Modal */}
       {selectedMemberToManage && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1500] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -599,6 +689,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Appointment Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[1800] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
@@ -634,6 +725,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Guest Detail Modal */}
       {selectedClientDetail && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative overflow-y-auto max-h-[90vh] animate-in zoom-in-95">
