@@ -8,9 +8,10 @@ export interface InstagramPost {
 }
 
 export async function fetchInstagramPhotos(token: string): Promise<InstagramPost[]> {
+  if (!token) return [];
   try {
     const response = await fetch(
-      `https://graph.instagram.com/me/media?fields=id,media_url,permalink,media_type,thumbnail_url&limit=6&access_token=${token}`
+      `https://graph.instagram.com/me/media?fields=id,media_url,permalink,media_type,thumbnail_url&limit=10&access_token=${token}`
     );
     const data = await response.json();
     
