@@ -35,6 +35,14 @@ const App: React.FC = () => {
   const [selectedClientDetail, setSelectedClientDetail] = useState<any | null>(null);
   const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<any | null>(null);
   
+  // Sistema di notifiche Toast
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
@@ -138,16 +146,16 @@ const App: React.FC = () => {
     return team.find(m => m.profile_id === user.id || m.name.toLowerCase() === user.fullName.split(' ')[0].toLowerCase());
   }, [user, team]);
 
-  // Ordinamento: Imminenti (data crescente), Passati (data decrescente)
+  // Ordinamento: Per Cliente -> Prenotazione più recente in alto (created_at)
   const myClientAppointments = useMemo(() => {
     if (!user) return [];
     return appointments
-      .filter(a => a.client_id === user.id && a.status !== 'cancelled')
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .filter(a => a.client_id === user.id)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [appointments, user]);
 
-  const upcomingAppointments = myClientAppointments.filter(a => new Date(a.date) >= new Date());
-  const pastAppointments = [...myClientAppointments.filter(a => new Date(a.date) < new Date())].reverse();
+  const upcomingAppointments = myClientAppointments.filter(a => a.status !== 'cancelled' && new Date(a.date) >= new Date());
+  const pastAppointments = myClientAppointments.filter(a => a.status === 'cancelled' || new Date(a.date) < new Date());
 
   const handleOpenSlotForm = (memberName: string, date: string, hour: string) => {
     setFormInitialData({
@@ -167,16 +175,21 @@ const App: React.FC = () => {
     const appt = appointments.find(a => a.id === id);
     if (!appt) return;
     
-    await db.appointments.upsert({ ...appt, status });
-    
-    const client = profiles.find(p => p.id === appt.client_id);
-    if (client) {
-      const statusText = status === 'cancelled' ? 'CANCELLATO' : status.toUpperCase();
-      alert(`Feedback inviato a ${client.full_name}.\nStato Ritual: ${statusText}\nSincronizzazione agenda completata.`);
+    try {
+      await db.appointments.upsert({ ...appt, status });
+      const client = profiles.find(p => p.id === appt.client_id);
+      
+      if (status === 'cancelled') {
+        showToast(`Ritual di ${client?.full_name} cancellato. Notifica inviata via mail.`, 'info');
+      } else {
+        showToast(`Stato Ritual aggiornato per ${client?.full_name}. Feedback inviato.`);
+      }
+      
+      setSelectedAppointmentDetail(null);
+      await refreshData();
+    } catch (e) {
+      showToast("Errore durante l'aggiornamento.", "error");
     }
-    
-    setSelectedAppointmentDetail(null);
-    refreshData();
   };
 
   const handleServiceClick = (service: Service) => {
@@ -194,7 +207,7 @@ const App: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h1 className="text-2xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal Atelier</h1>
-          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Inizializzazione Ritual...</p>
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em]">Sincronizzazione Agenda...</p>
         </div>
       </div>
     );
@@ -202,6 +215,20 @@ const App: React.FC = () => {
 
   return (
     <>
+      {/* Sistema Toast Luxury */}
+      {toast && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[3000] animate-in slide-in-from-top-4 duration-500">
+          <div className={`px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border ${
+            toast.type === 'error' ? 'bg-red-900 text-white border-red-800' : 
+            toast.type === 'info' ? 'bg-slate-900 text-white border-slate-800' : 
+            'bg-black text-white border-amber-500/30'
+          }`}>
+            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle text-red-400' : 'fa-check-circle text-amber-500'} text-lg`}></i>
+            <span className="text-[11px] font-bold uppercase tracking-widest">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       <Layout user={user} onLogout={handleLogout} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
         
         {activeTab === 'dashboard' && (
@@ -268,7 +295,7 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <header>
                <h2 className="text-4xl font-luxury font-bold">I Miei Ritual</h2>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gestione Prenotazioni Personali</p>
+               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Prenotazioni ordinate per data di creazione</p>
             </header>
 
             <section className="space-y-8">
@@ -295,7 +322,7 @@ const App: React.FC = () => {
                               <span className="text-[11px] font-bold">Con {app.team_member_name}</span>
                             </div>
                           </div>
-                          <div className="pt-4 border-t border-white/10">
+                          <div className="pt-4 border-t border-white/10 flex justify-between items-center">
                             <p className="text-[8px] text-white/40 uppercase font-bold tracking-widest">
                               Prenotato il: {new Date(app.created_at).toLocaleString('it-IT')}
                             </p>
@@ -306,7 +333,7 @@ const App: React.FC = () => {
                  </div>
                ) : (
                  <div className="p-12 bg-white rounded-[3rem] border border-dashed border-gray-200 text-center">
-                    <p className="text-gray-400 text-[10px] font-bold uppercase">Nessun rituale in programma.</p>
+                    <p className="text-gray-400 text-[10px] font-bold uppercase">Nessun rituale attivo.</p>
                     <button onClick={() => setActiveTab('dashboard')} className="mt-4 text-amber-600 font-bold text-[9px] uppercase tracking-widest">Esplora il Menu</button>
                  </div>
                )}
@@ -314,17 +341,19 @@ const App: React.FC = () => {
 
             {pastAppointments.length > 0 && (
               <section className="space-y-6">
-                <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">Diario di Bellezza</h4>
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 pb-4">Storico & Cancellati</h4>
                 <div className="space-y-4">
                    {pastAppointments.map(app => (
-                     <div key={app.id} className="flex justify-between items-center p-8 bg-white rounded-[3rem] border border-gray-50 opacity-60 hover:opacity-100 transition-opacity">
+                     <div key={app.id} className={`flex justify-between items-center p-8 rounded-[3rem] border border-gray-50 transition-opacity ${app.status === 'cancelled' ? 'bg-red-50/20 opacity-40' : 'bg-white opacity-60 hover:opacity-100'}`}>
                         <div className="flex items-center gap-6">
-                           <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400">
-                             <i className="fas fa-check"></i>
+                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${app.status === 'cancelled' ? 'bg-red-100 text-red-400' : 'bg-gray-100 text-gray-400'}`}>
+                             <i className={`fas ${app.status === 'cancelled' ? 'fa-times' : 'fa-check'}`}></i>
                            </div>
                            <div>
                               <h6 className="font-bold text-lg text-gray-900">{app.services?.name}</h6>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Eseguito il {new Date(app.date).toLocaleDateString()} • {app.team_member_name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                                {app.status === 'cancelled' ? 'ANNULLATO' : `Eseguito il ${new Date(app.date).toLocaleDateString()}`} • {app.team_member_name}
+                              </p>
                               <p className="text-[7px] text-gray-300 font-bold uppercase mt-1">Prenotazione del {new Date(app.created_at).toLocaleDateString()}</p>
                            </div>
                         </div>
@@ -351,6 +380,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Altri tab rimasti invariati ... */}
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold">Registro Ospiti</h2>
@@ -478,7 +508,7 @@ const App: React.FC = () => {
              </button>
              
              <header className="mb-10">
-               <p className="text-amber-600 font-bold text-[9px] uppercase tracking-widest mb-2">Dettagli Ritual</p>
+               <p className="text-amber-600 font-bold text-[9px] uppercase tracking-widest mb-2">Gestione Ritual</p>
                <h3 className="text-3xl font-luxury font-bold">{(selectedAppointmentDetail as any).services?.name}</h3>
                <p className="text-sm font-bold mt-2">Ospite: {(selectedAppointmentDetail as any).profiles?.full_name}</p>
              </header>
@@ -514,7 +544,7 @@ const App: React.FC = () => {
                  }}
                  className="py-4 bg-gray-50 text-black border border-gray-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-100"
                >
-                 Riprogramma Ritual
+                 Modifica Ritual
                </button>
                <button 
                  onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')}
@@ -526,13 +556,14 @@ const App: React.FC = () => {
                  onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')}
                  className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
                >
-                 Invia Feedback / Notifica Stato
+                 Invia Feedback Stato
                </button>
              </div>
           </div>
         </div>
       )}
 
+      {/* ... Altri modal Auth e Gestione ... */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -559,6 +590,7 @@ const App: React.FC = () => {
                 await db.team.upsert(m);
                 await refreshData();
                 setSelectedMemberToManage(null);
+                showToast("Dati Staff aggiornati.");
               }}
               onClose={() => setSelectedMemberToManage(null)}
             />
@@ -587,12 +619,9 @@ const App: React.FC = () => {
                  setFormInitialData(null);
                  await refreshData(); 
                  
-                 // Feedback
                  const client = profiles.find(p => p.id === finalData.client_id);
-                 if (client) {
-                    alert(`Ritual ${a.id ? 'aggiornato' : 'prenotato'} con successo per ${client.full_name}.\nArtista: ${finalData.team_member_name}`);
-                 }
-
+                 showToast(`Ritual ${a.id ? 'modificato' : 'confermato'} per ${client?.full_name}.`);
+                 
                  setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'my_rituals');
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
@@ -617,6 +646,7 @@ const App: React.FC = () => {
                 setIsNewGuestOpen(false);
                 setEditingGuest(null);
                 refreshData();
+                showToast("Ospite registrato con successo.");
               }} 
               onCancel={() => { setIsNewGuestOpen(false); setEditingGuest(null); }} 
             />
