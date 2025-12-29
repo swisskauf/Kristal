@@ -15,18 +15,19 @@ import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 
+const SALON_PHONE = '+41 91 859 37 77';
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Feature Settings con persistenza aggiornata (v9)
+  // Feature Settings con persistenza (v10) - Rimosso salonPhone
   const [settings, setSettings] = useState({
     aiAssistantEnabled: false,
     instagramIntegrationEnabled: false,
     instagramToken: '',
-    emailNotificationsEnabled: true,
-    salonPhone: '+41 00 000 00 00' 
+    emailNotificationsEnabled: true
   });
 
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -50,9 +51,8 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 5000);
   };
 
-  // Caricamento impostazioni iniziali
   useEffect(() => {
-    const savedSettings = localStorage.getItem('kristal_settings_v9');
+    const savedSettings = localStorage.getItem('kristal_settings_v10');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
@@ -60,21 +60,22 @@ const App: React.FC = () => {
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    localStorage.setItem('kristal_settings_v9', JSON.stringify(newSettings));
-    showToast("Impostazioni salvate con successo.");
+    localStorage.setItem('kristal_settings_v10', JSON.stringify(newSettings));
+    showToast("Configurazione salvata.");
   };
 
-  // Funzione di popolamento dati se il DB è vuoto
   const ensureDataSeeding = useCallback(async () => {
     try {
       const existingServices = await db.services.getAll();
       if (!existingServices || existingServices.length === 0) {
+        console.log("Seeding default services...");
         for (const s of DEFAULT_SERVICES) {
           await db.services.upsert(s);
         }
       }
       const existingTeam = await db.team.getAll();
       if (!existingTeam || existingTeam.length === 0) {
+        console.log("Seeding default team...");
         for (const m of DEFAULT_TEAM) {
           await db.team.upsert(m);
         }
@@ -83,6 +84,67 @@ const App: React.FC = () => {
       console.warn("Seeding error:", e);
     }
   }, []);
+
+  const refreshData = useCallback(async () => {
+    try {
+      // Assicuriamoci che i dati esistano prima di caricarli
+      await ensureDataSeeding();
+      
+      const [svcs, tm, appts, reqs, profs, closures] = await Promise.all([
+        db.services.getAll(),
+        db.team.getAll(),
+        db.appointments.getAll(),
+        db.requests.getAll(),
+        db.profiles.getAll(),
+        db.salonClosures.getAll()
+      ]);
+      
+      setServices(svcs || []);
+      setTeam(tm || []);
+      setAppointments(appts || []);
+      setRequests(reqs || []);
+      setProfiles(profs || []);
+      setSalonClosures(closures || []);
+    } catch (e) {
+      console.error("Data Refresh Error", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [ensureDataSeeding]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setActiveTab('dashboard');
+      } else if (session?.user) {
+        const profile = await db.profiles.get(session.user.id).catch(() => null);
+        const email = session.user.email?.toLowerCase();
+        let role: any = profile?.role || 'client';
+        if (email === 'serop.serop@outlook.com') role = 'admin';
+        else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
+        
+        setUser({ 
+          id: session.user.id, 
+          email: session.user.email!, 
+          fullName: profile?.full_name || 'Ospite Kristal', 
+          phone: profile?.phone || '', 
+          role, 
+          avatar: profile?.avatar 
+        });
+      }
+      // Dopo il check auth, carichiamo i dati
+      refreshData();
+    });
+    return () => subscription.unsubscribe();
+  }, [refreshData]);
+
+  // Ricaricamento periodico o su cambio tab per consistenza
+  useEffect(() => {
+    if (activeTab !== 'dashboard') {
+      refreshData();
+    }
+  }, [activeTab, refreshData]);
 
   const logOperation = async (clientId: string, action: string, details: string) => {
     const timestamp = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -133,61 +195,6 @@ const App: React.FC = () => {
       cancelled: userAppts.filter(a => a.status === 'cancelled').sort((a,b) => b.date.localeCompare(a.date))
     };
   }, [appointments, user]);
-
-  const refreshData = useCallback(async () => {
-    try {
-      await ensureDataSeeding();
-      const [svcs, tm, appts, reqs, profs, closures] = await Promise.all([
-        db.services.getAll(),
-        db.team.getAll(),
-        db.appointments.getAll(),
-        db.requests.getAll(),
-        db.profiles.getAll(),
-        db.salonClosures.getAll()
-      ]);
-      
-      setServices(svcs || []);
-      setTeam(tm || []);
-      setAppointments(appts || []);
-      setRequests(reqs || []);
-      setProfiles(profs || []);
-      setSalonClosures(closures || []);
-    } catch (e) {
-      console.error("Data Refresh Error", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [ensureDataSeeding]);
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setActiveTab('dashboard');
-      } else if (session?.user) {
-        const profile = await db.profiles.get(session.user.id).catch(() => null);
-        const email = session.user.email?.toLowerCase();
-        let role: any = profile?.role || 'client';
-        if (email === 'serop.serop@outlook.com') role = 'admin';
-        else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
-        
-        setUser({ 
-          id: session.user.id, 
-          email: session.user.email!, 
-          fullName: profile?.full_name || 'Ospite Kristal', 
-          phone: profile?.phone || '', 
-          role, 
-          avatar: profile?.avatar 
-        });
-      }
-      setLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!loading) refreshData();
-  }, [loading, refreshData]);
 
   const handleUpdateAppointmentStatus = async (id: string, status: 'confirmed' | 'cancelled' | 'noshow') => {
     try {
@@ -264,6 +271,7 @@ const App: React.FC = () => {
                       </div>
                     )) : (
                       <div className="col-span-full py-20 text-center">
+                         <div className="inline-block w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Menu Ritual...</p>
                       </div>
                     )}
@@ -308,10 +316,10 @@ const App: React.FC = () => {
                         <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
                            <div className="space-y-1">
                               <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Per modifiche:</p>
-                              <a href={`tel:${settings.salonPhone.replace(/[^\d+]/g, '')}`} className="text-gray-900 font-bold text-xs hover:text-amber-600 transition-colors">{settings.salonPhone}</a>
+                              <a href={`tel:${SALON_PHONE.replace(/[^\d+]/g, '')}`} className="text-gray-900 font-bold text-xs hover:text-amber-600 transition-colors">{SALON_PHONE}</a>
                            </div>
                            <a 
-                             href={`tel:${settings.salonPhone.replace(/[^\d+]/g, '')}`} 
+                             href={`tel:${SALON_PHONE.replace(/[^\d+]/g, '')}`} 
                              className="w-14 h-14 bg-black text-white rounded-[1.8rem] flex items-center justify-center hover:bg-amber-600 transition-all shadow-xl shadow-black/10 active:scale-95"
                            >
                               <i className="fas fa-phone-alt text-lg"></i>
@@ -377,12 +385,6 @@ const App: React.FC = () => {
                 <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-14">
                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8 flex items-center gap-4"><i className="fas fa-sliders-h text-amber-600"></i> Moduli & Contatto</h4>
                   <div className="space-y-12">
-                    <div className="space-y-6 p-10 bg-gray-50 rounded-[3rem] border border-gray-100 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fas fa-phone-alt text-5xl"></i></div>
-                        <label className="text-[10px] font-bold uppercase text-amber-600 tracking-widest ml-1 flex items-center gap-3"><i className="fas fa-phone-alt"></i> Telefono Atelier</label>
-                        <input type="text" placeholder="+41 00 000 00 00" value={settings.salonPhone} onChange={(e) => setSettings({...settings, salonPhone: e.target.value})} className="w-full p-6 rounded-[2rem] bg-white border-none font-bold text-sm shadow-inner focus:ring-2 focus:ring-amber-500 outline-none transition-all" />
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter leading-relaxed">Il numero salvato viene sincronizzato istantaneamente con l'area ospite.</p>
-                    </div>
                     <div className="flex items-center justify-between px-6">
                       <div className="flex items-center gap-6">
                         <div className="w-16 h-16 bg-amber-600 text-white rounded-[1.8rem] flex items-center justify-center shadow-xl"><i className="fas fa-sparkles text-2xl"></i></div>
