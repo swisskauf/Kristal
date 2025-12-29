@@ -10,7 +10,6 @@ import RequestManagement from './components/RequestManagement';
 import CollaboratorDashboard from './components/CollaboratorDashboard';
 import NewGuestForm from './components/NewGuestForm';
 import VisionAnalytics from './components/VisionAnalytics';
-import AIAssistant from './components/AIAssistant';
 import { supabase, db, useMock } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
@@ -181,7 +180,7 @@ const App: React.FC = () => {
       const client = profiles.find(p => p.id === appt.client_id);
       
       showToast(
-        `Feedback Ritual: ${status === 'cancelled' ? 'CANCELLAZIONE' : 'CONFERMA'}. Email inviata con successo a ${client?.full_name || 'Ospite'}.`,
+        `Ritual aggiornato con successo. Notifica inviata a ${client?.full_name || 'Ospite'}.`,
         status === 'cancelled' ? 'info' : 'success'
       );
       
@@ -381,7 +380,7 @@ const App: React.FC = () => {
 
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Atelier Planning</h2>
+            <h2 className="text-4xl font-luxury font-bold">Agenda Atelier</h2>
             <TeamPlanning 
               team={team} 
               appointments={appointments} 
@@ -601,8 +600,6 @@ const App: React.FC = () => {
         )}
       </Layout>
 
-      <AIAssistant user={user} />
-      
       {/* Appointment detail modal */}
       {selectedAppointmentDetail && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
@@ -656,14 +653,14 @@ const App: React.FC = () => {
                  onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')}
                  className="col-span-2 py-5 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 shadow-xl"
                >
-                 Invia Notifica Feedback
+                 Invia Notifica Conferma
                </button>
              </div>
           </div>
         </div>
       )}
 
-      {/* Other modals */}
+      {/* Auth Modal */}
       {isAuthOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[2000] flex items-center justify-center p-4">
           <div className="w-full max-w-lg relative animate-in zoom-in-95">
@@ -720,7 +717,7 @@ const App: React.FC = () => {
                  await refreshData(); 
                  
                  const client = profiles.find(p => p.id === finalData.client_id);
-                 showToast(`Ritual ${a.id ? 'modificato' : 'confermato'} per ${client?.full_name || 'Ospite'}. Email di feedback inviata.`);
+                 showToast(`Ritual ${a.id ? 'modificato' : 'confermato'} per ${client?.full_name || 'Ospite'}.`);
                  
                  setActiveTab(isAdmin || isCollaborator ? 'team_schedule' : 'my_rituals');
                }} 
