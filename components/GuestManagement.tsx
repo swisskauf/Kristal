@@ -7,9 +7,11 @@ interface GuestManagementProps {
   profiles: any[];
   appointments: Appointment[];
   onRefresh: () => void;
+  onEditGuest?: (guest: any) => void;
+  onAddGuest?: () => void;
 }
 
-const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointments, onRefresh }) => {
+const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointments, onRefresh, onEditGuest, onAddGuest }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGuest, setSelectedGuest] = useState<any | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'history' | 'technical'>('info');
@@ -40,8 +42,8 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
     await db.profiles.upsert({ ...selectedGuest, technical_sheets });
     setNewNote({ category: 'Colore', content: '' });
     onRefresh();
-    const updated = profiles.find(p => p.id === selectedGuest.id);
-    if (updated) setSelectedGuest({ ...updated, technical_sheets });
+    // Aggiorniamo la vista locale
+    setSelectedGuest({ ...selectedGuest, technical_sheets });
   };
 
   return (
@@ -51,21 +53,26 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
           <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">Archivio Ospiti</h2>
           <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Patrimonio Esperienziale Kristal</p>
         </div>
-        <div className="relative group">
-           <i className="fas fa-search absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-amber-600 transition-colors"></i>
-           <input 
-             type="text" 
-             placeholder="Ricerca ospite..." 
-             value={searchTerm}
-             onChange={e => setSearchTerm(e.target.value)}
-             className="pl-14 pr-8 py-5 bg-white border border-gray-100 rounded-[2rem] w-full md:w-80 text-xs font-bold shadow-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-           />
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative group w-full md:w-auto">
+             <i className="fas fa-search absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-amber-600 transition-colors"></i>
+             <input 
+               type="text" 
+               placeholder="Ricerca ospite..." 
+               value={searchTerm}
+               onChange={e => setSearchTerm(e.target.value)}
+               className="pl-14 pr-8 py-5 bg-white border border-gray-100 rounded-[2rem] w-full md:w-80 text-xs font-bold shadow-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+             />
+          </div>
+          <button onClick={onAddGuest} className="w-full md:w-auto px-8 py-5 bg-black text-white rounded-[2rem] text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all">
+            Nuovo Ospite
+          </button>
         </div>
       </header>
 
       <div className="grid lg:grid-cols-[1fr_2fr] gap-10">
         <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm overflow-hidden h-fit">
-           <div className="max-h-[600px] overflow-y-auto scrollbar-hide">
+           <div className="max-h-[650px] overflow-y-auto scrollbar-hide">
               {filteredGuests.length > 0 ? filteredGuests.map(g => (
                 <div 
                   key={g.id} 
@@ -85,7 +92,7 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
            </div>
         </div>
 
-        <div className="min-h-[600px]">
+        <div className="min-h-[650px]">
           {selectedGuest ? (
             <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-12 space-y-12 animate-in slide-in-from-right-4">
                <header className="flex items-start justify-between">
@@ -97,6 +104,7 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                     </div>
                   </div>
                   <div className="flex gap-4">
+                     <button onClick={() => onEditGuest?.(selectedGuest)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors" title="Modifica Profilo"><i className="fas fa-edit"></i></button>
                      <a href={`tel:${selectedGuest.phone}`} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors"><i className="fas fa-phone-alt"></i></a>
                      <a href={`mailto:${selectedGuest.email}`} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors"><i className="fas fa-envelope"></i></a>
                   </div>
@@ -114,23 +122,27 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                   ))}
                </nav>
 
-               <div className="min-h-[300px]">
+               <div className="min-h-[350px]">
                   {activeSubTab === 'info' && (
                     <div className="grid md:grid-cols-2 gap-8">
                        <div className="space-y-6">
                           <div className="bg-gray-50 p-6 rounded-[2rem]">
                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Email</p>
-                             <p className="text-sm font-bold">{selectedGuest.email}</p>
+                             <p className="text-sm font-bold">{selectedGuest.email || 'Nessuna email'}</p>
                           </div>
                           <div className="bg-gray-50 p-6 rounded-[2rem]">
                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Data Nascita</p>
                              <p className="text-sm font-bold">{selectedGuest.dob ? new Date(selectedGuest.dob).toLocaleDateString() : 'Non dichiarata'}</p>
                           </div>
+                          <div className="bg-gray-50 p-6 rounded-[2rem]">
+                             <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Telefono</p>
+                             <p className="text-sm font-bold">{selectedGuest.phone || 'Nessun numero'}</p>
+                          </div>
                        </div>
-                       <div className="bg-black text-white p-8 rounded-[3rem] shadow-xl flex flex-col justify-between">
+                       <div className="bg-black text-white p-8 rounded-[3rem] shadow-xl flex flex-col justify-between h-full">
                           <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Totale Rituali</p>
                           <h4 className="text-5xl font-luxury font-bold">{guestAppointments.length}</h4>
-                          <p className="text-[8px] text-gray-400 uppercase mt-4">Frequenza atelier: alta</p>
+                          <p className="text-[8px] text-gray-400 uppercase mt-4">Esperienza Atelier Kristal</p>
                        </div>
                     </div>
                   )}
@@ -141,11 +153,11 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                          <div key={a.id} className="p-6 bg-gray-50 rounded-3xl flex justify-between items-center group hover:bg-white hover:shadow-md transition-all">
                             <div>
                                <p className="text-[9px] font-bold text-amber-600 uppercase mb-1">{new Date(a.date).toLocaleDateString()}</p>
-                               <h5 className="font-bold text-sm text-gray-900">{a.services?.name}</h5>
+                               <h5 className="font-bold text-sm text-gray-900">{a.services?.name || 'Rituale Speciale'}</h5>
                                <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{a.team_member_name}</p>
                             </div>
                             <div className="text-right">
-                               <p className="text-sm font-bold">CHF {a.services?.price}</p>
+                               <p className="text-sm font-bold">CHF {a.services?.price || 0}</p>
                                <span className={`text-[8px] font-bold uppercase tracking-widest ${a.status === 'confirmed' ? 'text-green-600' : 'text-red-400'}`}>{a.status}</span>
                             </div>
                          </div>
