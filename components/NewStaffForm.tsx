@@ -12,7 +12,7 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('Senior Stylist');
   const [bio, setBio] = useState('');
-  const [avatar, setAvatar] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [workStart, setWorkStart] = useState('08:30');
   const [workEnd, setWorkEnd] = useState('18:30');
   const [breakStart, setBreakStart] = useState('13:00');
@@ -20,6 +20,17 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
   const [address, setAddress] = useState('');
   const [avs, setAvs] = useState('');
   const [iban, setIban] = useState('');
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +61,20 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
         <h3 className="text-3xl font-luxury font-bold text-gray-900">Nuovo Artista</h3>
         <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em] mt-2">Ingresso nel Team Kristal</p>
       </header>
+
+      <div className="flex flex-col items-center mb-8">
+        <div className="relative group cursor-pointer w-32 h-32">
+          <img 
+            src={avatar || `https://ui-avatars.com/api/?name=${name || 'Staff'}&background=f3f4f6&color=9ca3af`} 
+            className="w-full h-full rounded-[2.5rem] object-cover border-4 border-white shadow-xl transition-all group-hover:opacity-80" 
+          />
+          <label className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer bg-black/20 rounded-[2.5rem]">
+            <i className="fas fa-camera text-2xl text-white"></i>
+            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+          </label>
+        </div>
+        <p className="text-[8px] font-bold text-gray-400 uppercase mt-4 tracking-widest">Carica Foto Profilo</p>
+      </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-2">
@@ -90,16 +115,6 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
             <option value="Master Esthetician">Master Esthetician</option>
             <option value="Receptionist Luxury">Receptionist Luxury</option>
           </select>
-        </div>
-        <div className="space-y-2">
-          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2 tracking-widest">URL Immagine Profilo</label>
-          <input 
-            type="text" 
-            value={avatar} 
-            onChange={e => setAvatar(e.target.value)} 
-            className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" 
-            placeholder="https://..." 
-          />
         </div>
       </div>
 
