@@ -30,7 +30,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 }) => {
   const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
-  // Inizializzazione basata su initialData (per editing o pre-fill)
   const [clientId, setClientId] = useState<string>(initialData?.client_id || '');
   const [clientSearch, setClientSearch] = useState<string>('');
   const [serviceId, setServiceId] = useState<string>(initialData?.service_id || '');
@@ -43,7 +42,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sincronizzazione automatica se non c'è initialData
   useEffect(() => {
     if (services.length > 0 && !serviceId) {
       setServiceId(services[0].id);
@@ -99,11 +97,13 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       const slotStart = h * 60 + m;
       const slotEnd = slotStart + duration;
 
+      // Inibiamo slot passati per il giorno odierno
       if (selectedDate === todayStr) {
         const now = new Date();
         if (slotStart <= now.getHours() * 60 + now.getMinutes() + 15) return false;
       }
 
+      // Gestione pausa
       if (selectedMember.break_start_time && selectedMember.break_end_time) {
         const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
         const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
@@ -115,6 +115,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       const [whE, wmE] = (selectedMember.work_end_time || '19:00').split(':').map(Number);
       if (slotEnd > whE * 60 + wmE) return false;
 
+      // Conflitti con altri appuntamenti
       const hasConflict = existingAppointments.some((app) => {
         if (app.id === initialData?.id || app.status === 'cancelled') return false;
         if (app.team_member_name !== teamMemberName) return false;
@@ -136,17 +137,19 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     for (let h = startH; h <= endH; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
-        // Se stiamo modificando, l'orario originale deve apparire come disponibile
-        if (isSlotAvailable(t) || t === selectedTime) slots.push(t);
+        // Se l'orario è quello originale dell'appuntamento che stiamo modificando, lo mostriamo come disponibile
+        if (isSlotAvailable(t) || (initialData?.id && t === new Date(initialData.date!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) && selectedDate === new Date(initialData.date!).toLocaleDateString('en-CA') && teamMemberName === initialData.team_member_name)) {
+          slots.push(t);
+        }
       }
     }
     return slots;
-  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData?.id, teamMemberName, selectedTime]);
+  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData, teamMemberName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedService || isSubmitting) return;
-    if (isAdminOrStaff && !clientId) { alert('Scegliere un Ospite.'); return; }
+    if (isAdminOrStaff && !clientId && !initialData?.id) { alert('Scegliere un Ospite.'); return; }
     if (!selectedTime) { alert('Scegliere un orario.'); return; }
 
     setIsSubmitting(true);
@@ -157,14 +160,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
       await onSave({
         id: initialData?.id,
-        client_id: isAdminOrStaff ? clientId : (initialData?.client_id || clientId),
+        client_id: isAdminOrStaff ? (clientId || initialData?.client_id) : (initialData?.client_id || clientId),
         service_id: selectedService.id,
         team_member_name: teamMemberName,
         date: finalDate,
         status: initialData?.status || 'confirmed',
       });
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      console.error("Form Submit Error:", err);
+      setIsSubmitting(false); // Sblocchiamo il pulsante in caso di errore
     }
   };
 
@@ -172,7 +176,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     <div className="animate-in fade-in zoom-in-95 duration-500">
       <form onSubmit={handleSubmit} className="space-y-10">
         <header className="mb-6">
-          <h3 className="text-2xl font-luxury font-bold text-gray-900">{initialData?.id ? 'Riprogrammazione Ritual' : 'Configurazione Ritual'}</h3>
+          <h3 className="text-2xl font-luxury font-bold text-gray-900">{initialData?.id ? 'Aggiornamento Ritual' : 'Nuovo Ritual'}</h3>
           <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mt-1">Prenotazione Diretta</p>
         </header>
 
@@ -204,10 +208,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
             </div>
           )}
 
-          {initialData?.id && isAdminOrStaff && (
-             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 mb-6">
-                <p className="text-[10px] font-bold text-amber-800 uppercase">Modifica appuntamento per:</p>
-                <p className="text-sm font-luxury font-bold">{(initialData as any).profiles?.full_name}</p>
+          {initialData?.id && (
+             <div className="p-5 bg-amber-50 rounded-[2rem] border border-amber-100 mb-6 flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-600 rounded-2xl flex items-center justify-center text-white">
+                  <i className="fas fa-user-edit text-lg"></i>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">Modifica per:</p>
+                  <p className="text-sm font-luxury font-bold text-gray-900">{(initialData as any).profiles?.full_name || 'Ospite'}</p>
+                </div>
              </div>
           )}
 
@@ -279,7 +288,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                     type="button"
                     onClick={() => setSelectedTime(slot)}
                     className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 ${
-                      selectedTime === slot ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white border-gray-100 text-gray-700'
+                      selectedTime === slot ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-gray-100 text-gray-700 hover:border-amber-200'
                     }`}
                   >
                     {slot}
@@ -287,7 +296,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 ))
               ) : (
                 <div className="col-span-full py-8 bg-gray-50 rounded-2xl text-center border border-dashed border-gray-200">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase">Nessuna disponibilità.</p>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità.</p>
                 </div>
               )}
             </div>
@@ -295,15 +304,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         </div>
 
         <div className="flex gap-4 pt-8 border-t border-gray-100">
-          <button type="button" onClick={onCancel} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[9px] tracking-widest">Annulla</button>
+          <button type="button" onClick={onCancel} className="flex-1 py-5 text-gray-400 font-bold uppercase text-[10px] tracking-widest transition-colors hover:text-gray-900">Annulla</button>
           <button 
             type="submit" 
             disabled={isSubmitting || !selectedTime}
-            className={`flex-[2] py-4 rounded-2xl font-bold uppercase text-[9px] shadow-xl transition-all ${
-              isSubmitting ? 'bg-gray-400' : 'bg-black text-white hover:bg-amber-600'
+            className={`flex-[2] py-5 rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl transition-all ${
+              isSubmitting ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-amber-700 active:scale-95'
             }`}
           >
-            {isSubmitting ? 'Aggiornamento...' : initialData?.id ? 'Conferma Modifica' : 'Conferma Ritual'}
+            {isSubmitting ? <i className="fas fa-spinner animate-spin"></i> : (initialData?.id ? 'Salva Modifiche' : 'Conferma Ritual')}
           </button>
         </div>
       </form>
