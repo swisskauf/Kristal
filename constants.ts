@@ -32,6 +32,7 @@ export const SERVICES: Service[] = [
 export const TEAM: TeamMember[] = [
   { 
     name: 'Melk', 
+    email: 'melk@kristalatelier.ch',
     role: 'Creative Director', 
     bio: 'Specialista in colorazioni d\'avanguardia e tagli tecnici donna.',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&auto=format&fit=crop',
@@ -39,6 +40,7 @@ export const TEAM: TeamMember[] = [
   },
   { 
     name: 'Romina', 
+    email: 'romina@kristalatelier.ch',
     role: 'Master Esthetician', 
     bio: 'Esperta in dermocosmesi, trattamenti viso e benessere corpo.',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&h=200&auto=format&fit=crop',
@@ -46,6 +48,7 @@ export const TEAM: TeamMember[] = [
   },
   { 
     name: 'Maurizio', 
+    email: 'maurizio@kristalatelier.ch',
     role: 'Senior Stylist', 
     bio: 'Maestro del taglio maschile e acconciature moda.',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&h=200&auto=format&fit=crop',
