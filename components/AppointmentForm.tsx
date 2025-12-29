@@ -30,36 +30,31 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 }) => {
   const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
-  // Inizializzazione sicura
+  // Inizializzazione basata su initialData (per editing o pre-fill)
   const [clientId, setClientId] = useState<string>(initialData?.client_id || '');
   const [clientSearch, setClientSearch] = useState<string>('');
-  const [serviceId, setServiceId] = useState<string>('');
-  const [teamMemberName, setTeamMemberName] = useState<string>('');
+  const [serviceId, setServiceId] = useState<string>(initialData?.service_id || '');
+  const [teamMemberName, setTeamMemberName] = useState<string>(initialData?.team_member_name || '');
   const [selectedDate, setSelectedDate] = useState<string>(
     initialData?.date ? new Date(initialData.date).toLocaleDateString('en-CA') : todayStr
   );
-  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [selectedTime, setSelectedTime] = useState<string>(
+    initialData?.date ? new Date(initialData.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sincronizzazione stati quando i dati caricano o cambiano
+  // Sincronizzazione automatica se non c'è initialData
   useEffect(() => {
     if (services.length > 0 && !serviceId) {
-      setServiceId(initialData?.service_id || services[0].id);
+      setServiceId(services[0].id);
     }
-  }, [services, initialData, serviceId]);
+  }, [services, serviceId]);
 
   useEffect(() => {
     if (team.length > 0 && !teamMemberName) {
-      setTeamMemberName(initialData?.team_member_name || team[0].name);
+      setTeamMemberName(team[0].name);
     }
-  }, [team, initialData, teamMemberName]);
-
-  useEffect(() => {
-    if (initialData?.date) {
-      const d = new Date(initialData.date);
-      setSelectedTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
-    }
-  }, [initialData]);
+  }, [team, teamMemberName]);
 
   const selectedService = useMemo(() => services.find((s) => s.id === serviceId), [services, serviceId]);
   const selectedMember = useMemo(() => team.find((t) => t.name === teamMemberName), [team, teamMemberName]);
@@ -88,7 +83,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedMember || !selectedDate || !selectedService) return [];
 
-    // Check Chiusura Settimanale
     const d = new Date(`${selectedDate}T12:00:00`);
     const dayOfWeek = d.getDay();
     const closures = selectedMember.weekly_closures || [];
@@ -142,11 +136,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     for (let h = startH; h <= endH; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
-        if (isSlotAvailable(t)) slots.push(t);
+        // Se stiamo modificando, l'orario originale deve apparire come disponibile
+        if (isSlotAvailable(t) || t === selectedTime) slots.push(t);
       }
     }
     return slots;
-  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData?.id, teamMemberName]);
+  }, [selectedMember, selectedDate, selectedService, todayStr, existingAppointments, initialData?.id, teamMemberName, selectedTime]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,11 +157,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 
       await onSave({
         id: initialData?.id,
-        client_id: isAdminOrStaff ? clientId : initialData?.client_id,
+        client_id: isAdminOrStaff ? clientId : (initialData?.client_id || clientId),
         service_id: selectedService.id,
         team_member_name: teamMemberName,
         date: finalDate,
-        status: 'confirmed',
+        status: initialData?.status || 'confirmed',
       });
     } finally {
       setIsSubmitting(false);
@@ -177,12 +172,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     <div className="animate-in fade-in zoom-in-95 duration-500">
       <form onSubmit={handleSubmit} className="space-y-10">
         <header className="mb-6">
-          <h3 className="text-2xl font-luxury font-bold text-gray-900">Configurazione Ritual</h3>
+          <h3 className="text-2xl font-luxury font-bold text-gray-900">{initialData?.id ? 'Riprogrammazione Ritual' : 'Configurazione Ritual'}</h3>
           <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mt-1">Prenotazione Diretta</p>
         </header>
 
         <div className="space-y-8">
-          {isAdminOrStaff && (
+          {isAdminOrStaff && !initialData?.id && (
             <div className="space-y-4">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Ospite</label>
               <div className="relative">
@@ -207,6 +202,13 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 </select>
               </div>
             </div>
+          )}
+
+          {initialData?.id && isAdminOrStaff && (
+             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 mb-6">
+                <p className="text-[10px] font-bold text-amber-800 uppercase">Modifica appuntamento per:</p>
+                <p className="text-sm font-luxury font-bold">{(initialData as any).profiles?.full_name}</p>
+             </div>
           )}
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -301,7 +303,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               isSubmitting ? 'bg-gray-400' : 'bg-black text-white hover:bg-amber-600'
             }`}
           >
-            {isSubmitting ? 'Prenotazione in corso...' : 'Conferma Ritual'}
+            {isSubmitting ? 'Aggiornamento...' : initialData?.id ? 'Conferma Modifica' : 'Conferma Ritual'}
           </button>
         </div>
       </form>
