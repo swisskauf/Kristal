@@ -9,6 +9,7 @@ interface NewStaffFormProps {
 
 const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [role, setRole] = useState('Senior Stylist');
   const [bio, setBio] = useState('');
   const [avatar, setAvatar] = useState('');
@@ -22,11 +23,14 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !name) return;
+
     onSave({
       name,
+      email: email.toLowerCase(),
       role,
       bio,
-      avatar: avatar || `https://ui-avatars.com/api/?name=${name}&background=f3f4f6&color=9ca3af`,
+      avatar: avatar || `https://ui-avatars.com/api/?name=${name}&background=000&color=fff&bold=true`,
       work_start_time: workStart,
       work_end_time: workEnd,
       break_start_time: breakStart,
@@ -41,65 +45,134 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
-      <header className="text-center mb-8">
+    <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in zoom-in-95 duration-500 max-h-[80vh] overflow-y-auto pr-4 scrollbar-hide">
+      <header className="text-center mb-8 sticky top-0 bg-white z-10 pb-4 border-b border-gray-50">
         <h3 className="text-3xl font-luxury font-bold text-gray-900">Nuovo Artista</h3>
-        <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2">Iscrizione Staff Kristal</p>
+        <p className="text-[10px] text-amber-600 font-bold uppercase tracking-[0.4em] mt-2">Ingresso nel Team Kristal</p>
       </header>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Nome Arte</label>
-          <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" placeholder="es. Melk" />
+          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Nome d'Arte</label>
+          <input 
+            required 
+            type="text" 
+            value={name} 
+            onChange={e => setName(e.target.value)} 
+            className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all" 
+            placeholder="es. Melk" 
+          />
         </div>
         <div className="space-y-2">
-          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Ruolo</label>
-          <select value={role} onChange={e => setRole(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner">
+          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Email Aziendale / Privata</label>
+          <input 
+            required 
+            type="email" 
+            value={email} 
+            onChange={e => setEmail(e.target.value)} 
+            className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all" 
+            placeholder="staff@kristal.ch" 
+          />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Ruolo</label>
+          <select 
+            value={role} 
+            onChange={e => setRole(e.target.value)} 
+            className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all appearance-none"
+          >
             <option value="Senior Stylist">Senior Stylist</option>
             <option value="Creative Director">Creative Director</option>
             <option value="Color Specialist">Color Specialist</option>
             <option value="Master Esthetician">Master Esthetician</option>
+            <option value="Receptionist Luxury">Receptionist Luxury</option>
           </select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-gray-400 uppercase ml-2 tracking-widest">URL Immagine Profilo</label>
+          <input 
+            type="text" 
+            value={avatar} 
+            onChange={e => setAvatar(e.target.value)} 
+            className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" 
+            placeholder="https://..." 
+          />
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Biografia Breve</label>
-        <textarea rows={2} value={bio} onChange={e => setBio(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner resize-none" placeholder="Descrivi il talento dell'artista..." />
+        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Biografia d'Eccellenza</label>
+        <textarea 
+          rows={3} 
+          value={bio} 
+          onChange={e => setBio(e.target.value)} 
+          className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner resize-none focus:ring-2 focus:ring-amber-500 transition-all" 
+          placeholder="Descrivi la visione e il talento dell'artista..." 
+        />
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-gray-50 p-6 rounded-[2rem] space-y-4">
-          <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Orari Lavoro</p>
+        <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100 space-y-4">
+          <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Pianificazione Oraria</p>
           <div className="flex items-center gap-3">
-            <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)} className="flex-1 p-2 bg-white rounded-lg text-xs font-bold" />
-            <span className="text-gray-300">-</span>
-            <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)} className="flex-1 p-2 bg-white rounded-lg text-xs font-bold" />
+            <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)} className="flex-1 p-3 bg-white rounded-xl text-xs font-bold border-none shadow-sm" />
+            <span className="text-gray-300">al</span>
+            <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)} className="flex-1 p-3 bg-white rounded-xl text-xs font-bold border-none shadow-sm" />
           </div>
         </div>
-        <div className="bg-amber-50/30 p-6 rounded-[2rem] space-y-4">
-          <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Pausa Pranzo</p>
+        <div className="bg-amber-50/20 p-6 rounded-[2.5rem] border border-amber-100/50 space-y-4">
+          <p className="text-[9px] font-bold text-amber-700 uppercase tracking-widest">Intervallo Pausa</p>
           <div className="flex items-center gap-3">
-            <input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)} className="flex-1 p-2 bg-white rounded-lg text-xs font-bold" />
-            <span className="text-gray-300">-</span>
-            <input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)} className="flex-1 p-2 bg-white rounded-lg text-xs font-bold" />
+            <input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)} className="flex-1 p-3 bg-white rounded-xl text-xs font-bold border-none shadow-sm" />
+            <span className="text-gray-300">al</span>
+            <input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)} className="flex-1 p-3 bg-white rounded-xl text-xs font-bold border-none shadow-sm" />
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Dati Contrattuali</p>
-        <input placeholder="Indirizzo Residenza" type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
-        <div className="grid md:grid-cols-2 gap-6">
-          <input placeholder="Numero AVS" type="text" value={avs} onChange={e => setAvs(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
-          <input placeholder="IBAN" type="text" value={iban} onChange={e => setIban(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
+      <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6">
+        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Informazioni Riservate</p>
+        <input 
+          placeholder="Indirizzo di Residenza" 
+          type="text" 
+          value={address} 
+          onChange={e => setAddress(e.target.value)} 
+          className="w-full p-4 rounded-2xl bg-white border-none font-bold text-xs shadow-sm" 
+        />
+        <div className="grid md:grid-cols-2 gap-4">
+          <input 
+            placeholder="Numero AVS" 
+            type="text" 
+            value={avs} 
+            onChange={e => setAvs(e.target.value)} 
+            className="w-full p-4 rounded-2xl bg-white border-none font-bold text-xs shadow-sm" 
+          />
+          <input 
+            placeholder="IBAN per Accredito" 
+            type="text" 
+            value={iban} 
+            onChange={e => setIban(e.target.value)} 
+            className="w-full p-4 rounded-2xl bg-white border-none font-bold text-xs shadow-sm" 
+          />
         </div>
       </div>
 
-      <div className="flex gap-4 pt-8 border-t border-gray-100">
-        <button type="button" onClick={onCancel} className="flex-1 py-5 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Annulla</button>
-        <button type="submit" className="flex-[2] py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-amber-700 transition-all">
-          Crea Profilo Artista
+      <div className="flex gap-4 pt-8 sticky bottom-0 bg-white z-10 mt-4 border-t border-gray-50">
+        <button 
+          type="button" 
+          onClick={onCancel} 
+          className="flex-1 py-5 text-gray-400 font-bold uppercase text-[10px] tracking-widest hover:text-black transition-colors"
+        >
+          Annulla
+        </button>
+        <button 
+          type="submit" 
+          className="flex-[2] py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-amber-700 transition-all transform active:scale-95"
+        >
+          Crea Profilo e Invia Invito
         </button>
       </div>
     </form>
