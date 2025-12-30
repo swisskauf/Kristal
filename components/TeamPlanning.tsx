@@ -100,7 +100,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       if (appDate.toISOString().split('T')[0] !== dateStr) return false;
 
       const appStart = appDate.getHours() * 60 + appDate.getMinutes();
-      const duration = a.services?.duration || (a as any).duration || 30;
+      const duration = a.services?.duration || 30;
       const appEnd = appStart + duration;
 
       return targetMin >= appStart && targetMin < appEnd;
