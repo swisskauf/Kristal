@@ -33,7 +33,8 @@ const QuickRequestModal: React.FC<QuickRequestModalProps> = ({ date, memberName,
     availability_change: { label: 'Cambio Orario', icon: 'fa-exchange-alt', color: 'text-gray-500' },
     bereavement: { label: 'Lutto', icon: 'fa-ribbon', color: 'text-gray-900' },
     maternity: { label: 'Maternità', icon: 'fa-baby', color: 'text-pink-500' },
-    paternity: { label: 'Paternità', icon: 'fa-baby-carriage', color: 'text-blue-400' }
+    paternity: { label: 'Paternità', icon: 'fa-baby-carriage', color: 'text-blue-400' },
+    overtime_recovery: { label: 'Recupero Ore', icon: 'fa-history', color: 'text-amber-500' }
   };
 
   return (
