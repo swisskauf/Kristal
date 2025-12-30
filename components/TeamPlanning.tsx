@@ -220,8 +220,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-[4rem] border border-gray-50 shadow-2xl p-8 md:p-12 overflow-x-auto scrollbar-hide">
-         <div className="min-w-[1000px]">
+      <div className="bg-white rounded-[4rem] border border-gray-50 shadow-2xl p-8 md:p-12 overflow-x-auto scrollbar-hide relative">
+         <div className="min-w-[1000px] mb-8">
            <div className={`grid gap-3 ${viewMode === 'daily' ? `grid-cols-[100px_repeat(${team.length},1fr)]` : 'grid-cols-[100px_repeat(7,1fr)]'}`}>
               <div className="sticky left-0 bg-white/90 backdrop-blur-md z-30"></div>
               
@@ -355,6 +355,39 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                 </React.Fragment>
               ))}
            </div>
+         </div>
+
+         {/* Legenda Agenda */}
+         <div className="border-t border-gray-100 pt-8 flex flex-wrap gap-8 items-center justify-center">
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-rose-400 rounded-full"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Donna</span>
+            </div>
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Uomo</span>
+            </div>
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Colore</span>
+            </div>
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-emerald-400 rounded-full"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Trattamenti</span>
+            </div>
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 bg-amber-400 rounded-full"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Estetica</span>
+            </div>
+            <div className="h-4 w-px bg-gray-200 mx-2"></div>
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 border border-amber-200 bg-amber-50"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Ferie</span>
+            </div>
+            <div className="flex items-center gap-2">
+               <div className="w-3 h-3 border border-red-200 bg-red-50"></div>
+               <span className="text-[9px] font-bold uppercase text-gray-500">Malattia</span>
+            </div>
          </div>
       </div>
     </div>
