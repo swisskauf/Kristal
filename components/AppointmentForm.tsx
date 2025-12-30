@@ -84,7 +84,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!selectedMember || !selectedDate || !selectedService) return { valid: false, reason: 'Dati incompleti' };
 
     // 0. Controllo Chiusura Atelier (Priorità Massima)
-    if (salonClosures.includes(selectedDate)) {
+    if (salonClosures && salonClosures.includes(selectedDate)) {
       return { valid: false, reason: 'Atelier Chiuso (Festività)' };
     }
 
@@ -148,16 +148,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!selectedMember) return [];
     
     const slots: { time: string; valid: boolean; reason?: string }[] = [];
-    const isGlobalClosure = salonClosures.includes(selectedDate);
+    const isGlobalClosure = salonClosures && salonClosures.includes(selectedDate);
 
-    // Se il salone è chiuso globalmente, non generiamo slot validi
+    // Se il salone è chiuso globalmente, non generiamo slot validi per gli ospiti
     for (let h = 7; h <= 20; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
         const validation = getSlotValidation(t);
         
-        // Se l'admin inserisce manualmente, mostriamo tutto ma con avviso
-        // Se è un ospite, se il salone è chiuso non mostriamo nulla come valido
         if (isAdminOrStaff || validation.valid) {
           slots.push({ time: t, ...validation });
         }
@@ -272,7 +270,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               {next21Days.map((day) => {
                 const d = new Date(`${day}T12:00:00`);
                 const isSelected = selectedDate === day;
-                const isGlobalClosure = salonClosures.includes(day);
+                const isGlobalClosure = salonClosures && salonClosures.includes(day);
                 const isWeeklyClosure = (selectedMember?.weekly_closures || []).includes(d.getDay());
                 const isClosed = isGlobalClosure || isWeeklyClosure;
                 
@@ -304,7 +302,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           <div className="space-y-4">
             <div className="flex justify-between items-center ml-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Orario</label>
-              {salonClosures.includes(selectedDate) && (
+              {salonClosures && salonClosures.includes(selectedDate) && (
                 <p className="text-[9px] font-bold text-red-600 uppercase animate-pulse">Salone Chiuso per Festività</p>
               )}
             </div>
