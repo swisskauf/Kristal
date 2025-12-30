@@ -155,8 +155,11 @@ export const supabaseMock = {
       const data = localStorage.getItem(STORAGE_KEY_SALON_CLOSURES);
       if (!data) return [];
       const parsed = JSON.parse(data);
-      // Migrazione dati se necessario
-      return parsed.map((c: any) => typeof c === 'string' ? { date: c, name: 'Chiusura Straordinaria' } : c);
+      // Assicura che i dati siano nel formato corretto {date, name}
+      return parsed.map((c: any) => {
+        if (typeof c === 'string') return { date: c, name: 'Chiusura Straordinaria' };
+        return { date: c.date, name: c.name || 'Chiusura Straordinaria' };
+      });
     },
     save: (closures: SalonClosure[]) => {
       localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(closures));
