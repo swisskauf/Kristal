@@ -27,6 +27,28 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
   const [viewDate, setViewDate] = useState(new Date());
 
+  const getCategoryColor = (category?: string) => {
+    switch (category) {
+      case 'Donna': return 'bg-rose-50 border-rose-200 text-rose-700';
+      case 'Uomo': return 'bg-blue-50 border-blue-200 text-blue-700';
+      case 'Colore': return 'bg-purple-50 border-purple-200 text-purple-700';
+      case 'Trattamenti': return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+      case 'Estetica': return 'bg-amber-50 border-amber-200 text-amber-700';
+      default: return 'bg-gray-50 border-gray-200 text-gray-700';
+    }
+  };
+
+  const getCategoryDot = (category?: string) => {
+    switch (category) {
+      case 'Donna': return 'bg-rose-500';
+      case 'Uomo': return 'bg-blue-500';
+      case 'Colore': return 'bg-purple-500';
+      case 'Trattamenti': return 'bg-emerald-500';
+      case 'Estetica': return 'bg-amber-500';
+      default: return 'bg-gray-400';
+    }
+  };
+
   const weekDays = useMemo(() => {
     const days = [];
     const baseDate = new Date(viewDate);
@@ -63,7 +85,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
-    // 1. Chiusura Atelier (Globale)
     if (salonClosures && salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const member = team.find(t => t.name === memberName);
@@ -72,7 +93,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
 
-    // 2. Appuntamenti confermati
     const appts = appointments.filter(a => {
       if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
       const appDate = new Date(a.date);
@@ -90,7 +110,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       return { type: 'APPOINTMENT', appt: appts[0], count: appts.length, isStart };
     }
 
-    // 3. Assenze Approvate (Ferie/Congedi)
     const activeAbsence = (member.absences_json || []).find(abs => {
       const absStart = new Date(abs.startDate).toISOString().split('T')[0];
       const absEnd = new Date(abs.endDate).toISOString().split('T')[0];
@@ -104,14 +123,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     });
     if (activeAbsence) return { type: 'VACATION', label: activeAbsence.type };
 
-    // 4. Chiusure Settimanali Ricorrenti
     const dObj = new Date(`${dateStr}T12:00:00`);
     if ((member.weekly_closures || []).includes(dObj.getDay())) return { type: 'CLOSURE' };
     
-    // 5. Date Indisponibilità singole
     if ((member.unavailable_dates || []).includes(dateStr)) return { type: 'VACATION', label: 'Indisponibile' };
 
-    // 6. Pause e Orari non lavorativi
     if (member.break_start_time && member.break_end_time && hour >= member.break_start_time && hour < member.break_end_time) {
       return { type: 'BREAK' };
     }
@@ -197,6 +213,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     const status = getSlotStatus(m.name, dateStr, hour);
                     const isGlobalClosure = salonClosures && salonClosures.includes(dateStr);
                     
+                    let appointmentClasses = "";
+                    if (status?.type === 'APPOINTMENT') {
+                      appointmentClasses = getCategoryColor(status.appt.services?.category);
+                    }
+
                     return (
                       <div 
                         key={`${m.name}-${hour}`} 
@@ -205,11 +226,14 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                           else if (!isGlobalClosure && status?.type !== 'VACATION' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, dateStr, hour);
                         }}
                         className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${
-                          status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-md scale-[0.98]' : 'hover:bg-amber-50/10'
+                          status?.type === 'APPOINTMENT' ? `${appointmentClasses} shadow-md scale-[0.98] border-opacity-50` : 'hover:bg-amber-50/10'
                         } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-40' : ''}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
-                           <div className="text-[7px] font-bold uppercase truncate px-3">{status.appt.profiles?.full_name || 'Ospite'}</div>
+                           <div className="flex flex-col items-center justify-center overflow-hidden w-full px-2">
+                             <div className="text-[7px] font-black uppercase truncate leading-none mb-0.5">{status.appt.profiles?.full_name || 'Ospite'}</div>
+                             <div className="text-[6px] font-bold opacity-70 uppercase truncate">{status.appt.services?.name}</div>
+                           </div>
                          )}
                          {status?.type === 'VACATION' && !isGlobalClosure && (
                            <div className="w-full h-full vacation-pattern flex flex-col items-center justify-center rounded-2xl">
@@ -245,7 +269,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                            <button 
                              key={a.id} 
                              onClick={() => onAppointmentClick?.(a)} 
-                             className="w-3 h-3 rounded-full bg-black border-2 border-white shadow-sm hover:scale-125 transition-transform" 
+                             className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm hover:scale-125 transition-transform ${getCategoryDot(a.services?.category)}`} 
                            />
                          ))}
                       </div>
