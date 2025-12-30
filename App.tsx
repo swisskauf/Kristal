@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -41,6 +40,7 @@ const App: React.FC = () => {
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   const [aboutUs, setAboutUs] = useState<AboutUsContent | null>(null);
   
+  // Modal states
   const [newClosure, setNewClosure] = useState({ date: '', name: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
@@ -180,6 +180,37 @@ const App: React.FC = () => {
     }
   };
 
+  const formatICSDate = (date: Date) => {
+    return date.toISOString().replace(/-|:|\.\d+/g, '').split('T')[0] + 'T' + date.toISOString().replace(/-|:|\.\d+/g, '').split('T')[1].slice(0, 6) + 'Z';
+  };
+
+  const downloadICS = (appt: any) => {
+    const start = new Date(appt.date);
+    const duration = appt.services?.duration || 30;
+    const end = new Date(start.getTime() + duration * 60 * 1000);
+    
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      `DTSTART:${formatICSDate(start)}`,
+      `DTEND:${formatICSDate(end)}`,
+      `SUMMARY:Kristal Atelier - ${appt.services?.name}`,
+      `DESCRIPTION:Rituale di bellezza con ${appt.team_member_name}`,
+      `LOCATION:Kristal Atelier, Lugano`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `rituale-kristal-${appt.id}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSaveAppointment = async (a: Partial<Appointment>) => {
     try {
       const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id) : user?.id;
@@ -241,40 +272,6 @@ const App: React.FC = () => {
     } catch (err) {
       showToast("Errore salvataggio.", "error");
     }
-  };
-
-  // Function to generate and download an ICS file for a ritual
-  const downloadICS = (appt: any) => {
-    const start = new Date(appt.date);
-    const end = new Date(start.getTime() + (appt.services?.duration || 30) * 60000);
-    
-    const formatDate = (date: Date) => {
-      return date.toISOString().replace(/-|:|\.\d+/g, '');
-    };
-
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Kristal Atelier//Beauty Ritual//IT',
-      'BEGIN:VEVENT',
-      `UID:${appt.id}`,
-      `DTSTAMP:${formatDate(new Date())}`,
-      `DTSTART:${formatDate(start)}`,
-      `DTEND:${formatDate(end)}`,
-      `SUMMARY:Ritual Kristal: ${appt.services?.name}`,
-      `DESCRIPTION:Il vostro rituale di bellezza con ${appt.team_member_name} presso Kristal Atelier.`,
-      'LOCATION:Kristal Atelier, Lugano',
-      'END:VEVENT',
-      'END:VCALENDAR'
-    ].join('\r\n');
-
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', `ritual-kristal-${appt.id}.ics`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   if (loading && !aboutUs) {
@@ -479,7 +476,7 @@ const App: React.FC = () => {
              <header><h2 className="text-5xl font-luxury font-bold text-gray-900">Centro Congedi</h2></header>
              <div className="grid lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
-                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-amber-600 pl-4">Richieste Staff</h3>
+                   <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-l-4 border-amber-600 pl-4">Richieste Staff</h3>
                    <RequestManagement 
                      requests={requests} 
                      onAction={async (id, action) => { 
@@ -497,7 +494,7 @@ const App: React.FC = () => {
                    />
                 </div>
                 <div className="space-y-8">
-                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-black pl-4">Festività & Chiusure Globali</h3>
+                   <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-l-4 border-black pl-4">Festività & Chiusure Globali</h3>
                    <div className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm space-y-8">
                       <div className="grid grid-cols-2 gap-4">
                          <input type="date" value={newClosure.date} onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })} className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
@@ -561,6 +558,81 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'my_rituals' && user && (
+          <div className="space-y-20 animate-in fade-in">
+             <header className="flex items-center justify-between">
+               <div>
+                  <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
+                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">La vostra storia in Atelier</p>
+               </div>
+               <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
+             </header>
+
+             <section className="space-y-8">
+               <div className="flex items-center gap-4">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900">Sessioni Programmate</h3>
+               </div>
+               <div className="grid md:grid-cols-2 gap-8">
+                 {groupedGuestAppointments.upcoming.length > 0 ? groupedGuestAppointments.upcoming.map(a => (
+                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-amber-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group border-l-8 border-l-amber-600 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform"><i className="fas fa-sparkles text-6xl"></i></div>
+                      <div className="flex justify-between items-start mb-10 relative z-10">
+                         <div className="w-20 h-20 bg-black text-white rounded-[2.5rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors shadow-lg">
+                            <span className="text-[10px] uppercase font-bold text-amber-500 group-hover:text-white">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+                            <span className="text-3xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
+                         </div>
+                         <div className="text-right flex flex-col items-end gap-3">
+                            <span className="px-4 py-2 bg-green-50 text-green-700 text-[9px] font-bold uppercase rounded-full border border-green-100 flex items-center gap-2">
+                               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Confermato
+                            </span>
+                            <button onClick={() => downloadICS(a)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2 hover:text-black transition-colors"><i className="fas fa-calendar-plus"></i> Calendario</button>
+                         </div>
+                      </div>
+                      <div className="space-y-6 relative z-10">
+                        <h4 className="text-3xl font-luxury font-bold text-gray-900">{a.services?.name}</h4>
+                        <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-[11px] font-bold text-amber-600">{a.team_member_name[0]}</div>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                        </div>
+                      </div>
+                   </div>
+                 )) : (
+                   <div className="col-span-full py-24 text-center bg-gray-50/50 rounded-[4rem] border border-dashed border-gray-200">
+                     <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Nessuna sessione in programma</p>
+                   </div>
+                 )}
+               </div>
+             </section>
+
+             <section className="space-y-8">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">Il Vostro Storico</h3>
+                <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
+                   {groupedGuestAppointments.history.length > 0 ? groupedGuestAppointments.history.map((a, i) => (
+                     <div key={a.id} className={`p-10 flex items-center justify-between transition-all border-b border-gray-50 last:border-none ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/20'} opacity-70 hover:opacity-100`}>
+                        <div className="flex items-center gap-10">
+                           <div className="text-center w-16 grayscale">
+                              <p className="text-3xl font-luxury font-bold text-gray-400">{new Date(a.date).getDate()}</p>
+                              <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
+                           </div>
+                           <div className="space-y-1">
+                              <p className="font-bold text-lg text-gray-500">{a.services?.name}</p>
+                              <p className="text-[9px] text-gray-300 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).getFullYear()}</p>
+                           </div>
+                        </div>
+                        <div className="flex items-center gap-8">
+                           <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2"><i className="fas fa-check-circle"></i> Eseguito</span>
+                           <p className="font-luxury font-bold text-xl text-gray-400">CHF {a.services?.price}</p>
+                        </div>
+                     </div>
+                   )) : (
+                     <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">Nessun rituale nell'archivio</div>
+                   )}
+                </div>
+             </section>
+          </div>
+        )}
+
         {activeTab === 'impostazioni' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
              <h2 className="text-5xl font-luxury font-bold text-gray-900">Configurazione</h2>
@@ -568,7 +640,7 @@ const App: React.FC = () => {
                 <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-10">
                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8">AI & Servizi</h4>
                   <div className="flex items-center justify-between">
-                    <p className="text-lg font-bold">Kristal AI Assistant</p>
+                    <p className="text-lg font-bold text-gray-800">Kristal AI Assistant</p>
                     <button onClick={() => setSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
                   </div>
                   <button onClick={() => { showToast("Impostazioni salvate."); }} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl">Salva Configurazione</button>
