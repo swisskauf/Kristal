@@ -2,7 +2,7 @@
 import React from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
+  PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import { Service, TeamMember, Appointment } from '../types';
 
@@ -13,7 +13,7 @@ interface VisionAnalyticsProps {
 }
 
 const VisionAnalytics: React.FC<VisionAnalyticsProps> = ({ team, appointments, services }) => {
-  const COLORS = ['#d97706', '#000000', '#4b5563', '#9ca3af', '#f3f4f6'];
+  const COLORS = ['#d97706', '#111827', '#4b5563', '#9ca3af', '#f3f4f6'];
 
   const statsByArtist = team.map(m => {
     const appts = appointments.filter(a => a.team_member_name === m.name && a.status === 'confirmed');
@@ -22,7 +22,7 @@ const VisionAnalytics: React.FC<VisionAnalyticsProps> = ({ team, appointments, s
   });
 
   const statsByCategory = services.map(s => {
-    const count = appointments.filter(a => a.service_id === s.id).length;
+    const count = appointments.filter(a => a.service_id === s.id && a.status === 'confirmed').length;
     return { name: s.category, value: count };
   }).reduce((acc: any[], curr) => {
     const existing = acc.find(item => item.name === curr.name);
@@ -44,19 +44,19 @@ const VisionAnalytics: React.FC<VisionAnalyticsProps> = ({ team, appointments, s
           </div>
           <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2">Ricavo Complessivo</p>
           <h3 className="text-4xl font-luxury font-bold">CHF {totalRevenue}</h3>
-          <p className="text-[9px] text-gray-400 mt-4 uppercase tracking-tighter">Performance Atelier Kristal</p>
+          <p className="text-[9px] text-gray-400 mt-4 uppercase tracking-tighter">Performance Kristal Beauty Atelier</p>
         </div>
         
-        <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm">
+        <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Scontrino Medio</p>
           <h3 className="text-4xl font-luxury font-bold text-gray-900">CHF {avgRitualValue}</h3>
-          <p className="text-[9px] text-amber-600 mt-4 uppercase tracking-tighter">Valore per Ritual</p>
+          <p className="text-[9px] text-amber-600 mt-4 uppercase tracking-tighter">Valore medio per Ritual</p>
         </div>
 
-        <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm">
+        <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Rituali Eseguiti</p>
           <h3 className="text-4xl font-luxury font-bold text-gray-900">{totalRituals}</h3>
-          <p className="text-[9px] text-amber-600 mt-4 uppercase tracking-tighter">Volume Esperienze</p>
+          <p className="text-[9px] text-amber-600 mt-4 uppercase tracking-tighter">Volume totale esperienze</p>
         </div>
       </div>
 
@@ -84,10 +84,10 @@ const VisionAnalytics: React.FC<VisionAnalyticsProps> = ({ team, appointments, s
 
         <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm space-y-8">
           <header>
-            <h4 className="font-luxury font-bold text-2xl">Mix Servizi</h4>
-            <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Distribuzione per categoria</p>
+            <h4 className="font-luxury font-bold text-2xl">Mix Ritual</h4>
+            <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Distribuzione per categoria di servizio</p>
           </header>
-          <div className="h-[300px] flex items-center justify-center">
+          <div className="h-[300px] flex items-center justify-center relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -108,9 +108,9 @@ const VisionAnalytics: React.FC<VisionAnalyticsProps> = ({ team, appointments, s
                 />
               </PieChart>
             </ResponsiveContainer>
-            <div className="absolute text-center">
+            <div className="absolute flex flex-col items-center justify-center">
                <p className="text-[8px] font-bold text-gray-400 uppercase">Focus</p>
-               <p className="text-xl font-luxury font-bold">Ritual</p>
+               <p className="text-xl font-luxury font-bold">Menu</p>
             </div>
           </div>
         </div>
@@ -118,21 +118,22 @@ const VisionAnalytics: React.FC<VisionAnalyticsProps> = ({ team, appointments, s
 
       <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm space-y-8">
         <header>
-          <h4 className="font-luxury font-bold text-2xl">Occupazione Atelier</h4>
-          <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Saturazione agenda oraria</p>
+          <h4 className="font-luxury font-bold text-2xl">Saturazione Agenda</h4>
+          <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Percentuale di occupazione oraria stimata</p>
         </header>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
            {team.map((m, i) => {
-             const appts = appointments.filter(a => a.team_member_name === m.name);
+             const appts = appointments.filter(a => a.team_member_name === m.name && a.status === 'confirmed');
+             // Stima basata su 20 appuntamenti/settimana come target 100%
              const percentage = Math.min(Math.round((appts.length / 20) * 100), 100);
              return (
-               <div key={m.name} className="p-6 bg-gray-50 rounded-3xl space-y-3">
+               <div key={m.name} className="p-6 bg-gray-50 rounded-3xl space-y-3 hover:bg-white hover:shadow-md transition-all border border-transparent hover:border-gray-100">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-bold uppercase">{m.name}</span>
                     <span className="text-[10px] font-bold text-amber-600">{percentage}%</span>
                   </div>
                   <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-black rounded-full" style={{width: `${percentage}%`}}></div>
+                    <div className="h-full bg-black rounded-full transition-all duration-1000" style={{width: `${percentage}%`}}></div>
                   </div>
                </div>
              )
