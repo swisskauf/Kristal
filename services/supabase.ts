@@ -165,6 +165,11 @@ export const db = {
         return { error: null };
       }
       return await client.from('salon_closures').delete().eq('date', date);
+    },
+    // Fix: Add save method to support bulk updates to closures array
+    save: async (closures: SalonClosure[]) => {
+      if (useMock) return supabaseMock.salonClosures.save(closures);
+      return (await client.from('salon_closures').upsert(closures)).data;
     }
   },
   aboutUs: {
