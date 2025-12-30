@@ -267,8 +267,7 @@ const App: React.FC = () => {
       }
       
       const name = newClosure.name || 'Chiusura Straordinaria';
-      const updatedClosures = [...salonClosures, { date: newClosure.date, name }];
-      await db.salonClosures.save(updatedClosures);
+      await db.salonClosures.add({ date: newClosure.date, name });
       setNewClosure({ date: '', name: '' });
       await refreshData();
       showToast("Giorno festivo registrato.");
@@ -279,8 +278,7 @@ const App: React.FC = () => {
 
   const handleDeleteClosure = async (date: string) => {
     try {
-      const updated = salonClosures.filter(cl => cl.date !== date);
-      await db.salonClosures.save(updated);
+      await db.salonClosures.delete(date);
       await refreshData();
       showToast("Giorno festivo rimosso.");
     } catch (err) {
