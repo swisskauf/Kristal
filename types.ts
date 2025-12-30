@@ -19,6 +19,13 @@ export interface SalonClosure {
   name: string;
 }
 
+export interface AboutUsContent {
+  title: string;
+  subtitle: string;
+  description: string;
+  imageUrl: string;
+}
+
 export interface LeaveRequest {
   id: string;
   member_name: TeamMemberName;
