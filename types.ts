@@ -49,6 +49,7 @@ export interface AbsenceEntry {
   endTime?: string;
   isFullDay: boolean;
   type: AbsenceType;
+  hoursCount?: number; // Ore effettive per assenze parziali o calcolo straordinari
   notes?: string;
 }
 
@@ -91,7 +92,12 @@ export interface TeamMember {
   absences_json?: AbsenceEntry[];
   unavailable_dates?: string[];
   weekly_closures?: number[];
-  total_vacation_days?: number;
+  
+  // HR & Time Tracking
+  total_vacation_days?: number;   // Diritto annuale (es. 25)
+  overtime_balance_hours?: number; // Ore di straordinario accumulate
+  hours_per_day_contract?: number; // Ore contrattuali per giorno (es. 8)
+  
   work_start_time?: string; 
   work_end_time?: string;
   break_start_time?: string;
