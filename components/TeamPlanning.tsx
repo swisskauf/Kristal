@@ -66,17 +66,20 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     // 1. Chiusura Atelier (Globale)
     if (salonClosures && salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
+    const member = team.find(t => t.name === memberName);
+    if (!member) return null;
+
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
 
-    // 2. Appuntamenti confermati o no-show
+    // 2. Appuntamenti confermati
     const appts = appointments.filter(a => {
       if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
       const appDate = new Date(a.date);
       if (appDate.toISOString().split('T')[0] !== dateStr) return false;
 
       const appStart = appDate.getHours() * 60 + appDate.getMinutes();
-      const duration = (a as any).services?.duration || (a as any).duration || 30;
+      const duration = a.services?.duration || (a as any).duration || 30;
       const appEnd = appStart + duration;
 
       return targetMin >= appStart && targetMin < appEnd;
@@ -87,31 +90,33 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       return { type: 'APPOINTMENT', appt: appts[0], count: appts.length, isStart };
     }
 
-    const member = team.find(t => t.name === memberName);
-    if (!member) return null;
-
-    // 3. Assenze Approvate (Vacanze/Ferie del singolo)
-    const isAbsent = (member.absences_json || []).some(abs => {
-      const start = new Date(abs.startDate).toISOString().split('T')[0];
-      const end = new Date(abs.endDate).toISOString().split('T')[0];
-      return dateStr >= start && dateStr <= end;
+    // 3. Assenze Approvate (Ferie/Congedi)
+    const activeAbsence = (member.absences_json || []).find(abs => {
+      const absStart = new Date(abs.startDate).toISOString().split('T')[0];
+      const absEnd = new Date(abs.endDate).toISOString().split('T')[0];
+      if (dateStr >= absStart && dateStr <= absEnd) {
+        if (abs.isFullDay) return true;
+        if (abs.startTime && abs.endTime) {
+          return hour >= abs.startTime && hour < abs.endTime;
+        }
+      }
+      return false;
     });
-    if (isAbsent) return { type: 'VACATION' };
+    if (activeAbsence) return { type: 'VACATION', label: activeAbsence.type };
 
-    // 4. Chiusure Settimanali del collaboratore
-    const d = new Date(`${dateStr}T12:00:00`);
-    if ((member.weekly_closures || []).includes(d.getDay())) return { type: 'CLOSURE' };
+    // 4. Chiusure Settimanali Ricorrenti
+    const dObj = new Date(`${dateStr}T12:00:00`);
+    if ((member.weekly_closures || []).includes(dObj.getDay())) return { type: 'CLOSURE' };
     
-    // 5. Date Uniche ferie non strutturate
-    if ((member.unavailable_dates || []).includes(dateStr)) return { type: 'VACATION' };
+    // 5. Date Indisponibilità singole
+    if ((member.unavailable_dates || []).includes(dateStr)) return { type: 'VACATION', label: 'Indisponibile' };
 
-    // 6. Pause
+    // 6. Pause e Orari non lavorativi
     if (member.break_start_time && member.break_end_time && hour >= member.break_start_time && hour < member.break_end_time) {
       return { type: 'BREAK' };
     }
 
-    // 7. Orari fuori servizio
-    if (hour < (member.work_start_time || '08:30') || hour >= (member.work_end_time || '19:00')) {
+    if (hour < (member.work_start_time || '08:30') || hour >= (member.work_end_time || '18:30')) {
       return { type: 'NON_WORKING' };
     }
 
@@ -127,7 +132,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           position: relative;
         }
         .salon-closure-pattern::after {
-          content: 'CHIUSO';
+          content: 'ATELIER CHIUSO';
           position: absolute;
           inset: 0;
           display: flex;
@@ -139,7 +144,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           letter-spacing: 0.1em;
           opacity: 0.6;
         }
-        .vacation-pattern { background-image: repeating-linear-gradient(135deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); opacity: 0.6; }
+        .vacation-pattern { 
+          background-color: #f3f4f6;
+          background-image: repeating-linear-gradient(135deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); 
+          opacity: 0.6; 
+        }
       `}</style>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
@@ -169,7 +178,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                 <div key={m.name} className="flex flex-col items-center gap-3 pb-6 border-b border-gray-50">
                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-14 h-14 rounded-[1.5rem] object-cover border-4 border-white shadow-sm" />
                    <h5 className="font-luxury font-bold text-sm text-gray-900">{m.name}</h5>
-                   <p className="text-[8px] text-gray-300 font-bold uppercase tracking-widest">{viewDate.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}</p>
+                   <p className="text-[8px] text-gray-300 font-bold uppercase tracking-widest">Artista</p>
                 </div>
               )) : weekDays.map(date => (
                 <div key={date} className="text-center pb-6 border-b border-gray-50">
@@ -184,40 +193,60 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                      <span className="text-[8px] font-bold text-gray-300 uppercase">{hour}</span>
                   </div>
                   {viewMode === 'daily' ? team.map(m => {
-                    const status = getSlotStatus(m.name, weekDays[0], hour);
-                    const isSalonClosure = salonClosures && salonClosures.includes(weekDays[0]);
+                    const dateStr = weekDays[0];
+                    const status = getSlotStatus(m.name, dateStr, hour);
+                    const isGlobalClosure = salonClosures && salonClosures.includes(dateStr);
+                    
                     return (
                       <div 
                         key={`${m.name}-${hour}`} 
                         onClick={() => {
                           if (status?.type === 'APPOINTMENT') onAppointmentClick?.(status.appt);
-                          else if (!isSalonClosure && status?.type !== 'VACATION' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, weekDays[0], hour);
+                          else if (!isGlobalClosure && status?.type !== 'VACATION' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, dateStr, hour);
                         }}
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-md scale-[0.98]' : 'hover:bg-amber-50/10'} ${isSalonClosure ? 'salon-closure-pattern cursor-not-allowed opacity-40' : ''}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${
+                          status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-md scale-[0.98]' : 'hover:bg-amber-50/10'
+                        } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-40' : ''}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
-                           <div className="text-[7px] font-bold uppercase truncate px-3">{status.appt.profiles?.full_name}</div>
+                           <div className="text-[7px] font-bold uppercase truncate px-3">{status.appt.profiles?.full_name || 'Ospite'}</div>
                          )}
-                         {status?.type === 'VACATION' && !isSalonClosure && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-2xl"><span className="text-[7px] font-bold text-gray-400 uppercase">Assente</span></div>}
-                         {status?.type === 'CLOSURE' && !isSalonClosure && <div className="w-full h-full bg-gray-100/30 rounded-2xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[9px] text-gray-300"></i></div>}
-                         {status?.type === 'BREAK' && !isSalonClosure && <div className="w-full h-full bg-amber-50/20 rounded-2xl flex items-center justify-center"><i className="fas fa-coffee text-[10px] text-amber-200"></i></div>}
+                         {status?.type === 'VACATION' && !isGlobalClosure && (
+                           <div className="w-full h-full vacation-pattern flex flex-col items-center justify-center rounded-2xl">
+                             <span className="text-[7px] font-bold text-gray-400 uppercase">{status.label || 'Assente'}</span>
+                           </div>
+                         )}
+                         {status?.type === 'CLOSURE' && !isGlobalClosure && (
+                           <div className="w-full h-full bg-gray-50 rounded-2xl flex items-center justify-center opacity-50">
+                             <i className="fas fa-lock text-[9px] text-gray-300"></i>
+                           </div>
+                         )}
+                         {status?.type === 'BREAK' && !isGlobalClosure && (
+                           <div className="w-full h-full bg-amber-50/10 rounded-2xl flex items-center justify-center">
+                             <i className="fas fa-coffee text-[10px] text-amber-200"></i>
+                           </div>
+                         )}
                       </div>
                     );
                   }) : weekDays.map(date => {
+                    const isGlobalClosure = salonClosures && salonClosures.includes(date);
                     const apptsAtHour = appointments.filter(a => {
                        const d = new Date(a.date).toISOString().split('T')[0];
                        const h = new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
                        return d === date && h === hour && a.status !== 'cancelled';
                     });
-                    const isSalonClosure = salonClosures && salonClosures.includes(date);
 
                     return (
                       <div 
                         key={`${date}-${hour}`} 
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isSalonClosure ? 'salon-closure-pattern opacity-40' : 'hover:bg-amber-50/10'}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isGlobalClosure ? 'salon-closure-pattern opacity-40' : 'hover:bg-amber-50/10'}`}
                       >
-                         {!isSalonClosure && apptsAtHour.map(a => (
-                           <button key={a.id} onClick={() => onAppointmentClick?.(a)} className="w-3.5 h-3.5 rounded-full bg-black border-2 border-white shadow-sm hover:scale-125 transition-transform" />
+                         {!isGlobalClosure && apptsAtHour.map(a => (
+                           <button 
+                             key={a.id} 
+                             onClick={() => onAppointmentClick?.(a)} 
+                             className="w-3 h-3 rounded-full bg-black border-2 border-white shadow-sm hover:scale-125 transition-transform" 
+                           />
                          ))}
                       </div>
                     );
