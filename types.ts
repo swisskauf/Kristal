@@ -10,9 +10,47 @@ export type AbsenceType =
   | 'training' 
   | 'bereavement' 
   | 'unpaid' 
+  | 'overtime_recovery'
   | 'overtime'
   | 'availability_change'
   | 'permit';
+
+export interface AbsenceEntry {
+  id: string;
+  startDate: string;
+  endDate: string;
+  startTime?: string;
+  endTime?: string;
+  isFullDay: boolean;
+  type: AbsenceType;
+  hoursCount: number; // Ore effettive calcolate per l'assenza o straordinario
+  notes?: string;
+}
+
+export interface TeamMember {
+  name: string;
+  email: string; 
+  role: string;
+  bio?: string;
+  avatar?: string;
+  profile_id?: string; 
+  absences_json?: AbsenceEntry[];
+  unavailable_dates?: string[];
+  weekly_closures?: number[];
+  
+  // Parametri HR Strategici Professionali
+  total_vacation_days_per_year: number; // Diritto annuale (es. 25)
+  hours_per_day_contract: number;       // Ore medie giornaliere (es. 8.5)
+  overtime_balance_hours: number;       // Saldo ore straordinarie accumulato
+  
+  work_start_time?: string; 
+  work_end_time?: string;
+  break_start_time?: string;
+  break_end_time?: string;
+  address?: string;
+  avs_number?: string;
+  iban?: string;
+}
 
 export interface SalonClosure {
   date: string;
@@ -37,28 +75,7 @@ export interface LeaveRequest {
   is_full_day: boolean;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
-  admin_notes?: string;
   created_at: string;
-}
-
-export interface AbsenceEntry {
-  id: string;
-  startDate: string;
-  endDate: string;
-  startTime?: string;
-  endTime?: string;
-  isFullDay: boolean;
-  type: AbsenceType;
-  hoursCount?: number; // Ore effettive per assenze parziali o calcolo straordinari
-  notes?: string;
-}
-
-export interface TechnicalSheet {
-  id: string;
-  date: string;
-  category: string;
-  content: string;
-  author: string;
 }
 
 export interface Service {
@@ -78,33 +95,8 @@ export interface Appointment {
   date: string;
   status: 'confirmed' | 'pending' | 'cancelled' | 'noshow';
   services?: { name: string; price: number; duration: number; category: string };
-  profiles?: { full_name: string; phone: string; email?: string; treatment_history?: any[] };
+  profiles?: { full_name: string; phone: string; email?: string };
   created_at: string;
-}
-
-export interface TeamMember {
-  name: string;
-  email: string; 
-  role: string;
-  bio?: string;
-  avatar?: string;
-  profile_id?: string; 
-  absences_json?: AbsenceEntry[];
-  unavailable_dates?: string[];
-  weekly_closures?: number[];
-  
-  // HR & Time Tracking
-  total_vacation_days?: number;   // Diritto annuale (es. 25)
-  overtime_balance_hours?: number; // Ore di straordinario accumulate
-  hours_per_day_contract?: number; // Ore contrattuali per giorno (es. 8)
-  
-  work_start_time?: string; 
-  work_end_time?: string;
-  break_start_time?: string;
-  break_end_time?: string;
-  address?: string;
-  avs_number?: string;
-  iban?: string;
 }
 
 export interface User {
@@ -114,13 +106,4 @@ export interface User {
   fullName: string;
   role: 'client' | 'admin' | 'collaborator';
   avatar?: string;
-  gender?: 'M' | 'F' | 'Other';
-  dob?: string;
-  technical_sheets?: TechnicalSheet[];
-  treatment_history?: { service: string; date?: string }[];
-}
-
-export interface ChatMessage {
-  role: 'user' | 'model';
-  content: string;
 }
