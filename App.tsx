@@ -213,12 +213,27 @@ const App: React.FC = () => {
 
   const handleSaveClosure = async () => {
     if (newClosure.date) {
-      const name = newClosure.name || 'Chiusura Straordinaria';
-      const updatedClosures = [...salonClosures, { date: newClosure.date, name }];
-      await db.salonClosures.save(updatedClosures);
-      setNewClosure({ date: '', name: '' });
+      try {
+        const name = newClosure.name || 'Chiusura Straordinaria';
+        const updatedClosures = [...salonClosures, { date: newClosure.date, name }];
+        await db.salonClosures.save(updatedClosures);
+        setNewClosure({ date: '', name: '' });
+        await refreshData();
+        showToast("Festività registrata e agenda aggiornata.");
+      } catch (err) {
+        showToast("Errore nel salvataggio della festività.", "error");
+      }
+    }
+  };
+
+  const handleDeleteClosure = async (date: string) => {
+    try {
+      const updated = salonClosures.filter(cl => cl.date !== date);
+      await db.salonClosures.save(updated);
       await refreshData();
-      showToast("Festività registrata e agenda aggiornata.");
+      showToast("Festività rimossa.");
+    } catch (err) {
+      showToast("Errore nella rimozione.", "error");
     }
   };
 
@@ -439,14 +454,14 @@ const App: React.FC = () => {
                               type="date" 
                               value={newClosure.date} 
                               onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })}
-                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500" 
+                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all" 
                             />
                             <input 
                               type="text" 
                               placeholder="Nome Festività" 
                               value={newClosure.name}
                               onChange={(e) => setNewClosure({ ...newClosure, name: e.target.value })}
-                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500" 
+                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all" 
                             />
                          </div>
                          <button 
@@ -458,16 +473,12 @@ const App: React.FC = () => {
                       </div>
                       <div className="grid gap-3 max-h-[300px] overflow-y-auto scrollbar-hide pr-2">
                          {salonClosures.map(c => (
-                           <div key={c.date} className="p-5 bg-gray-50 rounded-3xl flex justify-between items-center group">
+                           <div key={c.date} className="p-5 bg-gray-50 rounded-3xl flex justify-between items-center group animate-in slide-in-from-left-4">
                               <div>
                                  <p className="text-[10px] font-bold text-gray-900 uppercase">{c.name}</p>
                                  <p className="text-[8px] font-bold text-gray-400 uppercase">{new Date(c.date).toLocaleDateString('it-IT', {day:'numeric', month:'long'})}</p>
                               </div>
-                              <button onClick={async () => {
-                                 const updated = salonClosures.filter(cl => cl.date !== c.date);
-                                 await db.salonClosures.save(updated);
-                                 refreshData();
-                              }} className="text-gray-300 hover:text-red-500 transition-colors p-3"><i className="fas fa-trash text-sm"></i></button>
+                              <button onClick={() => handleDeleteClosure(c.date)} className="text-gray-300 hover:text-red-500 transition-colors p-3"><i className="fas fa-trash text-sm"></i></button>
                            </div>
                          ))}
                          {salonClosures.length === 0 && (
@@ -527,7 +538,7 @@ const App: React.FC = () => {
 
         {activeTab === 'team_schedule' && (isAdmin || isCollaborator) && (
           <div className="space-y-12 animate-in fade-in">
-            <h2 className="text-4xl font-luxury font-bold">Agenda Atelier</h2>
+            <h2 className="text-4xl font-luxury font-bold text-gray-900">Agenda Atelier</h2>
             <TeamPlanning 
               team={team} appointments={appointments} onToggleVacation={() => {}} 
               onSlotClick={(memberName, date, hour) => { setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() }); setIsFormOpen(true); }} 
