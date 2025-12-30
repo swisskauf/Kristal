@@ -5,7 +5,7 @@ import Auth from './components/Auth';
 import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
 import TeamManagement from './components/TeamManagement';
-import HRManagement from './components/HRManagement'; // Nuovo import
+import HRManagement from './components/HRManagement'; 
 import NewStaffForm from './components/NewStaffForm';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
@@ -178,6 +178,21 @@ const App: React.FC = () => {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
+        
+        // Notifica Email per Cancellazione
+        if (status === 'cancelled' && settings.emailNotificationsEnabled) {
+          const clientProfile = profiles.find(p => p.id === appt.client_id);
+          const serviceInfo = services.find(s => s.id === appt.service_id);
+          if (clientProfile) {
+            sendLuxuryEmailNotification({
+              type: 'cancellation',
+              appointment: appt,
+              client: clientProfile,
+              service: serviceInfo
+            });
+          }
+        }
+
         showToast(`Rituale aggiornato.`);
         refreshData(true);
         setSelectedAppointmentDetail(null);
@@ -220,13 +235,33 @@ const App: React.FC = () => {
 
   const handleSaveAppointment = async (a: Partial<Appointment>) => {
     try {
+      const isEdit = !!a.id;
       const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id) : user?.id;
       const savedApptData = { ...a, client_id };
-      await db.appointments.upsert(savedApptData as any); 
+      
+      const result = await db.appointments.upsert(savedApptData as any); 
+
+      // Logica Notifica Email Automatica
+      if (settings.emailNotificationsEnabled) {
+        const clientProfile = profiles.find(p => p.id === client_id);
+        const serviceInfo = services.find(s => s.id === a.service_id);
+        const oldData = isEdit ? appointments.find(ex => ex.id === a.id) : null;
+        
+        if (clientProfile) {
+          sendLuxuryEmailNotification({
+            type: isEdit ? 'update' : 'confirmation',
+            appointment: result || savedApptData as any,
+            client: clientProfile,
+            service: serviceInfo,
+            oldData: oldData
+          });
+        }
+      }
+
       setIsFormOpen(false); 
       setFormInitialData(null); 
       await refreshData(true); 
-      showToast("Rituale programmato con successo.");
+      showToast(isEdit ? "Rituale aggiornato e notificato." : "Rituale programmato e notificato.");
     } catch (err) {
       showToast("Errore nel salvataggio.", "error");
     }
@@ -270,14 +305,13 @@ const App: React.FC = () => {
     }
   };
 
-  // Fixed: Updated handleSaveStaff to close the team editor modal too.
   const handleSaveStaff = async (member: TeamMember) => {
     try {
       await db.team.upsert(member);
       setIsNewStaffModalOpen(false);
       setIsTeamEditorOpen(false);
       await refreshData(true);
-      showToast("Dati staff salvati correttamente.");
+      showToast("Staff salvato con successo.");
     } catch (err) {
       showToast("Errore salvataggio.", "error");
     }
@@ -306,7 +340,6 @@ const App: React.FC = () => {
             notes: req.notes
           };
 
-          // Logica HR Professionale: Aggiornamento Bilancio Straordinari se tipo è 'overtime' o 'overtime_recovery'
           let updatedOvertime = member.overtime_balance_hours || 0;
           if (req.type === 'overtime' || req.type === 'overtime_recovery') {
              updatedOvertime -= hoursUsed;
@@ -702,7 +735,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsTeamEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             {/* Fixed: Updated onSave to use handleSaveStaff which is defined and handles both staff modals. */}
              <TeamManagement member={selectedTeamMember} onSave={handleSaveStaff} onClose={() => setIsTeamEditorOpen(false)} />
           </div>
         </div>
