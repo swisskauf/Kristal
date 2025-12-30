@@ -81,7 +81,9 @@ export const supabaseMock = {
       const data = safeParse(STORAGE_KEY_TEAM, INITIAL_TEAM);
       return data.map((m: any) => ({
         ...m,
-        weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : []
+        weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : [],
+        unavailable_dates: Array.isArray(m.unavailable_dates) ? m.unavailable_dates : [],
+        absences_json: Array.isArray(m.absences_json) ? m.absences_json : []
       }));
     },
     upsert: (member: TeamMember) => {
@@ -90,7 +92,8 @@ export const supabaseMock = {
       const memberToSave = {
         ...member,
         weekly_closures: Array.isArray(member.weekly_closures) ? member.weekly_closures.map(Number) : [],
-        unavailable_dates: Array.isArray(member.unavailable_dates) ? member.unavailable_dates : []
+        unavailable_dates: Array.isArray(member.unavailable_dates) ? member.unavailable_dates : [],
+        absences_json: Array.isArray(member.absences_json) ? member.absences_json : []
       };
       if (idx > -1) current[idx] = { ...current[idx], ...memberToSave };
       else current.push(memberToSave);
