@@ -104,7 +104,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       </aside>
 
       {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full shadow-sm">
+      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full">
         <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
@@ -123,12 +123,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       </main>
 
       {/* BOTTOM NAV MOBILE */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-2 py-3 flex justify-around items-center z-[500] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        {navItems.slice(0, 5).map((item) => (
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-2 py-3 flex justify-around items-center z-[500] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] overflow-x-auto scrollbar-hide">
+        {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`flex flex-col items-center space-y-1 transition-all flex-1 ${
+            className={`flex flex-col items-center space-y-1 transition-all flex-shrink-0 min-w-[70px] ${
               activeTab === item.id ? 'text-black scale-110' : 'text-gray-300'
             }`}
           >
@@ -136,6 +136,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
             <span className="text-[6px] font-bold uppercase tracking-widest">{item.label}</span>
           </button>
         ))}
+        {!isGuest && (
+          <button onClick={onLogout} className="flex flex-col items-center space-y-1 text-gray-300 hover:text-red-500 flex-shrink-0 min-w-[70px]">
+            <i className="fas fa-sign-out-alt text-lg"></i>
+            <span className="text-[6px] font-bold uppercase tracking-widest">Esci</span>
+          </button>
+        )}
       </nav>
     </div>
   );
