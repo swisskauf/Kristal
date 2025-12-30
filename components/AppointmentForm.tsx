@@ -83,7 +83,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const getSlotValidation = (timeStr: string) => {
     if (!selectedMember || !selectedDate || !selectedService) return { valid: false, reason: 'Dati incompleti' };
 
-    // 0. Controllo Chiusura Atelier
+    // 0. Controllo Chiusura Atelier (Priorità Massima)
     if (salonClosures.includes(selectedDate)) {
       return { valid: false, reason: 'Atelier Chiuso (Festività)' };
     }
@@ -148,11 +148,16 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!selectedMember) return [];
     
     const slots: { time: string; valid: boolean; reason?: string }[] = [];
+    const isGlobalClosure = salonClosures.includes(selectedDate);
+
+    // Se il salone è chiuso globalmente, non generiamo slot validi
     for (let h = 7; h <= 20; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
         const validation = getSlotValidation(t);
         
+        // Se l'admin inserisce manualmente, mostriamo tutto ma con avviso
+        // Se è un ospite, se il salone è chiuso non mostriamo nulla come valido
         if (isAdminOrStaff || validation.valid) {
           slots.push({ time: t, ...validation });
         }
@@ -173,7 +178,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         const confirmMsg = `Attenzione: l'orario scelto (${selectedTime}) presenta delle criticità:\n"${validation.reason}"\n\nDesideri procedere comunque con l'inserimento manuale forzato?`;
         if (!window.confirm(confirmMsg)) return;
       } else {
-        alert(`Spiacenti, l'orario selezionate non è valido: ${validation.reason}`);
+        alert(`Spiacenti, l'orario selezionato non è valido: ${validation.reason}`);
         return;
       }
     }
@@ -277,16 +282,16 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                     type="button"
                     onClick={() => !isClosed && setSelectedDate(day)}
                     disabled={isClosed}
-                    title={isGlobalClosure ? 'Festività - Salone Chiuso' : ''}
+                    title={isGlobalClosure ? 'Festività - Salone Chiuso' : isWeeklyClosure ? 'Giorno di chiusura artista' : ''}
                     className={`flex-shrink-0 w-16 h-20 rounded-[1.5rem] border-2 flex flex-col items-center justify-center transition-all duration-300 ${
                       isClosed
-                        ? 'opacity-20 bg-gray-100 border-transparent cursor-not-allowed'
+                        ? 'opacity-30 bg-red-50 border-red-100 cursor-not-allowed text-red-300'
                         : isSelected
                         ? 'border-black bg-black text-white shadow-lg'
                         : 'border-gray-50 bg-white hover:border-amber-200'
                     }`}
                   >
-                    <span className={`text-[7px] font-bold uppercase mb-1 ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>
+                    <span className={`text-[7px] font-bold uppercase mb-1 ${isSelected ? 'text-amber-500' : isClosed ? 'text-red-400' : 'text-gray-400'}`}>
                       {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                     </span>
                     <span className="text-xl font-luxury font-bold">{d.getDate()}</span>
@@ -299,7 +304,9 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           <div className="space-y-4">
             <div className="flex justify-between items-center ml-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Orario</label>
-              <p className="text-[8px] font-bold text-gray-300 uppercase italic">Durata prevista: {selectedService?.duration} min</p>
+              {salonClosures.includes(selectedDate) && (
+                <p className="text-[9px] font-bold text-red-600 uppercase animate-pulse">Salone Chiuso per Festività</p>
+              )}
             </div>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
               {availableSlots.length > 0 ? (
@@ -325,7 +332,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 ))
               ) : (
                 <div className="col-span-full py-8 bg-gray-50 rounded-2xl text-center border border-dashed border-gray-200">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità.</p>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Nessuna disponibilità per questa data.</p>
                 </div>
               )}
             </div>
