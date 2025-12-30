@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TeamMember, AbsenceEntry, AbsenceType } from '../types';
 
 interface HRManagementProps {
@@ -38,6 +38,17 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
     };
   };
 
+  const upcomingAbsences = useMemo(() => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    return team
+      .flatMap(m => (m.absences_json || []).map(a => ({...a, memberName: m.name, memberAvatar: m.avatar})))
+      .filter(a => new Date(a.startDate) >= today)
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+      .slice(0, 5); // Show only next 5
+  }, [team]);
+
   return (
     <div className="space-y-12 animate-in fade-in duration-700">
       <header className="flex justify-between items-end border-b border-gray-100 pb-8">
@@ -59,6 +70,28 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
            </div>
         </div>
       </header>
+
+      {/* Sezione Prossime Assenze */}
+      {upcomingAbsences.length > 0 && (
+        <div className="bg-amber-50/30 p-8 rounded-[3rem] border border-amber-100/50 space-y-6">
+           <div className="flex items-center gap-3">
+              <i className="fas fa-calendar-alt text-amber-600"></i>
+              <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-900">Prossime Assenze Programmate</h4>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {upcomingAbsences.map(abs => (
+                <div key={abs.id} className="bg-white p-5 rounded-[2rem] border border-gray-50 shadow-sm flex items-center gap-4">
+                   <img src={abs.memberAvatar || `https://ui-avatars.com/api/?name=${abs.memberName}`} className="w-10 h-10 rounded-xl object-cover" />
+                   <div>
+                      <p className="text-[10px] font-bold">{abs.memberName}</p>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">{new Date(abs.startDate).toLocaleDateString('it-IT', {day:'numeric', month:'short'})}</p>
+                      <span className="text-[7px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md mt-1 inline-block">{abs.type}</span>
+                   </div>
+                </div>
+              ))}
+           </div>
+        </div>
+      )}
 
       <div className="grid gap-8">
         {team.map((member, idx) => {
