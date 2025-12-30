@@ -261,7 +261,6 @@ const App: React.FC = () => {
     if (!newClosure.date) return;
     
     try {
-      // Controllo duplicati locale
       if (salonClosures.some(c => c.date === newClosure.date)) {
         showToast("Questa data è già registrata.", "info");
         return;
