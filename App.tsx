@@ -261,9 +261,9 @@ const App: React.FC = () => {
     if (!newClosure.date) return;
     
     try {
-      // Controllo duplicati locale per evitare chiamate inutili
+      // Controllo duplicati locale
       if (salonClosures.some(c => c.date === newClosure.date)) {
-        showToast("Questa data è già registrata come festività.", "info");
+        showToast("Questa data è già registrata.", "info");
         return;
       }
       
@@ -281,15 +281,15 @@ const App: React.FC = () => {
     try {
       await db.salonClosures.delete(date);
       await refreshData();
-      showToast("Giorno festivo rimosso dall'agenda.");
+      showToast("Giorno festivo rimosso correttamente.");
     } catch (err) {
-      showToast("Errore nella rimozione della festività.", "error");
+      showToast("Errore nella rimozione.", "error");
     }
   };
 
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
-    showToast("Impostazioni salvate con successo.");
+    showToast("Impostazioni salvate.");
   };
 
   const handleSocialSync = async () => {
