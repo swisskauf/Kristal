@@ -17,6 +17,7 @@ import NewGuestForm from './components/NewGuestForm';
 import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
+import { sendLuxuryEmailNotification } from './services/emailService';
 
 const SALON_PHONE = '+41 91 859 37 77';
 
@@ -171,8 +172,7 @@ const App: React.FC = () => {
 
   const categories = useMemo(() => {
     if (!services || services.length === 0) return [];
-    const cats = services.map(s => s.category);
-    return Array.from(new Set(cats));
+    return Array.from(new Set(services.map(s => s.category)));
   }, [services]);
 
   const groupedGuestAppointments = useMemo(() => {
@@ -192,11 +192,57 @@ const App: React.FC = () => {
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
         showToast(`Rituale aggiornato.`);
+        
+        if (settings.emailNotificationsEnabled && status === 'cancelled') {
+          const client = profiles.find(p => p.id === appt.client_id);
+          const service = services.find(s => s.id === appt.service_id);
+          sendLuxuryEmailNotification({ type: 'cancellation', appointment: appt, client, service });
+        }
+        
         refreshData();
         setSelectedAppointmentDetail(null);
       }
     } catch (e) {
       showToast("Errore durante l'aggiornamento.", "error");
+    }
+  };
+
+  const handleSaveAppointment = async (a: Partial<Appointment>) => {
+    try {
+      const isNew = !a.id;
+      const oldAppt = isNew ? null : appointments.find(app => app.id === a.id);
+      
+      const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
+      const savedApptData = { ...a, client_id };
+      await db.appointments.upsert(savedApptData as any); 
+      
+      setIsFormOpen(false); 
+      setFormInitialData(null); 
+      await refreshData(); 
+      
+      showToast(isNew ? "Rituale programmato con successo." : "Rituale aggiornato.");
+
+      // Logica Notifiche Email
+      if (settings.emailNotificationsEnabled) {
+        const client = profiles.find(p => p.id === client_id);
+        const service = services.find(s => s.id === a.service_id);
+        const fullAppt = { ...a, client_id } as Appointment;
+
+        if (isNew) {
+          showToast("Invio email di conferma...", "info");
+          await sendLuxuryEmailNotification({ type: 'confirmation', appointment: fullAppt, client, service });
+        } else if (oldAppt && (oldAppt.date !== a.date || oldAppt.team_member_name !== a.team_member_name)) {
+          showToast("Invio email aggiornamento...", "info");
+          await sendLuxuryEmailNotification({ type: 'update', appointment: fullAppt, client, service, oldData: oldAppt });
+        }
+      }
+
+      if (isNew && confirm("Desideri scaricare l'appuntamento nel calendario del telefono?")) {
+        const fullAppt = { ...a, services: services.find(s => s.id === a.service_id) };
+        downloadICS(fullAppt);
+      }
+    } catch (err) {
+      showToast("Errore nel salvataggio del rituale.", "error");
     }
   };
 
@@ -255,8 +301,8 @@ const App: React.FC = () => {
     <>
       {toast && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[3000] animate-in slide-in-from-top-4 duration-500 w-full max-w-md px-4">
-          <div className="px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-md bg-black/90 text-white border-amber-500/30">
-            <i className="fas fa-check-circle text-amber-500"></i>
+          <div className={`px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-md ${toast.type === 'error' ? 'bg-red-900/90 border-red-500/30' : 'bg-black/90 border-amber-500/30'} text-white`}>
+            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'} ${toast.type === 'error' ? 'text-red-400' : 'text-amber-500'}`}></i>
             <p className="text-[11px] font-bold uppercase tracking-widest">{toast.message}</p>
           </div>
         </div>
@@ -660,16 +706,7 @@ const App: React.FC = () => {
              <button onClick={() => { setIsFormOpen(false); setFormInitialData(null); }} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
              <AppointmentForm 
                services={services} team={team} existingAppointments={appointments} 
-               onSave={async (a) => { 
-                 const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
-                 await db.appointments.upsert({ ...a, client_id }); 
-                 setIsFormOpen(false); setFormInitialData(null); await refreshData(); 
-                 showToast("Rituale programmato con successo.");
-                 if (confirm("Desideri scaricare l'appuntamento nel calendario del telefono?")) {
-                    const fullAppt = { ...a, services: services.find(s => s.id === a.service_id) };
-                    downloadICS(fullAppt);
-                 }
-               }} 
+               onSave={handleSaveAppointment} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
                salonClosures={salonClosures.map(c => c.date)}
