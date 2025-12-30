@@ -18,6 +18,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
   const [contractHours, setContractHours] = useState(member.hours_per_day_contract || 8.5);
   const [overtimeBalance, setOvertimeBalance] = useState(member.overtime_balance_hours || 0);
   
+  // Working Hours & Breaks
+  const [workStart, setWorkStart] = useState(member.work_start_time || '08:30');
+  const [workEnd, setWorkEnd] = useState(member.work_end_time || '18:30');
+  const [breakStart, setBreakStart] = useState(member.break_start_time || '13:00');
+  const [breakEnd, setBreakEnd] = useState(member.break_end_time || '14:00');
+  
   // Extra fields for info
   const [address, setAddress] = useState(member.address || '');
   const [avs, setAvs] = useState(member.avs_number || '');
@@ -42,6 +48,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
       address,
       avs_number: avs,
       iban,
+      work_start_time: workStart,
+      work_end_time: workEnd,
+      break_start_time: breakStart,
+      break_end_time: breakEnd,
       total_vacation_days_per_year: vacationDays,
       hours_per_day_contract: contractHours,
       overtime_balance_hours: overtimeBalance,
@@ -61,7 +71,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
       <nav className="flex gap-10 border-b border-gray-100 mb-12 overflow-x-auto scrollbar-hide">
         {[
           { id: 'profile', label: 'Anagrafica', icon: 'fa-id-card' },
-          { id: 'hr', label: 'Contratto & Ferie', icon: 'fa-file-signature' },
+          { id: 'hr', label: 'Contratto & Orari', icon: 'fa-file-signature' },
           { id: 'bank', label: 'Banca Ore', icon: 'fa-history' }
         ].map(tab => (
           <button 
@@ -107,27 +117,42 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
 
         {activeTab === 'hr' && (
           <div className="space-y-10 animate-in slide-in-from-right-4">
+            {/* Sezione Orari e Pause */}
             <div className="bg-gray-50 p-10 rounded-[3.5rem] border border-gray-100 space-y-8">
-              <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600">Parametri Contrattuali Annuali</h4>
+              <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600">Disponibilità & Turni</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Diritto Ferie (Giorni/Anno)</label>
-                    <input type="number" value={vacationDays} onChange={e => setVacationDays(Number(e.target.value))} className="w-full p-5 rounded-3xl bg-white border-none font-bold text-lg shadow-sm" />
-                    <p className="text-[9px] text-gray-400 italic px-2">Il valore standard svizzero è di 20-25 giorni.</p>
+                 <div className="space-y-4">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Orario di Lavoro</label>
+                    <div className="flex items-center gap-3">
+                       <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)} className="flex-1 p-4 rounded-2xl bg-white border-none text-xs font-bold shadow-sm" />
+                       <span className="text-gray-300 font-bold">al</span>
+                       <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)} className="flex-1 p-4 rounded-2xl bg-white border-none text-xs font-bold shadow-sm" />
+                    </div>
                  </div>
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Ore Contrattuali Giornaliere</label>
-                    <input type="number" step="0.5" value={contractHours} onChange={e => setContractHours(Number(e.target.value))} className="w-full p-5 rounded-3xl bg-white border-none font-bold text-lg shadow-sm" />
-                    <p className="text-[9px] text-gray-400 italic px-2">Usato per convertire ore extra in giorni.</p>
+                 <div className="space-y-4">
+                    <label className="text-[10px] font-bold text-amber-600 uppercase ml-2 tracking-widest">Pausa Pranzo (Sincronizzata)</label>
+                    <div className="flex items-center gap-3">
+                       <input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)} className="flex-1 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-xs font-bold shadow-sm" />
+                       <span className="text-amber-200 font-bold">al</span>
+                       <input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)} className="flex-1 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-xs font-bold shadow-sm" />
+                    </div>
+                    <p className="text-[9px] text-amber-500 italic px-2">L'agenda bloccherà automaticamente questi slot.</p>
                  </div>
               </div>
             </div>
-            <div className="p-8 bg-black text-white rounded-[3rem] shadow-xl flex items-center gap-8">
-               <div className="w-16 h-16 bg-amber-600 rounded-2xl flex items-center justify-center shadow-lg"><i className="fas fa-shield-alt text-2xl"></i></div>
-               <div>
-                  <h5 className="font-luxury font-bold text-xl">Privacy dei Dati</h5>
-                  <p className="text-[10px] text-gray-400 leading-relaxed uppercase tracking-widest">Questi parametri sono visibili solo alla direzione e influenzano i calcoli della dashboard HR.</p>
-               </div>
+
+            <div className="bg-white p-10 rounded-[3.5rem] border border-gray-50 shadow-sm space-y-8">
+              <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900">Parametri Contrattuali Annuali</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Diritto Ferie (Giorni/Anno)</label>
+                    <input type="number" value={vacationDays} onChange={e => setVacationDays(Number(e.target.value))} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner" />
+                 </div>
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Ore Contrattuali Giornaliere</label>
+                    <input type="number" step="0.5" value={contractHours} onChange={e => setContractHours(Number(e.target.value))} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner" />
+                 </div>
+              </div>
             </div>
           </div>
         )}
