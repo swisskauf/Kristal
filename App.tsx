@@ -5,6 +5,7 @@ import Auth from './components/Auth';
 import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
 import TeamManagement from './components/TeamManagement';
+import HRManagement from './components/HRManagement'; // Nuovo import
 import NewStaffForm from './components/NewStaffForm';
 import TeamPlanning from './components/TeamPlanning';
 import RequestManagement from './components/RequestManagement';
@@ -18,8 +19,6 @@ import { supabase, db } from './services/supabase';
 import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure, AboutUsContent, AbsenceEntry } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 import { sendLuxuryEmailNotification } from './services/emailService';
-
-const SALON_PHONE = '+41 91 859 37 77';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -83,7 +82,14 @@ const App: React.FC = () => {
       const existingTeam = await db.team.getAll();
       if (!existingTeam || existingTeam.length === 0) {
         for (const m of DEFAULT_TEAM) {
-          await db.team.upsert({ ...m, email: m.email || `${m.name.toLowerCase()}@kristalatelier.ch` } as any);
+          await db.team.upsert({ 
+            ...m, 
+            email: m.email || `${m.name.toLowerCase()}@kristalatelier.ch`,
+            total_vacation_days_per_year: 25,
+            hours_per_day_contract: 8.5,
+            overtime_balance_hours: 0,
+            absences_json: []
+          } as any);
         }
       }
     } catch (e) {
@@ -264,12 +270,14 @@ const App: React.FC = () => {
     }
   };
 
+  // Fixed: Updated handleSaveStaff to close the team editor modal too.
   const handleSaveStaff = async (member: TeamMember) => {
     try {
       await db.team.upsert(member);
       setIsNewStaffModalOpen(false);
+      setIsTeamEditorOpen(false);
       await refreshData(true);
-      showToast("Artista aggiunto.");
+      showToast("Dati staff salvati correttamente.");
     } catch (err) {
       showToast("Errore salvataggio.", "error");
     }
@@ -285,7 +293,8 @@ const App: React.FC = () => {
       if (action === 'approved') {
         const member = team.find(t => t.name === req.member_name);
         if (member) {
-          const hoursUsed = req.is_full_day ? (member.hours_per_day_contract || 8) : 4; // Mock 4h per mezza giornata
+          const hoursPerDay = member.hours_per_day_contract || 8.5;
+          const hoursUsed = req.is_full_day ? hoursPerDay : 4; 
           
           const newAbsence: AbsenceEntry = { 
             id: Math.random().toString(36).substr(2, 9), 
@@ -293,12 +302,13 @@ const App: React.FC = () => {
             endDate: req.end_date, 
             type: req.type, 
             isFullDay: req.is_full_day,
-            hoursCount: hoursUsed
+            hoursCount: hoursUsed,
+            notes: req.notes
           };
 
-          // Aggiornamento Bilancio Straordinari se tipo è 'overtime'
+          // Logica HR Professionale: Aggiornamento Bilancio Straordinari se tipo è 'overtime' o 'overtime_recovery'
           let updatedOvertime = member.overtime_balance_hours || 0;
-          if (req.type === 'overtime') {
+          if (req.type === 'overtime' || req.type === 'overtime_recovery') {
              updatedOvertime -= hoursUsed;
           }
 
@@ -310,10 +320,10 @@ const App: React.FC = () => {
         }
       }
       
-      showToast(action === 'approved' ? "Richiesta approvata e registrata." : "Richiesta respinta.");
+      showToast(action === 'approved' ? "Richiesta approvata e registro HR aggiornato." : "Richiesta respinta.");
       refreshData(true);
     } catch (e) {
-      showToast("Errore durante l'elaborazione.", "error");
+      showToast("Errore durante l'elaborazione HR.", "error");
     }
   };
 
@@ -381,6 +391,13 @@ const App: React.FC = () => {
                 </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'team_management' && isAdmin && (
+           <HRManagement 
+             team={team} 
+             onEditMember={(m) => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} 
+           />
         )}
 
         {activeTab === 'about_us' && (
@@ -560,24 +577,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'team_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <header className="flex items-center justify-between">
-                <h2 className="text-5xl font-luxury font-bold text-gray-900">Il Tuo Team</h2>
-                <button onClick={() => setIsNewStaffModalOpen(true)} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
-             </header>
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
-                {team.map(m => (
-                   <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group text-center">
-                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white shadow-xl mx-auto mb-6" />
-                      <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
-                      <p className="text-[9px] text-amber-600 font-bold uppercase tracking-[0.3em] mt-1">{m.role}</p>
-                   </div>
-                ))}
-             </div>
-          </div>
-        )}
-
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="animate-in fade-in">
              <GuestManagement 
@@ -595,7 +594,7 @@ const App: React.FC = () => {
              <header className="flex items-center justify-between">
                <div>
                   <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
-                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">La vostra storia in Atelier</p>
+                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mt-2">La vostra storia in Atelier</p>
                </div>
                <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
              </header>
@@ -703,7 +702,8 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsTeamEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             <TeamManagement member={selectedTeamMember} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); setIsTeamEditorOpen(false); refreshData(true); showToast("Staff aggiornato."); }} onClose={() => setIsTeamEditorOpen(false)} />
+             {/* Fixed: Updated onSave to use handleSaveStaff which is defined and handles both staff modals. */}
+             <TeamManagement member={selectedTeamMember} onSave={handleSaveStaff} onClose={() => setIsTeamEditorOpen(false)} />
           </div>
         </div>
       )}
