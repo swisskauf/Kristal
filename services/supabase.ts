@@ -144,6 +144,14 @@ export const db = {
   },
   salonClosures: {
     getAll: async () => useMock ? supabaseMock.salonClosures.getAll() : (await client.from('salon_closures').select('*')).data || [],
-    save: async (closures: SalonClosure[]) => useMock ? supabaseMock.salonClosures.save(closures) : (await client.from('salon_closures').upsert(closures)).data
+    save: async (closures: SalonClosure[]) => {
+      if (useMock) return supabaseMock.salonClosures.save(closures);
+      // Sincronizzazione atomica: svuota e ricarica per garantire coerenza del set
+      await client.from('salon_closures').delete().neq('date', '1900-01-01'); 
+      if (closures.length > 0) {
+        return (await client.from('salon_closures').insert(closures)).data;
+      }
+      return [];
+    }
   }
 };
