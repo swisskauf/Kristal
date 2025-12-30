@@ -81,7 +81,7 @@ export const supabaseMock = {
       const data = safeParse(STORAGE_KEY_TEAM, INITIAL_TEAM);
       return data.map((m: any) => ({
         ...m,
-        total_vacation_days: m.total_vacation_days ?? 25,
+        total_vacation_days_per_year: m.total_vacation_days_per_year ?? 25,
         overtime_balance_hours: m.overtime_balance_hours ?? 0,
         hours_per_day_contract: m.hours_per_day_contract ?? 8,
         weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : [0], // Domenica default
@@ -94,7 +94,7 @@ export const supabaseMock = {
       const idx = current.findIndex(m => m.name === member.name);
       const memberToSave = {
         ...member,
-        total_vacation_days: member.total_vacation_days ?? 25,
+        total_vacation_days_per_year: member.total_vacation_days_per_year ?? 25,
         overtime_balance_hours: member.overtime_balance_hours ?? 0,
         hours_per_day_contract: member.hours_per_day_contract ?? 8,
         weekly_closures: Array.isArray(member.weekly_closures) ? member.weekly_closures.map(Number) : [0],
