@@ -16,6 +16,7 @@ interface AppointmentFormProps {
     email?: string | null;
     phone?: string | null;
   }>;
+  salonClosures?: string[];
 }
 
 const AppointmentForm: React.FC<AppointmentFormProps> = ({
@@ -27,6 +28,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   existingAppointments,
   isAdminOrStaff = false,
   profiles = [],
+  salonClosures = []
 }) => {
   const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
@@ -81,6 +83,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const getSlotValidation = (timeStr: string) => {
     if (!selectedMember || !selectedDate || !selectedService) return { valid: false, reason: 'Dati incompleti' };
 
+    // 0. Controllo Chiusura Atelier
+    if (salonClosures.includes(selectedDate)) {
+      return { valid: false, reason: 'Atelier Chiuso (Festività)' };
+    }
+
     const [h, m] = timeStr.split(':').map(Number);
     const slotStart = h * 60 + m;
     const duration = selectedService.duration || 30;
@@ -110,7 +117,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
       const bStart = bsH * 60 + bsM;
       const bEnd = beH * 60 + beM;
-      // Se l'appuntamento si sovrappone in qualunque modo alla pausa
       if (slotStart < bEnd && slotEnd > bStart) {
         return { valid: false, reason: 'Sovrapposizione con pausa' };
       }
@@ -142,22 +148,18 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     if (!selectedMember) return [];
     
     const slots: { time: string; valid: boolean; reason?: string }[] = [];
-    // Generiamo slot dalle 07:00 alle 20:30 per permettere flessibilità all'admin
     for (let h = 7; h <= 20; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
         const validation = getSlotValidation(t);
         
-        // Per gli ospiti mostriamo solo quelli validi
-        // Per l'admin mostriamo tutto ciò che non è un conflitto diretto, 
-        // ma evidenziamo quelli fuori orario o in pausa
         if (isAdminOrStaff || validation.valid) {
           slots.push({ time: t, ...validation });
         }
       }
     }
     return slots;
-  }, [selectedMember, selectedDate, selectedService, existingAppointments, isAdminOrStaff]);
+  }, [selectedMember, selectedDate, selectedService, existingAppointments, isAdminOrStaff, salonClosures]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,7 +173,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
         const confirmMsg = `Attenzione: l'orario scelto (${selectedTime}) presenta delle criticità:\n"${validation.reason}"\n\nDesideri procedere comunque con l'inserimento manuale forzato?`;
         if (!window.confirm(confirmMsg)) return;
       } else {
-        alert(`Spiacenti, l'orario selezionato non è valido: ${validation.reason}`);
+        alert(`Spiacenti, l'orario selezionate non è valido: ${validation.reason}`);
         return;
       }
     }
@@ -232,18 +234,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
             </div>
           )}
 
-          {initialData?.id && (
-             <div className="p-5 bg-amber-50 rounded-[2rem] border border-amber-100 mb-6 flex items-center gap-4">
-                <div className="w-12 h-12 bg-amber-600 rounded-2xl flex items-center justify-center text-white">
-                  <i className="fas fa-user-edit text-lg"></i>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">Modifica per:</p>
-                  <p className="text-sm font-luxury font-bold text-gray-900">{(initialData as any).profiles?.full_name || 'Ospite'}</p>
-                </div>
-             </div>
-          )}
-
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Ritual</label>
@@ -277,13 +267,17 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
               {next21Days.map((day) => {
                 const d = new Date(`${day}T12:00:00`);
                 const isSelected = selectedDate === day;
-                const isClosed = (selectedMember?.weekly_closures || []).includes(d.getDay());
+                const isGlobalClosure = salonClosures.includes(day);
+                const isWeeklyClosure = (selectedMember?.weekly_closures || []).includes(d.getDay());
+                const isClosed = isGlobalClosure || isWeeklyClosure;
+                
                 return (
                   <button
                     key={day}
                     type="button"
                     onClick={() => !isClosed && setSelectedDate(day)}
                     disabled={isClosed}
+                    title={isGlobalClosure ? 'Festività - Salone Chiuso' : ''}
                     className={`flex-shrink-0 w-16 h-20 rounded-[1.5rem] border-2 flex flex-col items-center justify-center transition-all duration-300 ${
                       isClosed
                         ? 'opacity-20 bg-gray-100 border-transparent cursor-not-allowed'
