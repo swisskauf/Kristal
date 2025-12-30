@@ -261,8 +261,9 @@ const App: React.FC = () => {
     if (!newClosure.date) return;
     
     try {
+      // Controllo duplicati locale per evitare chiamate inutili
       if (salonClosures.some(c => c.date === newClosure.date)) {
-        showToast("Data già presente nelle chiusure.", "info");
+        showToast("Questa data è già registrata come festività.", "info");
         return;
       }
       
@@ -270,7 +271,7 @@ const App: React.FC = () => {
       await db.salonClosures.add({ date: newClosure.date, name });
       setNewClosure({ date: '', name: '' });
       await refreshData();
-      showToast("Giorno festivo registrato.");
+      showToast("Giorno festivo registrato correttamente.");
     } catch (err) {
       showToast("Errore nel salvataggio della festività.", "error");
     }
@@ -280,9 +281,9 @@ const App: React.FC = () => {
     try {
       await db.salonClosures.delete(date);
       await refreshData();
-      showToast("Giorno festivo rimosso.");
+      showToast("Giorno festivo rimosso dall'agenda.");
     } catch (err) {
-      showToast("Errore nella rimozione.", "error");
+      showToast("Errore nella rimozione della festività.", "error");
     }
   };
 
@@ -726,7 +727,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1800] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-3xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => { setIsFormOpen(false); setFormInitialData(null); }} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             {/* Corrected prop name 'existingAppointments' and removed 'existing' placeholder */}
              <AppointmentForm 
                services={services} team={team} existingAppointments={appointments} 
                onSave={handleSaveAppointment} 
