@@ -85,6 +85,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
+    // 0. Chiusura Globale Salone (MASSIMA PRIORITÀ)
     if (salonClosures && salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const member = team.find(t => t.name === memberName);
@@ -143,13 +144,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     <div className="space-y-8 animate-in fade-in">
       <style>{`
         .salon-closure-pattern { 
-          background-color: #fee2e2;
-          background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); 
+          background-color: #fef2f2;
+          background-image: repeating-linear-gradient(45deg, #fef2f2, #fef2f2 10px, #fee2e2 10px, #fee2e2 20px); 
           position: relative;
-          border: 1px solid #fca5a5 !important;
+          border: 1px solid #fecaca !important;
         }
         .salon-closure-pattern::after {
-          content: 'CHIUSURA ATELIER';
+          content: 'CHIUSURA';
           position: absolute;
           inset: 0;
           display: flex;
@@ -157,9 +158,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           justify-content: center;
           font-size: 7px;
           font-weight: 900;
-          color: #b91c1c;
-          letter-spacing: 0.05em;
-          opacity: 0.7;
+          color: #ef4444;
+          letter-spacing: 0.1em;
+          opacity: 0.6;
           pointer-events: none;
         }
         .vacation-pattern { 
@@ -213,7 +214,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                   {viewMode === 'daily' ? team.map(m => {
                     const dateStr = weekDays[0];
                     const status = getSlotStatus(m.name, dateStr, hour);
-                    const isGlobalClosure = salonClosures && salonClosures.includes(dateStr);
+                    const isGlobalClosure = status?.type === 'SALON_CLOSURE';
                     
                     const slotStyles = status?.type === 'APPOINTMENT' 
                       ? getCategoryStyles(status.appt.services?.category) 
@@ -228,7 +229,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                         }}
                         className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${
                           status?.type === 'APPOINTMENT' ? `shadow-sm scale-[0.98] ${slotStyles}` : slotStyles
-                        } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-50' : ''}`}
+                        } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-60' : ''}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
                            <div className="flex flex-col items-center justify-center overflow-hidden w-full px-2">
@@ -264,7 +265,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     return (
                       <div 
                         key={`${date}-${hour}`} 
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isGlobalClosure ? 'salon-closure-pattern opacity-50' : 'hover:bg-amber-50/10'}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isGlobalClosure ? 'salon-closure-pattern opacity-60' : 'hover:bg-amber-50/10'}`}
                       >
                          {!isGlobalClosure && apptsAtHour.map(a => (
                            <button 
