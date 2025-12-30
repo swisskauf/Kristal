@@ -147,7 +147,11 @@ export const db = {
     add: async (closure: SalonClosure) => {
       if (useMock) {
         const current = supabaseMock.salonClosures.getAll();
-        supabaseMock.salonClosures.save([...current, closure]);
+        // Evita duplicati durante il salvataggio
+        const exists = current.find(c => c.date === closure.date);
+        if (!exists) {
+          supabaseMock.salonClosures.save([...current, closure]);
+        }
         return closure;
       }
       return (await client.from('salon_closures').insert(closure)).data;
