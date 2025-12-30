@@ -39,7 +39,8 @@ const App: React.FC = () => {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   
-  // Modals state
+  // Modal & Form state
+  const [newClosure, setNewClosure] = useState({ date: '', name: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [isTeamEditorOpen, setIsTeamEditorOpen] = useState(false);
@@ -97,7 +98,6 @@ const App: React.FC = () => {
       }
       const existingTeam = await db.team.getAll();
       if (!existingTeam || existingTeam.length === 0) {
-        // Garantiamo email fittizie per i membri predefiniti se mancano
         for (const m of DEFAULT_TEAM) {
           await db.team.upsert({ ...m, email: m.email || `${m.name.toLowerCase()}@kristalatelier.ch` } as any);
         }
@@ -177,7 +177,6 @@ const App: React.FC = () => {
 
   const groupedGuestAppointments = useMemo(() => {
     if (!user) return { upcoming: [], history: [], cancelled: [] };
-    // Usiamo filter(a => a.client_id === user.id) garantendo che client_id sia stringa
     const userAppts = appointments.filter(a => String(a.client_id) === String(user.id));
     const now = new Date();
     return {
@@ -203,8 +202,6 @@ const App: React.FC = () => {
 
   const handleSaveStaff = async (staffData: TeamMember) => {
     try {
-      // In un'app reale qui verrebbe lanciato un invito Auth di Supabase
-      // Per il mock, salviamo semplicemente il profilo e mostriamo successo
       await db.team.upsert(staffData);
       showToast(`Artista ${staffData.name} creato. Invito inviato a ${staffData.email}`);
       setIsNewStaffModalOpen(false);
@@ -214,10 +211,17 @@ const App: React.FC = () => {
     }
   };
 
-  /**
-   * Fix for missing saveSettings function.
-   * Persists settings updates and triggers success feedback.
-   */
+  const handleSaveClosure = async () => {
+    if (newClosure.date) {
+      const name = newClosure.name || 'Chiusura Straordinaria';
+      const updatedClosures = [...salonClosures, { date: newClosure.date, name }];
+      await db.salonClosures.save(updatedClosures);
+      setNewClosure({ date: '', name: '' });
+      await refreshData();
+      showToast("Festività registrata e agenda aggiornata.");
+    }
+  };
+
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
     showToast("Configurazione salvata con successo.");
@@ -431,21 +435,26 @@ const App: React.FC = () => {
                    <div className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm space-y-8">
                       <div className="space-y-4">
                          <div className="grid grid-cols-2 gap-4">
-                            <input type="date" id="salon-close-date" className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
-                            <input type="text" id="salon-close-name" placeholder="Nome Festività" className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
+                            <input 
+                              type="date" 
+                              value={newClosure.date} 
+                              onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })}
+                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500" 
+                            />
+                            <input 
+                              type="text" 
+                              placeholder="Nome Festività" 
+                              value={newClosure.name}
+                              onChange={(e) => setNewClosure({ ...newClosure, name: e.target.value })}
+                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500" 
+                            />
                          </div>
-                         <button onClick={async () => {
-                            const date = (document.getElementById('salon-close-date') as HTMLInputElement).value;
-                            const name = (document.getElementById('salon-close-name') as HTMLInputElement).value || 'Chiusura Speciale';
-                            if (date) {
-                               const newClosures = [...salonClosures, { date, name }];
-                               await db.salonClosures.save(newClosures);
-                               (document.getElementById('salon-close-date') as HTMLInputElement).value = '';
-                               (document.getElementById('salon-close-name') as HTMLInputElement).value = '';
-                               refreshData();
-                               showToast("Festività registrata.");
-                            }
-                         }} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all">Registra Chiusura</button>
+                         <button 
+                            onClick={handleSaveClosure}
+                            className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all active:scale-95"
+                         >
+                            Registra Chiusura
+                         </button>
                       </div>
                       <div className="grid gap-3 max-h-[300px] overflow-y-auto scrollbar-hide pr-2">
                          {salonClosures.map(c => (
@@ -461,6 +470,9 @@ const App: React.FC = () => {
                               }} className="text-gray-300 hover:text-red-500 transition-colors p-3"><i className="fas fa-trash text-sm"></i></button>
                            </div>
                          ))}
+                         {salonClosures.length === 0 && (
+                           <p className="text-center py-6 text-gray-300 text-[9px] font-bold uppercase tracking-widest italic">Nessun giorno festivo programmato</p>
+                         )}
                       </div>
                    </div>
                 </div>
@@ -574,7 +586,7 @@ const App: React.FC = () => {
         )}
       </Layout>
 
-      {/* Modali */}
+      {/* Modals */}
       {settings.aiAssistantEnabled && <AIAssistant />}
 
       {isNewStaffModalOpen && (
@@ -649,6 +661,7 @@ const App: React.FC = () => {
                }} 
                onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
+               salonClosures={salonClosures.map(c => c.date)}
              />
           </div>
         </div>
