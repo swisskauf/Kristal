@@ -51,7 +51,10 @@ const NewStaffForm: React.FC<NewStaffFormProps> = ({ onSave, onCancel }) => {
       iban,
       weekly_closures: [0], // Domenica chiuso di default
       unavailable_dates: [],
-      absences_json: []
+      absences_json: [],
+      total_vacation_days_per_year: 25,
+      hours_per_day_contract: 8.5,
+      overtime_balance_hours: 0
     });
   };
 
