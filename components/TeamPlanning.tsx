@@ -26,13 +26,32 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const getCategoryStyles = (category?: string) => {
     switch (category) {
-      case 'Donna': return 'bg-rose-100 border-rose-200 text-rose-800 hover:bg-rose-200 shadow-sm';
-      case 'Uomo': return 'bg-blue-100 border-blue-200 text-blue-800 hover:bg-blue-200 shadow-sm';
-      case 'Colore': return 'bg-purple-100 border-purple-200 text-purple-800 hover:bg-purple-200 shadow-sm';
-      case 'Trattamenti': return 'bg-emerald-100 border-emerald-200 text-emerald-800 hover:bg-emerald-200 shadow-sm';
-      case 'Estetica': return 'bg-amber-100 border-amber-200 text-amber-800 hover:bg-amber-200 shadow-sm';
-      default: return 'bg-gray-100 border-gray-200 text-gray-800 hover:bg-gray-200';
+      case 'Donna': return 'bg-rose-50 border-l-[6px] border-l-rose-400 text-rose-900 border-y border-r border-rose-100 shadow-sm';
+      case 'Uomo': return 'bg-blue-50 border-l-[6px] border-l-blue-400 text-blue-900 border-y border-r border-blue-100 shadow-sm';
+      case 'Colore': return 'bg-purple-50 border-l-[6px] border-l-purple-400 text-purple-900 border-y border-r border-purple-100 shadow-sm';
+      case 'Trattamenti': return 'bg-emerald-50 border-l-[6px] border-l-emerald-400 text-emerald-900 border-y border-r border-emerald-100 shadow-sm';
+      case 'Estetica': return 'bg-amber-50 border-l-[6px] border-l-amber-400 text-amber-900 border-y border-r border-amber-100 shadow-sm';
+      default: return 'bg-gray-50 border-l-[6px] border-l-gray-400 text-gray-900 border-y border-r border-gray-100 shadow-sm';
     }
+  };
+
+  const getAbsenceStyles = (type: string) => {
+     const stripePattern = "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)";
+     switch(type) {
+        case 'vacation': return { className: 'bg-amber-50 border border-amber-200 text-amber-800', style: { backgroundImage: stripePattern } };
+        case 'sick': 
+        case 'injury': return { className: 'bg-red-50 border border-red-200 text-red-800', style: { backgroundImage: stripePattern } };
+        case 'training': return { className: 'bg-emerald-50 border border-emerald-200 text-emerald-800', style: { backgroundImage: stripePattern } };
+        case 'unpaid': return { className: 'bg-gray-100 border border-gray-200 text-gray-500', style: { backgroundImage: stripePattern } };
+        default: return { className: 'bg-gray-50 border border-gray-200 text-gray-400', style: { backgroundImage: stripePattern } };
+     }
+  };
+
+  const getAbsenceLabel = (type: string) => {
+    const labels: Record<string, string> = { 
+      vacation: 'Ferie', sick: 'Malattia', training: 'Formazione', injury: 'Infortunio', unpaid: 'Permesso', overtime_recovery: 'Recupero' 
+    };
+    return labels[type] || 'Assente';
   };
 
   const weekDays = useMemo(() => {
@@ -129,23 +148,17 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <style>{`
-        .blocked-pattern { 
-          background-color: #f9fafb;
-          background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.02) 20px); 
-          cursor: not-allowed;
-          opacity: 0.7;
-        }
         .salon-holiday-pattern {
           background-color: #fffbeb;
           background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(217, 119, 6, 0.05) 10px, rgba(217, 119, 6, 0.05) 20px);
           border-color: #fef3c7 !important;
           cursor: not-allowed;
         }
-        .absent-pattern {
-          background-color: #fef2f2;
-          background-image: repeating-linear-gradient(-45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.03) 10px, rgba(239, 68, 68, 0.03) 20px);
-          border-color: #fee2e2 !important;
+        .blocked-pattern { 
+          background-color: #f9fafb;
+          background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.02) 20px); 
           cursor: not-allowed;
+          opacity: 0.7;
         }
         .break-pattern {
           background-color: #fffaf0;
@@ -255,6 +268,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     const isAppt = status?.type === 'APPOINTMENT';
                     const isOutOfHours = status?.type === 'OUT_OF_HOURS';
                     
+                    const absenceStyle = isAbsent ? getAbsenceStyles(status.absence.type) : { className: '', style: {} };
+
                     return (
                       <div 
                         key={`${m.name}-${hour}`}
@@ -262,16 +277,16 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                           if (isAppt) onAppointmentClick?.(status.appt);
                           else if (status?.type === 'AVAILABLE') onSlotClick?.(m.name, weekDays[0], hour);
                         }}
+                        style={isAbsent ? absenceStyle.style : {}}
                         className={`h-16 rounded-2xl border transition-all duration-300 slot-hover relative overflow-hidden ${
                           isAppt ? getCategoryStyles(status.appt.services?.category) : 
                           isHoliday ? 'salon-holiday-pattern border-amber-100' :
-                          isAbsent ? 'absent-pattern border-red-50' :
+                          isAbsent ? absenceStyle.className :
                           isBreak ? 'break-pattern border-amber-100 flex items-center justify-center' :
                           isOutOfHours ? 'bg-gray-100/50 border-gray-100 cursor-not-allowed' :
                           isOff ? 'blocked-pattern border-gray-50' :
                           'bg-white border-gray-50 hover:border-amber-200 cursor-pointer shadow-sm hover:shadow-md'
                         } animate-in fade-in zoom-in-95`}
-                        style={{animationDelay: `${(hIdx + mIdx) * 20}ms`}}
                       >
                          {isAppt && status.isStart && (
                            <div className="flex flex-col items-start justify-center h-full w-full px-4 py-2">
@@ -290,6 +305,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                            <div className="flex flex-col items-center justify-center gap-1">
                               <i className="fas fa-mug-hot text-amber-300 text-[10px]"></i>
                               <span className="text-[7px] font-bold text-amber-400 uppercase tracking-widest">Pausa</span>
+                           </div>
+                         )}
+                         {isAbsent && (
+                           <div className="flex flex-col items-center justify-center h-full gap-1 opacity-80">
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/50 px-2 py-0.5 rounded-md backdrop-blur-sm">
+                                {getAbsenceLabel(status.absence.type)}
+                              </span>
                            </div>
                          )}
                          {isHoliday && <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black text-amber-900/20 tracking-[0.3em] uppercase rotate-[-15deg]">Atelier Chiuso</span>}
