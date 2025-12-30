@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -14,7 +15,7 @@ import InstagramGallery from './components/InstagramGallery';
 import GuestManagement from './components/GuestManagement';
 import NewGuestForm from './components/NewGuestForm';
 import { supabase, db } from './services/supabase';
-import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure, AboutUsContent } from './types';
+import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure, AboutUsContent, AbsenceEntry } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 import { sendLuxuryEmailNotification } from './services/emailService';
 
@@ -274,6 +275,48 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRequestAction = async (id: string, action: 'approved' | 'rejected') => {
+    try {
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+
+      await db.requests.update(id, { status: action });
+      
+      if (action === 'approved') {
+        const member = team.find(t => t.name === req.member_name);
+        if (member) {
+          const hoursUsed = req.is_full_day ? (member.hours_per_day_contract || 8) : 4; // Mock 4h per mezza giornata
+          
+          const newAbsence: AbsenceEntry = { 
+            id: Math.random().toString(36).substr(2, 9), 
+            startDate: req.start_date, 
+            endDate: req.end_date, 
+            type: req.type, 
+            isFullDay: req.is_full_day,
+            hoursCount: hoursUsed
+          };
+
+          // Aggiornamento Bilancio Straordinari se tipo è 'overtime'
+          let updatedOvertime = member.overtime_balance_hours || 0;
+          if (req.type === 'overtime') {
+             updatedOvertime -= hoursUsed;
+          }
+
+          await db.team.upsert({ 
+            ...member, 
+            absences_json: [...(member.absences_json || []), newAbsence],
+            overtime_balance_hours: updatedOvertime
+          });
+        }
+      }
+      
+      showToast(action === 'approved' ? "Richiesta approvata e registrata." : "Richiesta respinta.");
+      refreshData(true);
+    } catch (e) {
+      showToast("Errore durante l'elaborazione.", "error");
+    }
+  };
+
   if (loading && !aboutUs) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white space-y-6">
@@ -479,18 +522,7 @@ const App: React.FC = () => {
                    <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-l-4 border-amber-600 pl-4">Richieste Staff</h3>
                    <RequestManagement 
                      requests={requests} 
-                     onAction={async (id, action) => { 
-                       await db.requests.update(id, { status: action }); 
-                       if (action === 'approved') {
-                          const req = requests.find(r => r.id === id);
-                          const member = team.find(t => t.name === req?.member_name);
-                          if (member && req) {
-                             const newAbsence = { id: Math.random().toString(36).substr(2,9), startDate: req.start_date, endDate: req.end_date, type: req.type, isFullDay: req.is_full_day };
-                             await db.team.upsert({ ...member, absences_json: [...(member.absences_json || []), newAbsence] });
-                          }
-                       }
-                       refreshData(true); 
-                     }} 
+                     onAction={handleRequestAction} 
                    />
                 </div>
                 <div className="space-y-8">
