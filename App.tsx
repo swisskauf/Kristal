@@ -263,7 +263,7 @@ const App: React.FC = () => {
   const handleSaveStaff = async (staffData: TeamMember) => {
     try {
       await db.team.upsert(staffData);
-      showToast(`Artista ${staffData.name} creato. Invito inviato a ${staffData.email}`);
+      showToast(`Artista ${staffData.name} creato.`);
       setIsNewStaffModalOpen(false);
       refreshData();
     } catch (e) {
@@ -401,7 +401,6 @@ const App: React.FC = () => {
           <div className="space-y-24 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
              {aboutUs ? (
                <div className="space-y-32">
-                  {/* HERO SECTION */}
                   <div className="space-y-12">
                     <header className="text-center space-y-4">
                        <h2 className="text-7xl font-luxury font-bold text-gray-900 leading-tight tracking-tighter">{aboutUs.title}</h2>
@@ -417,7 +416,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* STORY SECTION */}
                   <div className="grid md:grid-cols-2 gap-20 items-center">
                     <div className="prose prose-stone max-w-none">
                        <p className="text-3xl font-luxury font-bold text-gray-900 mb-8 leading-tight">La Filosofia Kristal</p>
@@ -439,7 +437,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* TEAM SECTION */}
                   <div className="space-y-16">
                      <div className="text-center space-y-2">
                         <h3 className="text-5xl font-luxury font-bold text-gray-900">Gli Artisti</h3>
@@ -465,7 +462,6 @@ const App: React.FC = () => {
                      </div>
                   </div>
 
-                  {/* INSTAGRAM / WORKS SECTION */}
                   <div className="space-y-16">
                      <div className="text-center space-y-2">
                         <h3 className="text-5xl font-luxury font-bold text-gray-900">I Nostri Lavori</h3>
@@ -481,7 +477,6 @@ const App: React.FC = () => {
                      )}
                   </div>
 
-                  {/* USEFUL INFO SECTION */}
                   <div className="bg-gray-900 text-white rounded-[5rem] p-20 grid md:grid-cols-2 gap-20 shadow-2xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-20 opacity-5">
                        <i className="fas fa-gem text-[15rem]"></i>
@@ -539,19 +534,18 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'about_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
+          <div className="space-y-12 animate-in fade-in max-w-4xl mx-auto">
              <header>
                 <h2 className="text-5xl font-luxury font-bold text-gray-900">Editor Atelier</h2>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Racconta la storia della bellezza</p>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Racconta la bellezza di Kristal</p>
              </header>
-             <div className="bg-white p-12 rounded-[5rem] border border-gray-100 shadow-sm space-y-10 max-w-3xl">
-                <div className="space-y-6">
-                   {/* IMAGE UPLOAD AREA */}
+             <div className="bg-white p-12 rounded-[5rem] border border-gray-100 shadow-sm space-y-10">
+                <div className="space-y-8">
                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Immagine Hero Atelier</label>
                       <div className="relative aspect-[16/6] bg-gray-50 rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 group cursor-pointer">
                          <img src={aboutUs?.imageUrl} className="w-full h-full object-cover group-hover:opacity-70 transition-opacity" />
-                         <label className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
+                         <label className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white cursor-pointer">
                             <i className="fas fa-camera text-3xl mb-2"></i>
                             <span className="text-[10px] font-bold uppercase">Carica Foto Atelier</span>
                             <input type="file" accept="image/*" className="hidden" onChange={handleAtelierImageUpload} />
@@ -559,46 +553,28 @@ const App: React.FC = () => {
                       </div>
                    </div>
 
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale</label>
-                      <input 
-                        type="text" 
-                        value={aboutUs?.title || ''} 
-                        onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)}
-                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
-                      />
+                   <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo</label>
+                         <input type="text" value={aboutUs?.title || ''} onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg focus:ring-2 focus:ring-amber-500" />
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo</label>
+                         <input type="text" value={aboutUs?.subtitle || ''} onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm focus:ring-2 focus:ring-amber-500" />
+                      </div>
                    </div>
                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo Evocativo</label>
-                      <input 
-                        type="text" 
-                        value={aboutUs?.subtitle || ''} 
-                        onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)}
-                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
-                      />
-                   </div>
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Narrazione</label>
-                      <textarea 
-                        rows={6}
-                        value={aboutUs?.description || ''} 
-                        onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)}
-                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-medium text-sm leading-relaxed shadow-inner outline-none focus:ring-2 focus:ring-amber-500 resize-none" 
-                      />
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Narrazione (Bio Atelier)</label>
+                      <textarea rows={8} value={aboutUs?.description || ''} onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-medium text-sm leading-relaxed focus:ring-2 focus:ring-amber-500 resize-none" />
                    </div>
                 </div>
-                <button 
-                   onClick={() => aboutUs && handleSaveAboutUs(aboutUs)}
-                   className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95"
-                >
-                   Pubblica Aggiornamenti
-                </button>
+                <button onClick={() => aboutUs && handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Pubblica Modifiche</button>
              </div>
           </div>
         )}
 
         {activeTab === 'my_rituals' && user && (
-          <div className="space-y-16 animate-in fade-in">
+          <div className="space-y-20 animate-in fade-in">
              <header className="flex items-center justify-between">
                <div>
                   <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
@@ -607,13 +583,18 @@ const App: React.FC = () => {
                <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
              </header>
 
+             {/* PROSSIMI RITUAL */}
              <section className="space-y-8">
-               <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600 border-l-4 border-amber-600 pl-4">Prossime Sessioni</h3>
+               <div className="flex items-center gap-4">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900">Sessioni Programmate</h3>
+               </div>
                <div className="grid md:grid-cols-2 gap-8">
                  {groupedGuestAppointments.upcoming.length > 0 ? groupedGuestAppointments.upcoming.map(a => (
-                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-gray-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group border-t-8 border-t-amber-600">
-                      <div className="flex justify-between items-start mb-10">
-                         <div className="w-20 h-20 bg-black text-white rounded-[2rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors shadow-lg">
+                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-amber-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group border-l-8 border-l-amber-600 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform"><i className="fas fa-sparkles text-6xl"></i></div>
+                      <div className="flex justify-between items-start mb-10 relative z-10">
+                         <div className="w-20 h-20 bg-black text-white rounded-[2.5rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors shadow-lg">
                             <span className="text-[10px] uppercase font-bold text-amber-500 group-hover:text-white">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
                             <span className="text-3xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
                          </div>
@@ -624,36 +605,28 @@ const App: React.FC = () => {
                             <button onClick={() => downloadICS(a)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2 hover:text-black transition-colors"><i className="fas fa-calendar-plus"></i> Calendario</button>
                          </div>
                       </div>
-                      <div className="space-y-6">
+                      <div className="space-y-6 relative z-10">
                         <h4 className="text-3xl font-luxury font-bold text-gray-900">{a.services?.name}</h4>
                         <div className="flex items-center gap-4">
                            <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-[11px] font-bold text-amber-600">{a.team_member_name[0]}</div>
                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                         </div>
-                        <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
-                           <div className="space-y-1">
-                              <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Assistenza Atelier:</p>
-                              <a href={`tel:${SALON_PHONE.replace(/[^\d+]/g, '')}`} className="text-gray-900 font-bold text-xs hover:text-amber-600 transition-colors">{SALON_PHONE}</a>
-                           </div>
-                           <a href={`tel:${SALON_PHONE.replace(/[^\d+]/g, '')}`} className="w-14 h-14 bg-black text-white rounded-[1.5rem] flex items-center justify-center hover:bg-amber-600 transition-all shadow-xl shadow-black/10">
-                              <i className="fas fa-phone-alt text-lg"></i>
-                           </a>
-                        </div>
                       </div>
                    </div>
                  )) : (
                    <div className="col-span-full py-24 text-center bg-gray-50/50 rounded-[4rem] border border-dashed border-gray-200">
-                     <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Nessuna sessione programmata</p>
+                     <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Nessuna sessione in programma</p>
                    </div>
                  )}
                </div>
              </section>
 
+             {/* STORICO RITUAL */}
              <section className="space-y-8">
-                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">I Vostri Momenti</h3>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">Il Vostro Storico</h3>
                 <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
                    {groupedGuestAppointments.history.length > 0 ? groupedGuestAppointments.history.map((a, i) => (
-                     <div key={a.id} className={`p-10 flex items-center justify-between transition-colors border-b border-gray-50 last:border-none ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/20'} ${a.status === 'noshow' ? 'opacity-50 grayscale' : ''}`}>
+                     <div key={a.id} className={`p-10 flex items-center justify-between transition-all border-b border-gray-50 last:border-none ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/20'} opacity-70 hover:opacity-100`}>
                         <div className="flex items-center gap-10">
                            <div className="text-center w-16 grayscale">
                               <p className="text-3xl font-luxury font-bold text-gray-400">{new Date(a.date).getDate()}</p>
@@ -665,32 +638,28 @@ const App: React.FC = () => {
                            </div>
                         </div>
                         <div className="flex items-center gap-8">
-                           <div className="text-right">
-                              {a.status === 'noshow' && <span className="text-[8px] font-bold text-red-400 bg-red-50 px-4 py-1.5 rounded-full border border-red-100 uppercase tracking-widest block mb-1">Non Effettuato</span>}
-                              <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2"><i className="fas fa-history"></i> Passato</span>
-                           </div>
+                           <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2"><i className="fas fa-check-circle"></i> Eseguito</span>
                            <p className="font-luxury font-bold text-xl text-gray-400">CHF {a.services?.price}</p>
                         </div>
                      </div>
                    )) : (
-                     <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">Nessun rituale nell'archivio personale</div>
+                     <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">Nessun rituale nell'archivio</div>
                    )}
                 </div>
              </section>
 
+             {/* RITUAL CANCELLATI */}
              {groupedGuestAppointments.cancelled.length > 0 && (
-               <section className="space-y-8 animate-in slide-in-from-bottom-4">
+               <section className="space-y-8">
                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-red-300 border-l-4 border-red-100 pl-4">Sessioni Annullate</h3>
                   <div className="bg-red-50/30 rounded-[4rem] border border-red-50 overflow-hidden">
-                     {groupedGuestAppointments.cancelled.map((a, i) => (
-                       <div key={a.id} className="p-8 flex items-center justify-between border-b border-red-50/50 last:border-none opacity-60">
+                     {groupedGuestAppointments.cancelled.map((a) => (
+                       <div key={a.id} className="p-8 flex items-center justify-between border-b border-red-50/50 last:border-none opacity-50 grayscale">
                           <div className="flex items-center gap-8">
-                             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-300 shadow-sm border border-red-50">
-                                <i className="fas fa-calendar-times"></i>
-                             </div>
+                             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-200"><i className="fas fa-calendar-times"></i></div>
                              <div>
                                 <h5 className="font-bold text-sm text-red-900/50 line-through">{a.services?.name}</h5>
-                                <p className="text-[9px] text-red-300 font-bold uppercase tracking-widest">Programmato per il {new Date(a.date).toLocaleDateString()}</p>
+                                <p className="text-[9px] text-red-300 font-bold uppercase tracking-widest">Rituale del {new Date(a.date).toLocaleDateString()}</p>
                              </div>
                           </div>
                           <span className="text-[9px] font-bold text-red-300 uppercase tracking-[0.3em] bg-white px-6 py-2 rounded-full border border-red-50 shadow-sm">Stornato</span>
@@ -702,13 +671,11 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Rest of the component management sections remain same ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <header className="flex items-center justify-between">
                 <div>
                    <h2 className="text-5xl font-luxury font-bold text-gray-900">Gestione Ritual</h2>
-                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Personalizza il Menù Esperienze</p>
                 </div>
                 <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
              </header>
