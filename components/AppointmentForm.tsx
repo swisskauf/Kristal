@@ -83,7 +83,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const getSlotValidation = (timeStr: string) => {
     if (!selectedMember || !selectedDate || !selectedService) return { valid: false, reason: 'Dati incompleti' };
 
-    // 0. Chiusura Globale Salone
+    // 0. Chiusura Globale Salone (MASSIMA PRIORITÀ)
     if (salonClosures && salonClosures.includes(selectedDate)) {
       return { valid: false, reason: 'Atelier Chiuso (Festività)' };
     }
@@ -176,6 +176,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
         const validation = getSlotValidation(t);
+        // Gli admin vedono tutti i tempi, i clienti solo quelli validi
         if (isAdminOrStaff || validation.valid) {
           slots.push({ time: t, ...validation });
         }
