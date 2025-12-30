@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Appointment, Service, TeamMember } from '../types';
 
