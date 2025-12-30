@@ -64,7 +64,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
     // 1. Chiusura Atelier (Globale)
-    if (salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
+    if (salonClosures && salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const [h, m] = hour.split(':').map(Number);
     const targetMin = h * 60 + m;
@@ -185,7 +185,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                   </div>
                   {viewMode === 'daily' ? team.map(m => {
                     const status = getSlotStatus(m.name, weekDays[0], hour);
-                    const isSalonClosure = salonClosures.includes(weekDays[0]);
+                    const isSalonClosure = salonClosures && salonClosures.includes(weekDays[0]);
                     return (
                       <div 
                         key={`${m.name}-${hour}`} 
@@ -209,7 +209,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                        const h = new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
                        return d === date && h === hour && a.status !== 'cancelled';
                     });
-                    const isSalonClosure = salonClosures.includes(date);
+                    const isSalonClosure = salonClosures && salonClosures.includes(date);
 
                     return (
                       <div 
