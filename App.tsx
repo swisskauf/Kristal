@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Layout from './components/Layout';
+import Layout, { NotificationItem } from './components/Layout';
 import Auth from './components/Auth';
 import AppointmentForm from './components/AppointmentForm';
 import ServiceForm from './components/ServiceForm';
@@ -40,6 +40,9 @@ const App: React.FC = () => {
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   const [aboutUs, setAboutUs] = useState<AboutUsContent | null>(null);
   
+  // Notifications State
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
   // Modal states
   const [newClosure, setNewClosure] = useState({ date: '', name: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -60,6 +63,17 @@ const App: React.FC = () => {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 5000);
+  };
+
+  const addNotification = (title: string, body: string) => {
+    const newNotif: NotificationItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      title,
+      body,
+      time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
   };
 
   const handleAtelierImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,12 +198,16 @@ const App: React.FC = () => {
           const clientProfile = profiles.find(p => p.id === appt.client_id);
           const serviceInfo = services.find(s => s.id === appt.service_id);
           if (clientProfile) {
-            sendLuxuryEmailNotification({
+            // Await the email generation to show immediate feedback in notifications
+            const emailBody = await sendLuxuryEmailNotification({
               type: 'cancellation',
               appointment: appt,
               client: clientProfile,
               service: serviceInfo
             });
+            if (emailBody) {
+               addNotification('Cancellazione Ritual', emailBody);
+            }
           }
         }
 
@@ -240,28 +258,38 @@ const App: React.FC = () => {
       const savedApptData = { ...a, client_id };
       
       const result = await db.appointments.upsert(savedApptData as any); 
+      const apptToNotify = result || savedApptData;
 
-      // Logica Notifica Email Automatica
+      setIsFormOpen(false); 
+      setFormInitialData(null); 
+      
+      // Feedback immediato ma non bloccante per l'email
+      showToast(isEdit ? "Rituale aggiornato." : "Rituale programmato.");
+
+      // Logica Notifica Email Automatica (Background)
       if (settings.emailNotificationsEnabled) {
         const clientProfile = profiles.find(p => p.id === client_id);
         const serviceInfo = services.find(s => s.id === a.service_id);
         const oldData = isEdit ? appointments.find(ex => ex.id === a.id) : null;
         
         if (clientProfile) {
-          sendLuxuryEmailNotification({
+           // Generazione Email
+           sendLuxuryEmailNotification({
             type: isEdit ? 'update' : 'confirmation',
-            appointment: result || savedApptData as any,
+            appointment: apptToNotify as any,
             client: clientProfile,
             service: serviceInfo,
             oldData: oldData
+          }).then(emailBody => {
+            if (emailBody) {
+               addNotification(isEdit ? 'Modifica Ritual' : 'Conferma Ritual', emailBody);
+               showToast("Email di notifica inviata al cliente.", "info");
+            }
           });
         }
       }
 
-      setIsFormOpen(false); 
-      setFormInitialData(null); 
       await refreshData(true); 
-      showToast(isEdit ? "Rituale aggiornato e notificato." : "Rituale programmato e notificato.");
     } catch (err) {
       showToast("Errore nel salvataggio.", "error");
     }
@@ -380,7 +408,15 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <Layout user={user} onLogout={() => supabase.auth.signOut()} onLoginClick={() => setIsAuthOpen(true)} activeTab={activeTab} setActiveTab={setActiveTab}>
+      <Layout 
+        user={user} 
+        onLogout={() => supabase.auth.signOut()} 
+        onLoginClick={() => setIsAuthOpen(true)} 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab}
+        notifications={notifications}
+        onClearNotifications={() => setNotifications([])}
+      >
         
         {activeTab === 'dashboard' && (
           <div className="space-y-16 animate-in fade-in duration-1000">
@@ -706,6 +742,10 @@ const App: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <p className="text-lg font-bold text-gray-800">Kristal AI Assistant</p>
                     <button onClick={() => setSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-lg font-bold text-gray-800">Notifiche Email</p>
+                    <button onClick={() => setSettings({...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.emailNotificationsEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.emailNotificationsEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
                   </div>
                   <button onClick={() => { showToast("Impostazioni salvate."); }} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl">Salva Configurazione</button>
                 </div>
