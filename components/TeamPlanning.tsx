@@ -27,7 +27,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
   const [viewDate, setViewDate] = useState(new Date());
 
-  // Definizione colori per categoria servizio per una distinzione visiva immediata
   const getCategoryStyles = (category?: string) => {
     switch (category) {
       case 'Donna': return 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100';
