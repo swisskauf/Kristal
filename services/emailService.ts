@@ -7,7 +7,8 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const EMAIL_SYSTEM_INSTRUCTION = `Sei l'ufficio relazioni esterne di "Kristal Atelier". 
 Il tuo compito è scrivere email di conferma e aggiornamento per i "Ritual" di bellezza. 
 Il tono deve essere estremamente raffinato, accogliente e professionale (Luxury Italian Style).
-Usa un linguaggio evocativo. Firma sempre come "Il Team Kristal".`;
+Usa un linguaggio evocativo. Firma sempre come "Il Team Kristal".
+Non includere l'oggetto nell'output, solo il corpo dell'email.`;
 
 export type EmailType = 'confirmation' | 'update' | 'cancellation';
 
@@ -19,10 +20,10 @@ interface SendEmailParams {
   oldData?: any;
 }
 
-export async function sendLuxuryEmailNotification({ type, appointment, client, service, oldData }: SendEmailParams) {
+export async function sendLuxuryEmailNotification({ type, appointment, client, service, oldData }: SendEmailParams): Promise<string | null> {
   if (!client?.email) {
     console.warn("Email non inviata: Ospite senza indirizzo email valido.");
-    return false;
+    return null;
   }
 
   const dateStr = new Date(appointment.date).toLocaleDateString('it-IT', { 
@@ -31,12 +32,12 @@ export async function sendLuxuryEmailNotification({ type, appointment, client, s
 
   let prompt = "";
   if (type === 'confirmation') {
-    prompt = `Scrivi un'email di conferma per l'ospite ${client.full_name} che ha prenotato il rituale "${service?.name}" per il giorno ${dateStr} con l'artista ${appointment.team_member_name}.`;
+    prompt = `Scrivi un'email di conferma breve ma elegante per l'ospite ${client.full_name} che ha prenotato il rituale "${service?.name}" per il giorno ${dateStr} con l'artista ${appointment.team_member_name}.`;
   } else if (type === 'update') {
     const oldDateStr = oldData?.date ? new Date(oldData.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'precedente';
-    prompt = `Scrivi un'email di notifica modifica per l'ospite ${client.full_name}. Il suo rituale "${service?.name}" è stato spostato. Vecchio orario: ${oldDateStr}. Nuovo orario: ${dateStr}. Artista assegnato: ${appointment.team_member_name}.`;
+    prompt = `Scrivi un'email di notifica modifica breve per l'ospite ${client.full_name}. Il suo rituale "${service?.name}" è stato spostato. Vecchio orario: ${oldDateStr}. Nuovo orario: ${dateStr}. Artista assegnato: ${appointment.team_member_name}.`;
   } else if (type === 'cancellation') {
-    prompt = `Scrivi un'email di cancellazione raffinata per l'ospite ${client.full_name} per il rituale "${service?.name}" del giorno ${dateStr}. Esprimi il dispiacere e invita a prenotare una nuova sessione.`;
+    prompt = `Scrivi un'email di cancellazione raffinata e breve per l'ospite ${client.full_name} per il rituale "${service?.name}" del giorno ${dateStr}. Esprimi il dispiacere e invita a prenotare una nuova sessione.`;
   }
 
   try {
@@ -45,23 +46,19 @@ export async function sendLuxuryEmailNotification({ type, appointment, client, s
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         systemInstruction: EMAIL_SYSTEM_INSTRUCTION,
-        temperature: 0.8,
+        temperature: 0.7,
       },
     });
 
-    const emailContent = response.text;
+    const emailContent = response.text || "Impossibile generare il contenuto dell'email.";
 
-    // Simulazione invio tramite API professionale (es. Resend, SendGrid)
+    // Log per debug
     console.log(`%c[EMAIL SENDING to ${client.email}]`, "color: #d97706; font-weight: bold;");
-    console.log(`Oggetto: Kristal Atelier - ${type === 'confirmation' ? 'Conferma Ritual' : type === 'update' ? 'Aggiornamento Agenda' : 'Cancellazione Sessione'}`);
     console.log(emailContent);
 
-    // Qui andrebbe la chiamata fetch reale all'API di mailing
-    // await fetch('https://api.resend.com/emails', { ... });
-
-    return true;
+    return emailContent;
   } catch (error) {
     console.error("Errore generazione email con Gemini:", error);
-    return false;
+    return null;
   }
 }
