@@ -73,35 +73,6 @@ const App: React.FC = () => {
     }
   };
 
-  const downloadICS = (appt: any) => {
-    if (!appt) return;
-    const start = new Date(appt.date);
-    const duration = appt.services?.duration || 30;
-    const end = new Date(start.getTime() + duration * 60000);
-    const formatDate = (d: Date) => d.toISOString().replace(/-|:|\.\d+/g, '');
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'BEGIN:VEVENT',
-      `DTSTART:${formatDate(start)}`,
-      `DTEND:${formatDate(end)}`,
-      `SUMMARY:Kristal Ritual: ${appt.services?.name || 'Appuntamento'}`,
-      `DESCRIPTION:Rituale di bellezza con ${appt.team_member_name} presso Kristal Atelier.`,
-      `LOCATION:Kristal Atelier, ${SALON_PHONE}`,
-      'END:VEVENT',
-      'END:VCALENDAR'
-    ].join('\n');
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `rituale-kristal-${formatDate(start).substring(0,8)}.ics`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Rituale aggiunto al tuo calendario.");
-  };
-
   const ensureDataSeeding = useCallback(async () => {
     try {
       const existingServices = await db.services.getAll();
@@ -201,11 +172,6 @@ const App: React.FC = () => {
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
         showToast(`Rituale aggiornato.`);
-        if (settings.emailNotificationsEnabled && status === 'cancelled') {
-          const client = profiles.find(p => p.id === appt.client_id);
-          const service = services.find(s => s.id === appt.service_id);
-          sendLuxuryEmailNotification({ type: 'cancellation', appointment: appt, client, service });
-        }
         refreshData(true);
         setSelectedAppointmentDetail(null);
       }
@@ -266,16 +232,49 @@ const App: React.FC = () => {
     }
   };
 
-  // Fix: Added handleSaveStaff function to process new team member additions
   const handleSaveStaff = async (member: TeamMember) => {
     try {
       await db.team.upsert(member);
       setIsNewStaffModalOpen(false);
       await refreshData(true);
-      showToast("Nuovo artista aggiunto con successo.");
+      showToast("Artista aggiunto.");
     } catch (err) {
-      showToast("Errore salvataggio artista.", "error");
+      showToast("Errore salvataggio.", "error");
     }
+  };
+
+  // Function to generate and download an ICS file for a ritual
+  const downloadICS = (appt: any) => {
+    const start = new Date(appt.date);
+    const end = new Date(start.getTime() + (appt.services?.duration || 30) * 60000);
+    
+    const formatDate = (date: Date) => {
+      return date.toISOString().replace(/-|:|\.\d+/g, '');
+    };
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Kristal Atelier//Beauty Ritual//IT',
+      'BEGIN:VEVENT',
+      `UID:${appt.id}`,
+      `DTSTAMP:${formatDate(new Date())}`,
+      `DTSTART:${formatDate(start)}`,
+      `DTEND:${formatDate(end)}`,
+      `SUMMARY:Ritual Kristal: ${appt.services?.name}`,
+      `DESCRIPTION:Il vostro rituale di bellezza con ${appt.team_member_name} presso Kristal Atelier.`,
+      'LOCATION:Kristal Atelier, Lugano',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `ritual-kristal-${appt.id}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (loading && !aboutUs) {
@@ -291,8 +290,8 @@ const App: React.FC = () => {
     <>
       {toast && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[3000] animate-in slide-in-from-top-4 duration-500 w-full max-w-md px-4">
-          <div className={`px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-md ${toast.type === 'error' ? 'bg-red-900/90 border-red-500/30' : toast.type === 'info' ? 'bg-amber-600/90 border-amber-500/30' : 'bg-black/90 border-amber-500/30'} text-white`}>
-            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : toast.type === 'info' ? 'fa-sync fa-spin' : 'fa-check-circle'} text-white`}></i>
+          <div className={`px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-md ${toast.type === 'error' ? 'bg-red-900/90 border-red-500/30' : 'bg-black/90 border-amber-500/30'} text-white`}>
+            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'} text-white`}></i>
             <p className="text-[11px] font-bold uppercase tracking-widest">{toast.message}</p>
           </div>
         </div>
@@ -449,98 +448,29 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'my_rituals' && user && (
-          <div className="space-y-20 animate-in fade-in">
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
              <header className="flex items-center justify-between">
-               <div>
-                  <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
-                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">La vostra storia in Atelier</p>
-               </div>
-               <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
+                <div>
+                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Gestione Ritual</h2>
+                </div>
+                <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
              </header>
-
-             <section className="space-y-8">
-               <div className="flex items-center gap-4">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900">Sessioni Programmate</h3>
-               </div>
-               <div className="grid md:grid-cols-2 gap-8">
-                 {groupedGuestAppointments.upcoming.length > 0 ? groupedGuestAppointments.upcoming.map(a => (
-                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-amber-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group border-l-8 border-l-amber-600 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform"><i className="fas fa-sparkles text-6xl"></i></div>
-                      <div className="flex justify-between items-start mb-10 relative z-10">
-                         <div className="w-20 h-20 bg-black text-white rounded-[2.5rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors shadow-lg">
-                            <span className="text-[10px] uppercase font-bold text-amber-500 group-hover:text-white">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
-                            <span className="text-3xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
-                         </div>
-                         <div className="text-right flex flex-col items-end gap-3">
-                            <span className="px-4 py-2 bg-green-50 text-green-700 text-[9px] font-bold uppercase rounded-full border border-green-100 flex items-center gap-2">
-                               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Confermato
-                            </span>
-                            <button onClick={() => downloadICS(a)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2 hover:text-black transition-colors"><i className="fas fa-calendar-plus"></i> Calendario</button>
-                         </div>
-                      </div>
-                      <div className="space-y-6 relative z-10">
-                        <h4 className="text-3xl font-luxury font-bold text-gray-900">{a.services?.name}</h4>
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-[11px] font-bold text-amber-600">{a.team_member_name[0]}</div>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
-                        </div>
-                      </div>
-                   </div>
-                 )) : (
-                   <div className="col-span-full py-24 text-center bg-gray-50/50 rounded-[4rem] border border-dashed border-gray-200">
-                     <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Nessuna sessione in programma</p>
-                   </div>
-                 )}
-               </div>
-             </section>
-
-             <section className="space-y-8">
-                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">Il Vostro Storico</h3>
-                <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
-                   {groupedGuestAppointments.history.length > 0 ? groupedGuestAppointments.history.map((a, i) => (
-                     <div key={a.id} className={`p-10 flex items-center justify-between transition-all border-b border-gray-50 last:border-none ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/20'} opacity-70 hover:opacity-100`}>
-                        <div className="flex items-center gap-10">
-                           <div className="text-center w-16 grayscale">
-                              <p className="text-3xl font-luxury font-bold text-gray-400">{new Date(a.date).getDate()}</p>
-                              <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
-                           </div>
-                           <div className="space-y-1">
-                              <p className="font-bold text-lg text-gray-500">{a.services?.name}</p>
-                              <p className="text-[9px] text-gray-300 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).getFullYear()}</p>
-                           </div>
-                        </div>
-                        <div className="flex items-center gap-8">
-                           <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2"><i className="fas fa-check-circle"></i> Eseguito</span>
-                           <p className="font-luxury font-bold text-xl text-gray-400">CHF {a.services?.price}</p>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {services.map(s => (
+                  <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all group">
+                     <div className="flex justify-between items-start mb-6">
+                        <span className="px-4 py-1.5 bg-gray-50 text-[8px] font-bold uppercase tracking-widest rounded-full">{s.category}</span>
+                        <div className="flex gap-2">
+                           <button onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="w-8 h-8 bg-gray-50 text-gray-400 rounded-xl hover:text-black transition-colors"><i className="fas fa-edit text-xs"></i></button>
                         </div>
                      </div>
-                   )) : (
-                     <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">Nessun rituale nell'archivio</div>
-                   )}
-                </div>
-             </section>
-
-             {groupedGuestAppointments.cancelled.length > 0 && (
-               <section className="space-y-8">
-                  <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-red-300 border-l-4 border-red-100 pl-4">Sessioni Annullate</h3>
-                  <div className="bg-red-50/30 rounded-[4rem] border border-red-50 overflow-hidden">
-                     {groupedGuestAppointments.cancelled.map((a) => (
-                       <div key={a.id} className="p-8 flex items-center justify-between border-b border-red-50/50 last:border-none opacity-50 grayscale">
-                          <div className="flex items-center gap-8">
-                             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-200"><i className="fas fa-calendar-times"></i></div>
-                             <div>
-                                <h5 className="font-bold text-sm text-red-900/50 line-through">{a.services?.name}</h5>
-                                <p className="text-[9px] text-red-300 font-bold uppercase tracking-widest">Rituale del {new Date(a.date).toLocaleDateString()}</p>
-                             </div>
-                          </div>
-                          <span className="text-[9px] font-bold text-red-300 uppercase tracking-[0.3em] bg-white px-6 py-2 rounded-full border border-red-50 shadow-sm">Stornato</span>
-                       </div>
-                     ))}
+                     <h4 className="text-xl font-luxury font-bold text-gray-900 mb-1">{s.name}</h4>
+                     <p className="text-[10px] text-gray-400 font-bold uppercase mb-6">{s.duration} min</p>
+                     <p className="text-2xl font-luxury font-bold pt-6 border-t border-gray-50">CHF {s.price}</p>
                   </div>
-               </section>
-             )}
+                ))}
+             </div>
           </div>
         )}
 
@@ -660,7 +590,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsNewStaffModalOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             {/* handleSaveStaff is now properly defined */}
              <NewStaffForm onSave={handleSaveStaff} onCancel={() => setIsNewStaffModalOpen(false)} />
           </div>
         </div>
@@ -680,6 +609,15 @@ const App: React.FC = () => {
           <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsGuestEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
              <NewGuestForm initialData={selectedGuestToEdit} onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(true); showToast("Profilo salvato."); }} onCancel={() => setIsGuestEditorOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {isServiceFormOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
+             <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
+             <ServiceForm initialData={selectedServiceToEdit} onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(true); showToast("Ritual salvato."); }} onCancel={() => setIsServiceFormOpen(false)} />
           </div>
         </div>
       )}
