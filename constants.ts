@@ -36,7 +36,10 @@ export const TEAM: TeamMember[] = [
     role: 'Creative Director', 
     bio: 'Specialista in colorazioni d\'avanguardia e tagli tecnici donna.',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&auto=format&fit=crop',
-    unavailable_dates: []
+    unavailable_dates: [],
+    total_vacation_days_per_year: 25,
+    hours_per_day_contract: 8.5,
+    overtime_balance_hours: 0
   },
   { 
     name: 'Romina', 
@@ -44,7 +47,10 @@ export const TEAM: TeamMember[] = [
     role: 'Master Esthetician', 
     bio: 'Esperta in dermocosmesi, trattamenti viso e benessere corpo.',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&h=200&auto=format&fit=crop',
-    unavailable_dates: []
+    unavailable_dates: [],
+    total_vacation_days_per_year: 25,
+    hours_per_day_contract: 8.5,
+    overtime_balance_hours: 0
   },
   { 
     name: 'Maurizio', 
@@ -52,6 +58,9 @@ export const TEAM: TeamMember[] = [
     role: 'Senior Stylist', 
     bio: 'Maestro del taglio maschile e acconciature moda.',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&h=200&auto=format&fit=crop',
-    unavailable_dates: []
+    unavailable_dates: [],
+    total_vacation_days_per_year: 25,
+    hours_per_day_contract: 8.5,
+    overtime_balance_hours: 0
   }
 ];
