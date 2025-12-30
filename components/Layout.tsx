@@ -62,7 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center space-x-4 px-6 py-4 rounded-2xl transition-all duration-300 ${
                 activeTab === item.id 
-                  ? 'bg-black text-white shadow-xl' 
+                  ? 'bg-black text-white shadow-xl scale-[1.02]' 
                   : 'text-gray-400 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
@@ -104,7 +104,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
       </aside>
 
       {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full">
+      <div className="md:hidden flex items-center justify-between p-4 px-6 bg-white border-b border-gray-50 sticky top-0 z-[500] w-full shadow-sm">
         <h1 className="text-xl font-luxury font-bold text-gray-900 tracking-tighter" onClick={() => setActiveTab('dashboard')}>KRISTAL</h1>
         {isGuest && (
           <button onClick={onLoginClick} className="text-[9px] font-bold uppercase tracking-widest text-amber-600 border border-amber-600 px-4 py-2 rounded-full">Accedi</button>
