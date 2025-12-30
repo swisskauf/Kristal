@@ -1,3 +1,4 @@
+
 import { Appointment, User, Service, TeamMember, LeaveRequest, SalonClosure, AboutUsContent } from '../types';
 import { SERVICES as INITIAL_SERVICES, TEAM as INITIAL_TEAM } from '../constants';
 
@@ -80,7 +81,10 @@ export const supabaseMock = {
       const data = safeParse(STORAGE_KEY_TEAM, INITIAL_TEAM);
       return data.map((m: any) => ({
         ...m,
-        weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : [],
+        total_vacation_days: m.total_vacation_days ?? 25,
+        overtime_balance_hours: m.overtime_balance_hours ?? 0,
+        hours_per_day_contract: m.hours_per_day_contract ?? 8,
+        weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : [0], // Domenica default
         unavailable_dates: Array.isArray(m.unavailable_dates) ? m.unavailable_dates : [],
         absences_json: Array.isArray(m.absences_json) ? m.absences_json : []
       }));
@@ -90,7 +94,10 @@ export const supabaseMock = {
       const idx = current.findIndex(m => m.name === member.name);
       const memberToSave = {
         ...member,
-        weekly_closures: Array.isArray(member.weekly_closures) ? member.weekly_closures.map(Number) : [],
+        total_vacation_days: member.total_vacation_days ?? 25,
+        overtime_balance_hours: member.overtime_balance_hours ?? 0,
+        hours_per_day_contract: member.hours_per_day_contract ?? 8,
+        weekly_closures: Array.isArray(member.weekly_closures) ? member.weekly_closures.map(Number) : [0],
         unavailable_dates: Array.isArray(member.unavailable_dates) ? member.unavailable_dates : [],
         absences_json: Array.isArray(member.absences_json) ? member.absences_json : []
       };
