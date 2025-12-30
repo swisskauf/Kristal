@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { TeamMember, Appointment } from '../types';
 
@@ -108,12 +109,19 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     });
     if (activeAbsence) return { type: 'STAFF_ABSENT', absence: activeAbsence };
 
-    // 5. Pausa Pranzo
+    // 5. Pausa Pranzo (Sincronizzata con i parametri HR)
     const [breakS, breakSM] = (member.break_start_time || '13:00').split(':').map(Number);
     const [breakE, breakEM] = (member.break_end_time || '14:00').split(':').map(Number);
     const bStart = breakS * 60 + breakSM;
     const bEnd = breakE * 60 + breakEM;
     if (targetMin >= bStart && targetMin < bEnd) return { type: 'BREAK' };
+
+    // 6. Fuori Orario di Lavoro
+    const [workSH, workSM] = (member.work_start_time || '08:30').split(':').map(Number);
+    const [workEH, workEM] = (member.work_end_time || '18:30').split(':').map(Number);
+    const wStart = workSH * 60 + workSM;
+    const wEnd = workEH * 60 + workEM;
+    if (targetMin < wStart || targetMin >= wEnd) return { type: 'OUT_OF_HOURS' };
     
     return { type: 'AVAILABLE' };
   };
@@ -137,6 +145,11 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           background-color: #fef2f2;
           background-image: repeating-linear-gradient(-45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.03) 10px, rgba(239, 68, 68, 0.03) 20px);
           border-color: #fee2e2 !important;
+          cursor: not-allowed;
+        }
+        .break-pattern {
+          background-color: #fffaf0;
+          border-color: #feebc8 !important;
           cursor: not-allowed;
         }
         .slot-hover:hover {
@@ -240,6 +253,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     const isAbsent = status?.type === 'STAFF_ABSENT';
                     const isBreak = status?.type === 'BREAK';
                     const isAppt = status?.type === 'APPOINTMENT';
+                    const isOutOfHours = status?.type === 'OUT_OF_HOURS';
                     
                     return (
                       <div 
@@ -252,7 +266,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                           isAppt ? getCategoryStyles(status.appt.services?.category) : 
                           isHoliday ? 'salon-holiday-pattern border-amber-100' :
                           isAbsent ? 'absent-pattern border-red-50' :
-                          isBreak ? 'bg-gray-50/50 border-gray-100 flex items-center justify-center' :
+                          isBreak ? 'break-pattern border-amber-100 flex items-center justify-center' :
+                          isOutOfHours ? 'bg-gray-100/50 border-gray-100 cursor-not-allowed' :
                           isOff ? 'blocked-pattern border-gray-50' :
                           'bg-white border-gray-50 hover:border-amber-200 cursor-pointer shadow-sm hover:shadow-md'
                         } animate-in fade-in zoom-in-95`}
@@ -271,9 +286,15 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                              </span>
                            </div>
                          )}
-                         {isBreak && <i className="fas fa-mug-hot text-gray-200 text-xs"></i>}
+                         {isBreak && (
+                           <div className="flex flex-col items-center justify-center gap-1">
+                              <i className="fas fa-mug-hot text-amber-300 text-[10px]"></i>
+                              <span className="text-[7px] font-bold text-amber-400 uppercase tracking-widest">Pausa</span>
+                           </div>
+                         )}
                          {isHoliday && <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black text-amber-900/20 tracking-[0.3em] uppercase rotate-[-15deg]">Atelier Chiuso</span>}
                          {isOff && <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black text-gray-300 tracking-[0.2em] uppercase">Riposo</span>}
+                         {isOutOfHours && !isOff && !isHoliday && <div className="absolute inset-0 bg-gray-900/5"></div>}
                       </div>
                     );
                   }) : weekDays.map((d, dIdx) => {
