@@ -147,19 +147,21 @@ export const db = {
     add: async (closure: SalonClosure) => {
       if (useMock) {
         const current = supabaseMock.salonClosures.getAll();
-        // Evita duplicati durante il salvataggio
         const exists = current.find(c => c.date === closure.date);
         if (!exists) {
-          supabaseMock.salonClosures.save([...current, closure]);
+          const updated = [...current, closure];
+          supabaseMock.salonClosures.save(updated);
         }
         return closure;
       }
-      return (await client.from('salon_closures').insert(closure)).data;
+      const { data } = await client.from('salon_closures').insert(closure).select();
+      return data;
     },
     delete: async (date: string) => {
       if (useMock) {
         const current = supabaseMock.salonClosures.getAll();
-        supabaseMock.salonClosures.save(current.filter(c => c.date !== date));
+        const filtered = current.filter(c => c.date !== date);
+        supabaseMock.salonClosures.save(filtered);
         return { error: null };
       }
       return await client.from('salon_closures').delete().eq('date', date);
