@@ -63,6 +63,17 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 5000);
   };
 
+  const handleAtelierImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && aboutUs) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAboutUs({ ...aboutUs, imageUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const downloadICS = (appt: any) => {
     if (!appt) return;
     const start = new Date(appt.date);
@@ -315,7 +326,7 @@ const App: React.FC = () => {
     showToast("Galleria Instagram aggiornata.");
   };
 
-  if (loading && !user) {
+  if (loading && !user && activeTab !== 'about_us' && activeTab !== 'dashboard') {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white space-y-6">
         <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -387,38 +398,135 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'about_us' && (
-          <div className="space-y-16 animate-in fade-in duration-1000 max-w-4xl mx-auto">
+          <div className="space-y-24 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
              {aboutUs ? (
-               <div className="space-y-12">
-                  <header className="text-center space-y-4">
-                     <h2 className="text-6xl font-luxury font-bold text-gray-900 leading-tight">{aboutUs.title}</h2>
-                     <p className="text-amber-600 text-[12px] font-bold uppercase tracking-[0.4em]">{aboutUs.subtitle}</p>
-                  </header>
-                  <div className="relative aspect-[16/9] rounded-[4rem] overflow-hidden shadow-2xl border-8 border-white">
-                    <img src={aboutUs.imageUrl} className="w-full h-full object-cover" alt="Kristal Atelier" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+               <div className="space-y-32">
+                  {/* HERO SECTION */}
+                  <div className="space-y-12">
+                    <header className="text-center space-y-4">
+                       <h2 className="text-7xl font-luxury font-bold text-gray-900 leading-tight tracking-tighter">{aboutUs.title}</h2>
+                       <p className="text-amber-600 text-[14px] font-bold uppercase tracking-[0.6em]">{aboutUs.subtitle}</p>
+                    </header>
+                    <div className="relative aspect-[21/9] rounded-[5rem] overflow-hidden shadow-2xl border-[12px] border-white group">
+                      <img src={aboutUs.imageUrl} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Kristal Atelier" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                      <div className="absolute bottom-12 left-12">
+                         <p className="text-white text-[10px] font-bold uppercase tracking-[0.5em] mb-2 opacity-80">Our Maison</p>
+                         <p className="text-white text-3xl font-luxury">L'Eccellenza a Lugano</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="prose prose-stone max-w-none">
-                     <p className="text-xl md:text-2xl font-light leading-relaxed text-gray-600 italic border-l-4 border-amber-600 pl-8">
-                       {aboutUs.description}
-                     </p>
+
+                  {/* STORY SECTION */}
+                  <div className="grid md:grid-cols-2 gap-20 items-center">
+                    <div className="prose prose-stone max-w-none">
+                       <p className="text-3xl font-luxury font-bold text-gray-900 mb-8 leading-tight">La Filosofia Kristal</p>
+                       <p className="text-xl font-light leading-relaxed text-gray-600 italic border-l-4 border-amber-600 pl-8">
+                         {aboutUs.description}
+                       </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                       <div className="aspect-square bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center p-8 text-center space-y-4 hover:shadow-xl transition-all">
+                          <i className="fas fa-history text-amber-600 text-3xl"></i>
+                          <h4 className="font-bold uppercase text-[10px] tracking-widest">Heritage</h4>
+                          <p className="text-[11px] text-gray-400">Punto di riferimento dal 2010</p>
+                       </div>
+                       <div className="aspect-square bg-black text-white rounded-[3rem] flex flex-col items-center justify-center p-8 text-center space-y-4 shadow-2xl">
+                          <i className="fas fa-medal text-amber-600 text-3xl"></i>
+                          <h4 className="font-bold uppercase text-[10px] tracking-widest text-amber-500">Eccellenza</h4>
+                          <p className="text-[11px] text-gray-400">Master Stylists Certificati</p>
+                       </div>
+                    </div>
                   </div>
-                  <div className="grid md:grid-cols-3 gap-8 pt-12 border-t border-gray-100">
+
+                  {/* TEAM SECTION */}
+                  <div className="space-y-16">
                      <div className="text-center space-y-2">
-                        <i className="fas fa-history text-amber-600 text-2xl"></i>
-                        <h4 className="font-bold uppercase text-[10px] tracking-widest">Heritage</h4>
-                        <p className="text-[11px] text-gray-400">Dal 2010 a Lugano</p>
+                        <h3 className="text-5xl font-luxury font-bold text-gray-900">Gli Artisti</h3>
+                        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Il talento dietro ogni rituale</p>
                      </div>
+                     <div className="grid md:grid-cols-3 gap-12">
+                        {team.map((member) => (
+                           <div key={member.name} className="group space-y-6">
+                              <div className="relative aspect-[3/4] rounded-[4rem] overflow-hidden shadow-xl border-4 border-white transition-all group-hover:shadow-2xl">
+                                 <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={member.name} />
+                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-10">
+                                    <p className="text-amber-500 text-[8px] font-bold uppercase tracking-widest mb-1">{member.role}</p>
+                                    <p className="text-white text-xl font-bold uppercase tracking-tighter">{member.name}</p>
+                                 </div>
+                              </div>
+                              <div className="text-center space-y-2 px-6">
+                                 <h5 className="text-xl font-luxury font-bold">{member.name}</h5>
+                                 <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{member.role}</p>
+                                 <p className="text-xs text-gray-500 leading-relaxed italic">{member.bio || 'Esperto rituali Kristal'}</p>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* INSTAGRAM / WORKS SECTION */}
+                  <div className="space-y-16">
                      <div className="text-center space-y-2">
-                        <i className="fas fa-medal text-amber-600 text-2xl"></i>
-                        <h4 className="font-bold uppercase text-[10px] tracking-widest">Eccellenza</h4>
-                        <p className="text-[11px] text-gray-400">Master Stylists & Estetisti</p>
+                        <h3 className="text-5xl font-luxury font-bold text-gray-900">I Nostri Lavori</h3>
+                        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Dal Portfolio Ufficiale @Kristal</p>
                      </div>
-                     <div className="text-center space-y-2">
-                        <i className="fas fa-leaf text-amber-600 text-2xl"></i>
-                        <h4 className="font-bold uppercase text-[10px] tracking-widest">Sostenibilità</h4>
-                        <p className="text-[11px] text-gray-400">Prodotti Green Luxury</p>
-                     </div>
+                     {settings.instagramToken ? (
+                       <InstagramGallery token={settings.instagramToken} />
+                     ) : (
+                       <div className="p-20 text-center bg-gray-50 rounded-[4rem] border border-dashed border-gray-200">
+                          <i className="fab fa-instagram text-4xl text-gray-200 mb-4"></i>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Galleria Lavori in fase di sincronizzazione</p>
+                       </div>
+                     )}
+                  </div>
+
+                  {/* USEFUL INFO SECTION */}
+                  <div className="bg-gray-900 text-white rounded-[5rem] p-20 grid md:grid-cols-2 gap-20 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-20 opacity-5">
+                       <i className="fas fa-gem text-[15rem]"></i>
+                    </div>
+                    <div className="space-y-10 relative z-10">
+                       <div>
+                          <h4 className="text-4xl font-luxury font-bold mb-4">Rituali & Etichetta</h4>
+                          <p className="text-gray-400 text-sm leading-relaxed">
+                            L'Atelier è un tempio del benessere. Per garantire la massima esperienza luxury, vi invitiamo ad arrivare 5 minuti prima del vostro appuntamento.
+                          </p>
+                       </div>
+                       <div className="space-y-4">
+                          <div className="flex items-center gap-6">
+                             <div className="w-12 h-12 rounded-2xl bg-amber-600 flex items-center justify-center text-white"><i className="fas fa-phone-alt"></i></div>
+                             <div>
+                                <p className="text-[8px] font-bold uppercase tracking-widest text-amber-500">Prenotazioni Telefoniche</p>
+                                <p className="text-lg font-bold">{SALON_PHONE}</p>
+                             </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                             <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white"><i className="fas fa-clock"></i></div>
+                             <div>
+                                <p className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Orario Atelier</p>
+                                <p className="text-lg font-bold">Mar - Sab | 08:30 - 18:30</p>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                    <div className="bg-white/5 backdrop-blur-xl rounded-[3rem] p-10 space-y-6 border border-white/10 relative z-10">
+                       <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Domande Frequenti</p>
+                       <div className="space-y-6">
+                          <div className="space-y-1">
+                             <p className="text-xs font-bold">Politica di Cancellazione?</p>
+                             <p className="text-[10px] text-gray-400">Chiediamo gentilmente preavviso di 24 ore per storni o modifiche.</p>
+                          </div>
+                          <div className="space-y-1">
+                             <p className="text-xs font-bold">Consulenza d'Immagine?</p>
+                             <p className="text-[10px] text-gray-400">Ogni rituale include una consulenza stilistica personalizzata gratuita.</p>
+                          </div>
+                          <div className="space-y-1">
+                             <p className="text-xs font-bold">Prodotti Utilizzati?</p>
+                             <p className="text-[10px] text-gray-400">Utilizziamo esclusivamente linee organiche e cruelty-free di alta gamma.</p>
+                          </div>
+                       </div>
+                    </div>
                   </div>
                </div>
              ) : (
@@ -438,6 +546,19 @@ const App: React.FC = () => {
              </header>
              <div className="bg-white p-12 rounded-[5rem] border border-gray-100 shadow-sm space-y-10 max-w-3xl">
                 <div className="space-y-6">
+                   {/* IMAGE UPLOAD AREA */}
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Immagine Hero Atelier</label>
+                      <div className="relative aspect-[16/6] bg-gray-50 rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 group cursor-pointer">
+                         <img src={aboutUs?.imageUrl} className="w-full h-full object-cover group-hover:opacity-70 transition-opacity" />
+                         <label className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
+                            <i className="fas fa-camera text-3xl mb-2"></i>
+                            <span className="text-[10px] font-bold uppercase">Carica Foto Atelier</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleAtelierImageUpload} />
+                         </label>
+                      </div>
+                   </div>
+
                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale</label>
                       <input 
@@ -454,15 +575,6 @@ const App: React.FC = () => {
                         value={aboutUs?.subtitle || ''} 
                         onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)}
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
-                      />
-                   </div>
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Immagine Atelier (URL)</label>
-                      <input 
-                        type="text" 
-                        value={aboutUs?.imageUrl || ''} 
-                        onChange={e => setAboutUs(prev => prev ? {...prev, imageUrl: e.target.value} : null)}
-                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
                       />
                    </div>
                    <div className="space-y-2">
@@ -495,7 +607,6 @@ const App: React.FC = () => {
                <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
              </header>
 
-             {/* GRUPPO: PROSSIME SESSIONI */}
              <section className="space-y-8">
                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600 border-l-4 border-amber-600 pl-4">Prossime Sessioni</h3>
                <div className="grid md:grid-cols-2 gap-8">
@@ -538,7 +649,6 @@ const App: React.FC = () => {
                </div>
              </section>
 
-             {/* GRUPPO: I VOSTRI MOMENTI (PASSATI) */}
              <section className="space-y-8">
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">I Vostri Momenti</h3>
                 <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
@@ -568,7 +678,6 @@ const App: React.FC = () => {
                 </div>
              </section>
 
-             {/* GRUPPO: SESSIONI CANCELLATE */}
              {groupedGuestAppointments.cancelled.length > 0 && (
                <section className="space-y-8 animate-in slide-in-from-bottom-4">
                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-red-300 border-l-4 border-red-100 pl-4">Sessioni Annullate</h3>
@@ -593,6 +702,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Rest of the component management sections remain same ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in">
              <header className="flex items-center justify-between">
