@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Appointment, Service, TeamMember, AbsenceEntry } from '../types';
+import { Appointment, Service, TeamMember } from '../types';
 
 interface AppointmentFormProps {
   onSave: (app: Partial<Appointment>) => void;
@@ -10,12 +10,7 @@ interface AppointmentFormProps {
   team: TeamMember[];
   existingAppointments: Appointment[];
   isAdminOrStaff?: boolean;
-  profiles?: Array<{
-    id: string;
-    full_name: string;
-    email?: string | null;
-    phone?: string | null;
-  }>;
+  profiles?: any[];
   salonClosures?: string[];
 }
 
@@ -63,11 +58,10 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     return profiles
       .filter(
         (p) =>
-          p.full_name.toLowerCase().includes(clientSearch.toLowerCase()) ||
-          (p.email && p.email.toLowerCase().includes(clientSearch.toLowerCase())) ||
-          (p.phone && p.phone.includes(clientSearch)),
+          p.full_name?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+          (p.email && p.email.toLowerCase().includes(clientSearch.toLowerCase())),
       )
-      .sort((a, b) => a.full_name.localeCompare(b.full_name));
+      .sort((a, b) => a.full_name?.localeCompare(b.full_name));
   }, [profiles, clientSearch]);
 
   const next21Days = useMemo(() => {
@@ -83,19 +77,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const getSlotValidation = (timeStr: string) => {
     if (!selectedMember || !selectedDate || !selectedService) return { valid: false, reason: 'Dati incompleti' };
 
-    // 0. Chiusura Globale Salone (MASSIMA PRIORITÀ)
     if (salonClosures && salonClosures.includes(selectedDate)) {
       return { valid: false, reason: 'Atelier Chiuso (Festività)' };
     }
 
     const dObj = new Date(`${selectedDate}T12:00:00`);
-    
-    // 1. Chiusura Settimanale Artista
     if ((selectedMember.weekly_closures || []).includes(dObj.getDay())) {
       return { valid: false, reason: `Giorno di riposo per ${selectedMember.name}` };
     }
 
-    // 2. Ferie o Indisponibilità Artista
     if ((selectedMember.unavailable_dates || []).includes(selectedDate)) {
       return { valid: false, reason: `${selectedMember.name} non è in Atelier oggi` };
     }
@@ -105,7 +95,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     const duration = selectedService.duration || 30;
     const slotEnd = slotStart + duration;
 
-    // 3. Controllo Congedi Approvati (anche parziali)
     const activeAbsence = (selectedMember.absences_json || []).find(abs => {
       const absStart = new Date(abs.startDate).toISOString().split('T')[0];
       const absEnd = new Date(abs.endDate).toISOString().split('T')[0];
@@ -123,36 +112,20 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
     });
 
     if (activeAbsence) {
-      return { valid: false, reason: `${selectedMember.name} è in congedo (${activeAbsence.type})` };
+      return { valid: false, reason: `${selectedMember.name} è in congedo` };
     }
 
-    // 4. Orari di lavoro standard
     const [whS, wmS] = (selectedMember.work_start_time || '08:30').split(':').map(Number);
     const [whE, wmE] = (selectedMember.work_end_time || '18:30').split(':').map(Number);
     const workStart = whS * 60 + wmS;
     const workEnd = whE * 60 + wmE;
 
-    if (slotStart < workStart || slotEnd > workEnd) {
-      return { valid: false, reason: 'Fuori orario lavorativo' };
-    }
+    if (slotStart < workStart || slotEnd > workEnd) return { valid: false, reason: 'Fuori orario' };
 
-    // 5. Pausa pranzo
-    if (selectedMember.break_start_time && selectedMember.break_end_time) {
-      const [bsH, bsM] = selectedMember.break_start_time.split(':').map(Number);
-      const [beH, beM] = selectedMember.break_end_time.split(':').map(Number);
-      const bStart = bsH * 60 + bsM;
-      const bEnd = beH * 60 + beM;
-      if (slotStart < bEnd && slotEnd > bStart) {
-        return { valid: false, reason: 'Pausa pranzo' };
-      }
-    }
-
-    // 6. Conflitti con appuntamenti esistenti
     const conflict = existingAppointments.find((app) => {
       if (app.id === initialData?.id || app.status === 'cancelled') return false;
       if (app.team_member_name !== teamMemberName) return false;
-      const appD = new Date(app.date).toLocaleDateString('en-CA');
-      if (appD !== selectedDate) return false;
+      if (new Date(app.date).toLocaleDateString('en-CA') !== selectedDate) return false;
 
       const appDateObj = new Date(app.date);
       const appStart = appDateObj.getHours() * 60 + appDateObj.getMinutes();
@@ -162,21 +135,16 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       return slotStart < appEnd && slotEnd > appStart;
     });
 
-    if (conflict) {
-      return { valid: false, reason: 'Slot già occupato' };
-    }
-
-    return { valid: true };
+    return conflict ? { valid: false, reason: 'Slot occupato' } : { valid: true };
   };
 
   const availableSlots = useMemo(() => {
     if (!selectedMember) return [];
-    const slots: { time: string; valid: boolean; reason?: string }[] = [];
+    const slots = [];
     for (let h = 8; h <= 19; h++) {
       for (const m of ['00', '30']) {
         const t = `${h.toString().padStart(2, '0')}:${m}`;
         const validation = getSlotValidation(t);
-        // Gli admin vedono tutti i tempi, i clienti solo quelli validi
         if (isAdminOrStaff || validation.valid) {
           slots.push({ time: t, ...validation });
         }
@@ -188,14 +156,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedService || isSubmitting) return;
-    if (isAdminOrStaff && !clientId && !initialData?.id) { alert('Scegliere un Ospite.'); return; }
-    if (!selectedTime) { alert('Scegliere un orario.'); return; }
-
-    const validation = getSlotValidation(selectedTime);
-    if (!validation.valid && !isAdminOrStaff) {
-      alert(`Spiacenti: ${validation.reason}`);
-      return;
-    }
+    if (!selectedTime) return;
 
     setIsSubmitting(true);
     try {
@@ -261,7 +222,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                 className="w-full p-5 rounded-3xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm"
               >
                 {services.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.duration} min)</option>
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </div>
@@ -280,15 +241,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
           </div>
 
           <div className="space-y-4">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Data del Ritual</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Data</label>
             <div className="flex space-x-3 overflow-x-auto pb-4 scrollbar-hide">
               {next21Days.map((day) => {
                 const d = new Date(`${day}T12:00:00`);
                 const isSelected = selectedDate === day;
                 const isSalonClosed = salonClosures && salonClosures.includes(day);
                 const isStaffClosed = selectedMember && (selectedMember.weekly_closures || []).includes(d.getDay());
-                const isStaffAway = selectedMember && (selectedMember.unavailable_dates || []).includes(day);
-                const isDisabled = isSalonClosed || isStaffClosed || isStaffAway;
+                const isDisabled = isSalonClosed || isStaffClosed;
                 
                 return (
                   <button
@@ -303,9 +263,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                         : 'border-gray-50 bg-white hover:border-amber-200'
                     }`}
                   >
-                    <span className={`text-[7px] font-bold uppercase mb-1 ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>
-                      {d.toLocaleDateString('it-IT', { weekday: 'short' })}
-                    </span>
+                    <span className={`text-[7px] font-bold uppercase mb-1 ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
                     <span className="text-xl font-luxury font-bold">{d.getDate()}</span>
                   </button>
                 );
@@ -313,49 +271,30 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex justify-between items-center ml-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Orario</label>
-              <p className="text-[9px] font-bold text-amber-600 uppercase">Seleziona uno slot</p>
-            </div>
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-              {availableSlots.length > 0 ? (
-                availableSlots.map((slot) => (
-                  <button
-                    key={slot.time}
-                    type="button"
-                    onClick={() => setSelectedTime(slot.time)}
-                    className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 ${
-                      selectedTime === slot.time 
-                        ? 'bg-amber-600 border-amber-600 text-white shadow-md' 
-                        : slot.valid
-                        ? 'bg-white border-gray-100 text-gray-700 hover:border-amber-200'
-                        : 'bg-red-50 border-red-100 text-red-300 opacity-60 cursor-not-allowed'
-                    }`}
-                    title={slot.valid ? 'Disponibile' : slot.reason}
-                  >
-                    {slot.time}
-                  </button>
-                ))
-              ) : (
-                <div className="col-span-full py-8 text-center bg-gray-50 rounded-2xl">
-                  <p className="text-gray-400 text-[10px] font-bold uppercase">Nessuna disponibilità oggi</p>
-                </div>
-              )}
-            </div>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+            {availableSlots.map((slot) => (
+              <button
+                key={slot.time}
+                type="button"
+                onClick={() => slot.valid && setSelectedTime(slot.time)}
+                className={`py-3 rounded-xl text-[10px] font-bold transition-all border-2 ${
+                  selectedTime === slot.time 
+                    ? 'bg-amber-600 border-amber-600 text-white' 
+                    : slot.valid
+                    ? 'bg-white border-gray-100 text-gray-700'
+                    : 'bg-red-50 border-red-100 text-red-300 opacity-60 cursor-not-allowed'
+                }`}
+              >
+                {slot.time}
+              </button>
+            ))}
           </div>
         </div>
 
         <div className="flex gap-4 pt-8 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="flex-1 py-5 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Annulla</button>
-          <button 
-            type="submit" 
-            disabled={isSubmitting || !selectedTime}
-            className={`flex-[2] py-5 rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl transition-all ${
-              isSubmitting ? 'bg-gray-200 text-gray-400' : 'bg-black text-white hover:bg-amber-700'
-            }`}
-          >
-            {isSubmitting ? <i className="fas fa-spinner animate-spin"></i> : (initialData?.id ? 'Salva Modifiche' : 'Conferma Ritual')}
+          <button type="submit" disabled={isSubmitting || !selectedTime} className="flex-[2] py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-amber-700 transition-all">
+            {isSubmitting ? '...' : (initialData?.id ? 'Salva' : 'Conferma')}
           </button>
         </div>
       </form>
