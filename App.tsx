@@ -41,7 +41,6 @@ const App: React.FC = () => {
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
   const [aboutUs, setAboutUs] = useState<AboutUsContent | null>(null);
   
-  // Modal & Form state
   const [newClosure, setNewClosure] = useState({ date: '', name: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
@@ -120,8 +119,9 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (silent = false) => {
     try {
+      if (!silent) setLoading(true);
       await ensureDataSeeding();
       const [svcs, tm, appts, reqs, profs, closures, about] = await Promise.all([
         db.services.getAll(),
@@ -138,7 +138,7 @@ const App: React.FC = () => {
       setRequests(reqs || []);
       setProfiles(profs || []);
       setSalonClosures(closures || []);
-      setAboutUs(about);
+      setAboutUs(about || null);
     } catch (e) {
       console.error("Data Refresh Error", e);
     } finally {
@@ -171,10 +171,6 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [refreshData]);
 
-  useEffect(() => {
-    refreshData();
-  }, [refreshData, activeTab]);
-
   const isAdmin = user?.role === 'admin';
   const isCollaborator = user?.role === 'collaborator';
   const isGuest = !user;
@@ -185,7 +181,6 @@ const App: React.FC = () => {
   }, [team, user]);
 
   const categories = useMemo(() => {
-    if (!services || services.length === 0) return [];
     return Array.from(new Set(services.map(s => s.category)));
   }, [services]);
 
@@ -206,97 +201,58 @@ const App: React.FC = () => {
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
         showToast(`Rituale aggiornato.`);
-        
         if (settings.emailNotificationsEnabled && status === 'cancelled') {
           const client = profiles.find(p => p.id === appt.client_id);
           const service = services.find(s => s.id === appt.service_id);
           sendLuxuryEmailNotification({ type: 'cancellation', appointment: appt, client, service });
         }
-        
-        refreshData();
+        refreshData(true);
         setSelectedAppointmentDetail(null);
       }
     } catch (e) {
-      showToast("Errore durante l'aggiornamento.", "error");
+      showToast("Errore aggiornamento.", "error");
     }
   };
 
   const handleSaveAppointment = async (a: Partial<Appointment>) => {
     try {
-      const isNew = !a.id;
-      const oldAppt = isNew ? null : appointments.find(app => app.id === a.id);
-      
-      const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id || user?.id) : user?.id;
+      const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id) : user?.id;
       const savedApptData = { ...a, client_id };
       await db.appointments.upsert(savedApptData as any); 
-      
       setIsFormOpen(false); 
       setFormInitialData(null); 
-      await refreshData(); 
-      
-      showToast(isNew ? "Rituale programmato con successo." : "Rituale aggiornato.");
-
-      // Logica Notifiche Email
-      if (settings.emailNotificationsEnabled) {
-        const client = profiles.find(p => p.id === client_id);
-        const service = services.find(s => s.id === a.service_id);
-        const fullAppt = { ...a, client_id } as Appointment;
-
-        if (isNew) {
-          showToast("Invio email di conferma...", "info");
-          await sendLuxuryEmailNotification({ type: 'confirmation', appointment: fullAppt, client, service });
-        } else if (oldAppt && (oldAppt.date !== a.date || oldAppt.team_member_name !== a.team_member_name)) {
-          showToast("Invio email aggiornamento...", "info");
-          await sendLuxuryEmailNotification({ type: 'update', appointment: fullAppt, client, service, oldData: oldAppt });
-        }
-      }
-
-      if (isNew && confirm("Desideri scaricare l'appuntamento nel calendario del telefono?")) {
-        const fullAppt = { ...a, services: services.find(s => s.id === a.service_id) };
-        downloadICS(fullAppt);
-      }
+      await refreshData(true); 
+      showToast("Rituale programmato con successo.");
     } catch (err) {
-      showToast("Errore nel salvataggio del rituale.", "error");
-    }
-  };
-
-  const handleSaveStaff = async (staffData: TeamMember) => {
-    try {
-      await db.team.upsert(staffData);
-      showToast(`Artista ${staffData.name} creato.`);
-      setIsNewStaffModalOpen(false);
-      refreshData();
-    } catch (e) {
-      showToast("Errore nel salvataggio del nuovo membro.", "error");
+      showToast("Errore nel salvataggio.", "error");
     }
   };
 
   const handleSaveClosure = async () => {
     if (!newClosure.date) return;
-    
     try {
       if (salonClosures.some(c => c.date === newClosure.date)) {
-        showToast("Questa data è già registrata.", "info");
+        showToast("Data già registrata.", "info");
         return;
       }
-      
-      const name = newClosure.name || 'Chiusura Straordinaria';
-      await db.salonClosures.add({ date: newClosure.date, name });
+      const updated = [...salonClosures, { date: newClosure.date, name: newClosure.name || 'Chiusura Atelier' }];
+      await db.salonClosures.save(updated);
       setNewClosure({ date: '', name: '' });
-      await refreshData();
-      showToast("Giorno festivo registrato correttamente.");
+      await refreshData(true);
+      showToast("Chiusura registrata.");
     } catch (err) {
-      showToast("Errore nel salvataggio della festività.", "error");
+      showToast("Errore salvataggio.", "error");
     }
   };
 
   const handleDeleteClosure = async (date: string) => {
     try {
-      await db.salonClosures.delete(date);
-      await refreshData();
-      showToast("Giorno festivo rimosso correttamente.");
+      const updated = salonClosures.filter(c => c.date !== date);
+      await db.salonClosures.save(updated);
+      await refreshData(true);
+      showToast("Chiusura rimossa.");
     } catch (err) {
-      showToast("Errore nella rimozione.", "error");
+      showToast("Errore rimozione.", "error");
     }
   };
 
@@ -306,27 +262,23 @@ const App: React.FC = () => {
       setAboutUs(content);
       showToast("Contenuti Atelier aggiornati.");
     } catch (e) {
-      showToast("Errore nel salvataggio dei contenuti.", "error");
+      showToast("Errore salvataggio.", "error");
     }
   };
 
-  const saveSettings = (newSettings: typeof settings) => {
-    setSettings(newSettings);
-    showToast("Impostazioni salvate.");
-  };
-
-  const handleSocialSync = async () => {
-    if (!settings.instagramToken) {
-      showToast("Inserire un token Instagram valido.", "error");
-      return;
+  // Fix: Added handleSaveStaff function to process new team member additions
+  const handleSaveStaff = async (member: TeamMember) => {
+    try {
+      await db.team.upsert(member);
+      setIsNewStaffModalOpen(false);
+      await refreshData(true);
+      showToast("Nuovo artista aggiunto con successo.");
+    } catch (err) {
+      showToast("Errore salvataggio artista.", "error");
     }
-    showToast("Sincronizzazione social in corso...", "info");
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setSettings(prev => ({ ...prev, instagramIntegrationEnabled: true }));
-    showToast("Galleria Instagram aggiornata.");
   };
 
-  if (loading && !user && activeTab !== 'about_us' && activeTab !== 'dashboard') {
+  if (loading && !aboutUs) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white space-y-6">
         <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -340,7 +292,7 @@ const App: React.FC = () => {
       {toast && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[3000] animate-in slide-in-from-top-4 duration-500 w-full max-w-md px-4">
           <div className={`px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-md ${toast.type === 'error' ? 'bg-red-900/90 border-red-500/30' : toast.type === 'info' ? 'bg-amber-600/90 border-amber-500/30' : 'bg-black/90 border-amber-500/30'} text-white`}>
-            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : toast.type === 'info' ? 'fa-sync fa-spin' : 'fa-check-circle'} ${toast.type === 'error' ? 'text-red-400' : 'text-white'}`}></i>
+            <i className={`fas ${toast.type === 'error' ? 'fa-exclamation-circle' : toast.type === 'info' ? 'fa-sync fa-spin' : 'fa-check-circle'} text-white`}></i>
             <p className="text-[11px] font-bold uppercase tracking-widest">{toast.message}</p>
           </div>
         </div>
@@ -355,8 +307,8 @@ const App: React.FC = () => {
             ) : isCollaborator && currentMember ? (
                 <CollaboratorDashboard 
                   member={currentMember} appointments={appointments} requests={requests} user={user!} 
-                  onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(); }}
-                  onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(); }}
+                  onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(true); }}
+                  onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(true); }}
                   onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
                 />
             ) : (
@@ -366,7 +318,7 @@ const App: React.FC = () => {
                     <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em]">Atelier di Bellezza Luxury</p>
                   </header>
                   <div className="grid md:grid-cols-2 gap-12">
-                    {categories.length > 0 ? categories.map(cat => (
+                    {categories.map(cat => (
                       <div key={cat} className="space-y-8">
                         <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-300 border-b border-gray-100 pb-4">{cat}</h4>
                         <div className="space-y-4">
@@ -384,12 +336,7 @@ const App: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                    )) : (
-                      <div className="col-span-full py-20 text-center">
-                         <div className="inline-block w-8 h-8 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                         <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Sincronizzazione Menu Ritual...</p>
-                      </div>
-                    )}
+                    ))}
                   </div>
                   {settings.instagramIntegrationEnabled && settings.instagramToken && <InstagramGallery token={settings.instagramToken} />}
                 </div>
@@ -409,10 +356,6 @@ const App: React.FC = () => {
                     <div className="relative aspect-[21/9] rounded-[5rem] overflow-hidden shadow-2xl border-[12px] border-white group">
                       <img src={aboutUs.imageUrl} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Kristal Atelier" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-12 left-12">
-                         <p className="text-white text-[10px] font-bold uppercase tracking-[0.5em] mb-2 opacity-80">Our Maison</p>
-                         <p className="text-white text-3xl font-luxury">L'Eccellenza a Lugano</p>
-                      </div>
                     </div>
                   </div>
 
@@ -427,12 +370,10 @@ const App: React.FC = () => {
                        <div className="aspect-square bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center p-8 text-center space-y-4 hover:shadow-xl transition-all">
                           <i className="fas fa-history text-amber-600 text-3xl"></i>
                           <h4 className="font-bold uppercase text-[10px] tracking-widest">Heritage</h4>
-                          <p className="text-[11px] text-gray-400">Punto di riferimento dal 2010</p>
                        </div>
                        <div className="aspect-square bg-black text-white rounded-[3rem] flex flex-col items-center justify-center p-8 text-center space-y-4 shadow-2xl">
                           <i className="fas fa-medal text-amber-600 text-3xl"></i>
                           <h4 className="font-bold uppercase text-[10px] tracking-widest text-amber-500">Eccellenza</h4>
-                          <p className="text-[11px] text-gray-400">Master Stylists Certificati</p>
                        </div>
                     </div>
                   </div>
@@ -448,7 +389,6 @@ const App: React.FC = () => {
                               <div className="relative aspect-[3/4] rounded-[4rem] overflow-hidden shadow-xl border-4 border-white transition-all group-hover:shadow-2xl">
                                  <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={member.name} />
                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-10">
-                                    <p className="text-amber-500 text-[8px] font-bold uppercase tracking-widest mb-1">{member.role}</p>
                                     <p className="text-white text-xl font-bold uppercase tracking-tighter">{member.name}</p>
                                  </div>
                               </div>
@@ -461,73 +401,10 @@ const App: React.FC = () => {
                         ))}
                      </div>
                   </div>
-
-                  <div className="space-y-16">
-                     <div className="text-center space-y-2">
-                        <h3 className="text-5xl font-luxury font-bold text-gray-900">I Nostri Lavori</h3>
-                        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Dal Portfolio Ufficiale @Kristal</p>
-                     </div>
-                     {settings.instagramToken ? (
-                       <InstagramGallery token={settings.instagramToken} />
-                     ) : (
-                       <div className="p-20 text-center bg-gray-50 rounded-[4rem] border border-dashed border-gray-200">
-                          <i className="fab fa-instagram text-4xl text-gray-200 mb-4"></i>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Galleria Lavori in fase di sincronizzazione</p>
-                       </div>
-                     )}
-                  </div>
-
-                  <div className="bg-gray-900 text-white rounded-[5rem] p-20 grid md:grid-cols-2 gap-20 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-20 opacity-5">
-                       <i className="fas fa-gem text-[15rem]"></i>
-                    </div>
-                    <div className="space-y-10 relative z-10">
-                       <div>
-                          <h4 className="text-4xl font-luxury font-bold mb-4">Rituali & Etichetta</h4>
-                          <p className="text-gray-400 text-sm leading-relaxed">
-                            L'Atelier è un tempio del benessere. Per garantire la massima esperienza luxury, vi invitiamo ad arrivare 5 minuti prima del vostro appuntamento.
-                          </p>
-                       </div>
-                       <div className="space-y-4">
-                          <div className="flex items-center gap-6">
-                             <div className="w-12 h-12 rounded-2xl bg-amber-600 flex items-center justify-center text-white"><i className="fas fa-phone-alt"></i></div>
-                             <div>
-                                <p className="text-[8px] font-bold uppercase tracking-widest text-amber-500">Prenotazioni Telefoniche</p>
-                                <p className="text-lg font-bold">{SALON_PHONE}</p>
-                             </div>
-                          </div>
-                          <div className="flex items-center gap-6">
-                             <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white"><i className="fas fa-clock"></i></div>
-                             <div>
-                                <p className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Orario Atelier</p>
-                                <p className="text-lg font-bold">Mar - Sab | 08:30 - 18:30</p>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-xl rounded-[3rem] p-10 space-y-6 border border-white/10 relative z-10">
-                       <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Domande Frequenti</p>
-                       <div className="space-y-6">
-                          <div className="space-y-1">
-                             <p className="text-xs font-bold">Politica di Cancellazione?</p>
-                             <p className="text-[10px] text-gray-400">Chiediamo gentilmente preavviso di 24 ore per storni o modifiche.</p>
-                          </div>
-                          <div className="space-y-1">
-                             <p className="text-xs font-bold">Consulenza d'Immagine?</p>
-                             <p className="text-[10px] text-gray-400">Ogni rituale include una consulenza stilistica personalizzata gratuita.</p>
-                          </div>
-                          <div className="space-y-1">
-                             <p className="text-xs font-bold">Prodotti Utilizzati?</p>
-                             <p className="text-[10px] text-gray-400">Utilizziamo esclusivamente linee organiche e cruelty-free di alta gamma.</p>
-                          </div>
-                       </div>
-                    </div>
-                  </div>
                </div>
              ) : (
                <div className="py-24 text-center">
-                  <div className="inline-block w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Caricamento Storia Kristal...</p>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">In attesa dei contenuti della Maison...</p>
                </div>
              )}
           </div>
@@ -552,20 +429,19 @@ const App: React.FC = () => {
                          </label>
                       </div>
                    </div>
-
                    <div className="grid md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo</label>
-                         <input type="text" value={aboutUs?.title || ''} onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg focus:ring-2 focus:ring-amber-500" />
+                         <input type="text" value={aboutUs?.title || ''} onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg" />
                       </div>
                       <div className="space-y-2">
                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo</label>
-                         <input type="text" value={aboutUs?.subtitle || ''} onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm focus:ring-2 focus:ring-amber-500" />
+                         <input type="text" value={aboutUs?.subtitle || ''} onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm" />
                       </div>
                    </div>
                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Narrazione (Bio Atelier)</label>
-                      <textarea rows={8} value={aboutUs?.description || ''} onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-medium text-sm leading-relaxed focus:ring-2 focus:ring-amber-500 resize-none" />
+                      <textarea rows={8} value={aboutUs?.description || ''} onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-medium text-sm leading-relaxed resize-none" />
                    </div>
                 </div>
                 <button onClick={() => aboutUs && handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Pubblica Modifiche</button>
@@ -583,7 +459,6 @@ const App: React.FC = () => {
                <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
              </header>
 
-             {/* PROSSIMI RITUAL */}
              <section className="space-y-8">
                <div className="flex items-center gap-4">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -621,7 +496,6 @@ const App: React.FC = () => {
                </div>
              </section>
 
-             {/* STORICO RITUAL */}
              <section className="space-y-8">
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">Il Vostro Storico</h3>
                 <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
@@ -648,7 +522,6 @@ const App: React.FC = () => {
                 </div>
              </section>
 
-             {/* RITUAL CANCELLATI */}
              {groupedGuestAppointments.cancelled.length > 0 && (
                <section className="space-y-8">
                   <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-red-300 border-l-4 border-red-100 pl-4">Sessioni Annullate</h3>
@@ -671,40 +544,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'services_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <header className="flex items-center justify-between">
-                <div>
-                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Gestione Ritual</h2>
-                </div>
-                <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
-             </header>
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {services.map(s => (
-                  <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all group">
-                     <div className="flex justify-between items-start mb-6">
-                        <span className="px-4 py-1.5 bg-gray-50 text-[8px] font-bold uppercase tracking-widest rounded-full">{s.category}</span>
-                        <div className="flex gap-2">
-                           <button onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="w-8 h-8 bg-gray-50 text-gray-400 rounded-xl hover:text-black transition-colors"><i className="fas fa-edit text-xs"></i></button>
-                        </div>
-                     </div>
-                     <h4 className="text-xl font-luxury font-bold text-gray-900 mb-1">{s.name}</h4>
-                     <p className="text-[10px] text-gray-400 font-bold uppercase mb-6">{s.duration} min</p>
-                     <div className="flex items-center justify-between pt-6 border-t border-gray-50">
-                        <p className="text-2xl font-luxury font-bold">CHF {s.price}</p>
-                     </div>
-                  </div>
-                ))}
-             </div>
-          </div>
-        )}
-
         {activeTab === 'vacation_planning' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
-             <header>
-                <h2 className="text-5xl font-luxury font-bold text-gray-900">Centro Congedi</h2>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Gestione Assenze e Chiusure Atelier</p>
-             </header>
+             <header><h2 className="text-5xl font-luxury font-bold text-gray-900">Centro Congedi</h2></header>
              <div className="grid lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
                    <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-amber-600 pl-4">Richieste Staff</h3>
@@ -720,98 +562,29 @@ const App: React.FC = () => {
                              await db.team.upsert({ ...member, absences_json: [...(member.absences_json || []), newAbsence] });
                           }
                        }
-                       refreshData(); 
+                       refreshData(true); 
                      }} 
                    />
                 </div>
                 <div className="space-y-8">
                    <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-black pl-4">Festività & Chiusure Globali</h3>
                    <div className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm space-y-8">
-                      <div className="space-y-4">
-                         <div className="grid grid-cols-2 gap-4">
-                            <input 
-                              type="date" 
-                              value={newClosure.date} 
-                              onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })}
-                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all" 
-                            />
-                            <input 
-                              type="text" 
-                              placeholder="Nome Festività" 
-                              value={newClosure.name}
-                              onChange={(e) => setNewClosure({ ...newClosure, name: e.target.value })}
-                              className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 transition-all" 
-                            />
-                         </div>
-                         <button 
-                            onClick={handleSaveClosure}
-                            className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all active:scale-95"
-                         >
-                            Registra Chiusura
-                         </button>
+                      <div className="grid grid-cols-2 gap-4">
+                         <input type="date" value={newClosure.date} onChange={(e) => setNewClosure({ ...newClosure, date: e.target.value })} className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
+                         <input type="text" placeholder="Nome Festività" value={newClosure.name} onChange={(e) => setNewClosure({ ...newClosure, name: e.target.value })} className="p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs" />
                       </div>
-                      <div className="grid gap-3 max-h-[300px] overflow-y-auto scrollbar-hide pr-2">
+                      <button onClick={handleSaveClosure} className="w-full py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all">Registra Chiusura</button>
+                      <div className="grid gap-3 max-h-[300px] overflow-y-auto scrollbar-hide">
                          {salonClosures.map(c => (
-                           <div key={c.date} className="p-5 bg-gray-50 rounded-3xl flex justify-between items-center group animate-in slide-in-from-left-4">
-                              <div>
-                                 <p className="text-[10px] font-bold text-gray-900 uppercase">{c.name}</p>
-                                 <p className="text-[8px] font-bold text-gray-400 uppercase">{new Date(c.date).toLocaleDateString('it-IT', {day:'numeric', month:'long'})}</p>
-                              </div>
+                           <div key={c.date} className="p-5 bg-gray-50 rounded-3xl flex justify-between items-center group">
+                              <div><p className="text-[10px] font-bold text-gray-900 uppercase">{c.name}</p><p className="text-[8px] font-bold text-gray-400">{new Date(c.date).toLocaleDateString('it-IT')}</p></div>
                               <button onClick={() => handleDeleteClosure(c.date)} className="text-gray-300 hover:text-red-500 transition-colors p-3"><i className="fas fa-trash text-sm"></i></button>
                            </div>
                          ))}
-                         {salonClosures.length === 0 && (
-                           <p className="text-center py-6 text-gray-300 text-[9px] font-bold uppercase tracking-widest italic">Nessun giorno festivo programmato</p>
-                         )}
                       </div>
                    </div>
                 </div>
              </div>
-          </div>
-        )}
-
-        {activeTab === 'team_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <header className="flex items-center justify-between">
-                <div>
-                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Il Tuo Team</h2>
-                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Gestione Profili Artisti</p>
-                </div>
-                <button onClick={() => setIsNewStaffModalOpen(true)} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all">
-                  <i className="fas fa-plus"></i>
-                </button>
-             </header>
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
-                {team.map(m => (
-                   <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group">
-                      <div className="relative mb-8 text-center">
-                         <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white shadow-xl mx-auto" />
-                         <div className="absolute -bottom-2 right-1/2 translate-x-12 w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center shadow-lg group-hover:bg-amber-600 transition-colors"><i className="fas fa-cog text-xs"></i></div>
-                      </div>
-                      <div className="text-center">
-                         <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
-                         <p className="text-[9px] text-amber-600 font-bold uppercase tracking-[0.3em] mt-1">{m.role}</p>
-                         <p className="text-[8px] text-gray-400 font-medium lowercase tracking-tighter mt-1">{m.email}</p>
-                         <div className="mt-8 pt-8 border-t border-gray-50 flex justify-center gap-6">
-                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_start_time || '08:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Inizio</p></div>
-                            <div className="text-center"><p className="text-[10px] font-bold text-gray-900">{m.work_end_time || '18:30'}</p><p className="text-[7px] text-gray-400 uppercase font-bold">Fine</p></div>
-                         </div>
-                      </div>
-                   </div>
-                ))}
-             </div>
-          </div>
-        )}
-
-        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
-          <div className="animate-in fade-in">
-             <GuestManagement 
-               profiles={profiles} 
-               appointments={appointments} 
-               onRefresh={refreshData} 
-               onEditGuest={(guest) => { setSelectedGuestToEdit(guest); setIsGuestEditorOpen(true); }}
-               onAddGuest={() => { setSelectedGuestToEdit(null); setIsGuestEditorOpen(true); }}
-             />
           </div>
         )}
 
@@ -828,56 +601,52 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'team_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <header className="flex items-center justify-between">
+                <h2 className="text-5xl font-luxury font-bold text-gray-900">Il Tuo Team</h2>
+                <button onClick={() => setIsNewStaffModalOpen(true)} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
+             </header>
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+                {team.map(m => (
+                   <div key={m.name} onClick={() => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} className="bg-white p-10 rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all cursor-pointer group text-center">
+                      <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white shadow-xl mx-auto mb-6" />
+                      <h4 className="text-2xl font-luxury font-bold text-gray-900">{m.name}</h4>
+                      <p className="text-[9px] text-amber-600 font-bold uppercase tracking-[0.3em] mt-1">{m.role}</p>
+                   </div>
+                ))}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'clients' && (isAdmin || isCollaborator) && (
+          <div className="animate-in fade-in">
+             <GuestManagement 
+               profiles={profiles} 
+               appointments={appointments} 
+               onRefresh={() => refreshData(true)} 
+               onEditGuest={(guest) => { setSelectedGuestToEdit(guest); setIsGuestEditorOpen(true); }}
+               onAddGuest={() => { setSelectedGuestToEdit(null); setIsGuestEditorOpen(true); }}
+             />
+          </div>
+        )}
+
         {activeTab === 'impostazioni' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
-             <header>
-               <h2 className="text-5xl font-luxury font-bold text-gray-900">Configurazione</h2>
-               <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Centro Controllo Kristal</p>
-             </header>
+             <h2 className="text-5xl font-luxury font-bold text-gray-900">Configurazione</h2>
              <div className="grid md:grid-cols-2 gap-12">
-                <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-14">
-                  <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8 flex items-center gap-4"><i className="fas fa-sliders-h text-amber-600"></i> Moduli & Contatto</h4>
-                  <div className="space-y-12">
-                    <div className="flex items-center justify-between px-6">
-                      <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 bg-amber-600 text-white rounded-[1.8rem] flex items-center justify-center shadow-xl"><i className="fas fa-sparkles text-2xl"></i></div>
-                        <div><p className="text-lg font-bold">Kristal AI Assistant</p><p className="text-[10px] text-gray-400 font-bold uppercase">Consulente virtuale</p></div>
-                      </div>
-                      <button onClick={() => { 
-                        const newVal = !settings.aiAssistantEnabled;
-                        setSettings({...settings, aiAssistantEnabled: newVal});
-                        showToast(`Assistente AI ${newVal ? 'attivato' : 'disattivato'}.`);
-                      }} className={`w-16 h-9 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
-                    </div>
-                    <div className="p-8 bg-gray-50 rounded-[3rem] border border-gray-100">
-                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Numero Emergenze Atelier</p>
-                       <p className="text-xl font-luxury font-bold text-gray-900">{SALON_PHONE}</p>
-                    </div>
-                    <button onClick={() => saveSettings(settings)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Salva Configurazione</button>
+                <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-10">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8">AI & Servizi</h4>
+                  <div className="flex items-center justify-between">
+                    <p className="text-lg font-bold">Kristal AI Assistant</p>
+                    <button onClick={() => setSettings({...settings, aiAssistantEnabled: !settings.aiAssistantEnabled})} className={`w-16 h-9 rounded-full transition-all relative ${settings.aiAssistantEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.aiAssistantEnabled ? 'left-9' : 'left-1.5'}`}></div></button>
                   </div>
+                  <button onClick={() => { showToast("Impostazioni salvate."); }} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl">Salva Configurazione</button>
                 </div>
-                <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-12">
-                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8 flex items-center gap-4"><i className="fab fa-instagram text-amber-600 text-2xl"></i> Social Integration</h4>
-                   <div className="space-y-8">
-                      <div className="p-10 bg-gray-50 rounded-[3rem] border border-gray-100">
-                        <p className="text-[10px] font-bold uppercase text-amber-600 mb-4 tracking-widest">Guida Token</p>
-                        <ol className="text-[11px] leading-relaxed text-gray-600 space-y-3 list-decimal ml-4">
-                          <li>Accedi a developers.facebook.com</li>
-                          <li>Crea app "Consumer"</li>
-                          <li>Instagram Basic Display - Genera Token</li>
-                        </ol>
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-[9px] font-bold uppercase text-gray-400 ml-4">Access Token</label>
-                        <input type="password" placeholder="IGQV..." value={settings.instagramToken} onChange={(e) => setSettings({...settings, instagramToken: e.target.value})} className="w-full p-6 rounded-[2rem] bg-gray-50 border-none font-bold text-xs shadow-inner focus:ring-2 focus:ring-amber-500 outline-none" />
-                      </div>
-                      <div className="flex items-center justify-between px-6"><span className="text-[10px] font-bold uppercase tracking-[0.3em]">Attiva Portfolio Gallery</span><button onClick={() => {
-                        const newVal = !settings.instagramIntegrationEnabled;
-                        setSettings({...settings, instagramIntegrationEnabled: newVal});
-                        showToast(`Portfolio Instagram ${newVal ? 'attivata' : 'disattivata'}.`);
-                      }} className={`w-16 h-9 rounded-full transition-all relative ${settings.instagramIntegrationEnabled ? 'bg-amber-600' : 'bg-gray-200'}`}><div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all ${settings.instagramIntegrationEnabled ? 'left-9' : 'left-1.5'}`}></div></button></div>
-                      <button onClick={handleSocialSync} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Sincronizza Social</button>
-                   </div>
+                <div className="bg-white p-14 rounded-[5rem] border border-gray-100 shadow-sm space-y-8">
+                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b pb-8">Social Integration</h4>
+                   <input type="password" placeholder="Instagram Token" value={settings.instagramToken} onChange={(e) => setSettings({...settings, instagramToken: e.target.value})} className="w-full p-6 rounded-[2rem] bg-gray-50 border-none font-bold text-xs" />
+                   <button onClick={() => setSettings({...settings, instagramIntegrationEnabled: !settings.instagramIntegrationEnabled})} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl">Sincronizza Social</button>
                 </div>
              </div>
           </div>
@@ -891,10 +660,8 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsNewStaffModalOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             <NewStaffForm 
-               onSave={handleSaveStaff} 
-               onCancel={() => setIsNewStaffModalOpen(false)} 
-             />
+             {/* handleSaveStaff is now properly defined */}
+             <NewStaffForm onSave={handleSaveStaff} onCancel={() => setIsNewStaffModalOpen(false)} />
           </div>
         </div>
       )}
@@ -903,14 +670,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-2xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsTeamEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             <TeamManagement 
-               member={selectedTeamMember} 
-               appointments={appointments} 
-               services={services} 
-               profiles={profiles} 
-               onSave={async (m) => { await db.team.upsert(m); setIsTeamEditorOpen(false); refreshData(); showToast("Profilo staff aggiornato."); }} 
-               onClose={() => setIsTeamEditorOpen(false)} 
-             />
+             <TeamManagement member={selectedTeamMember} appointments={appointments} services={services} profiles={profiles} onSave={async (m) => { await db.team.upsert(m); setIsTeamEditorOpen(false); refreshData(true); showToast("Staff aggiornato."); }} onClose={() => setIsTeamEditorOpen(false)} />
           </div>
         </div>
       )}
@@ -919,24 +679,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsGuestEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             <NewGuestForm 
-               initialData={selectedGuestToEdit} 
-               onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(); showToast("Profilo ospite salvato."); }} 
-               onCancel={() => setIsGuestEditorOpen(false)} 
-             />
-          </div>
-        </div>
-      )}
-
-      {isServiceFormOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
-             <button onClick={() => setIsServiceFormOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             <ServiceForm 
-               initialData={selectedServiceToEdit} 
-               onSave={async (s) => { await db.services.upsert(s); setIsServiceFormOpen(false); refreshData(); showToast("Ritual salvato."); }} 
-               onCancel={() => setIsServiceFormOpen(false)} 
-             />
+             <NewGuestForm initialData={selectedGuestToEdit} onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(true); showToast("Profilo salvato."); }} onCancel={() => setIsGuestEditorOpen(false)} />
           </div>
         </div>
       )}
@@ -947,8 +690,7 @@ const App: React.FC = () => {
              <button onClick={() => { setIsFormOpen(false); setFormInitialData(null); }} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
              <AppointmentForm 
                services={services} team={team} existingAppointments={appointments} 
-               onSave={handleSaveAppointment} 
-               onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
+               onSave={handleSaveAppointment} onCancel={() => { setIsFormOpen(false); setFormInitialData(null); }} 
                isAdminOrStaff={isAdmin || isCollaborator} profiles={profiles} initialData={formInitialData}
                salonClosures={salonClosures.map(c => c.date)}
              />
@@ -968,7 +710,7 @@ const App: React.FC = () => {
              <div className="grid grid-cols-2 gap-6">
                <button onClick={() => { setFormInitialData(selectedAppointmentDetail); setSelectedAppointmentDetail(null); setIsFormOpen(true); }} className="py-5 bg-gray-50 text-black border border-gray-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:shadow-lg transition-all">Modifica</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-5 bg-red-50 text-red-600 border border-red-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Annulla</button>
-               <button onClick={() => downloadICS(selectedAppointmentDetail)} className="col-span-2 py-5 bg-amber-50 text-amber-600 rounded-3xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-3"><i className="fas fa-calendar-plus"></i> Aggiungi al Calendario</button>
+               <button onClick={() => downloadICS(selectedAppointmentDetail)} className="col-span-2 py-5 bg-amber-50 text-amber-600 rounded-3xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-3"><i className="fas fa-calendar-plus"></i> Calendario</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-6 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-2xl shadow-black/20 hover:bg-amber-700 transition-all">Conferma Ritual</button>
              </div>
           </div>
@@ -979,7 +721,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[2000] flex items-center justify-center p-6">
           <div className="w-full max-w-xl relative animate-in zoom-in-95">
             <button onClick={() => setIsAuthOpen(false)} className="absolute -top-16 right-0 text-white/40 hover:text-white transition-all"><i className="fas fa-times text-4xl"></i></button>
-            <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(); }} />
+            <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(true); }} />
           </div>
         </div>
       )}
