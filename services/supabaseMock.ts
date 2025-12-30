@@ -10,12 +10,18 @@ const STORAGE_KEY_PROFILES = 'kristal_profiles';
 const STORAGE_KEY_REQUESTS = 'kristal_requests';
 const STORAGE_KEY_SALON_CLOSURES = 'kristal_salon_closures';
 
+const safeParse = (key: string, fallback: any) => {
+  try {
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
 export const supabaseMock = {
   auth: {
-    getUser: () => {
-      const u = localStorage.getItem(STORAGE_KEY_USER);
-      return u ? JSON.parse(u) as User : null;
-    },
+    getUser: () => safeParse(STORAGE_KEY_USER, null),
     signIn: (user: User) => {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
       supabaseMock.profiles.upsert({
@@ -33,11 +39,7 @@ export const supabaseMock = {
     }
   },
   profiles: {
-    getAll: () => {
-      const data = localStorage.getItem(STORAGE_KEY_PROFILES);
-      if (!data) return [];
-      return JSON.parse(data);
-    },
+    getAll: () => safeParse(STORAGE_KEY_PROFILES, []),
     get: (id: string) => {
       const current = supabaseMock.profiles.getAll();
       return current.find((p: any) => p.id === id) || null;
@@ -56,11 +58,7 @@ export const supabaseMock = {
     }
   },
   services: {
-    getAll: (): Service[] => {
-      const data = localStorage.getItem(STORAGE_KEY_SERVICES);
-      if (!data) return INITIAL_SERVICES;
-      return JSON.parse(data);
-    },
+    getAll: (): Service[] => safeParse(STORAGE_KEY_SERVICES, INITIAL_SERVICES),
     upsert: (service: Service) => {
       const current = supabaseMock.services.getAll();
       const idx = current.findIndex(s => s.id === service.id);
@@ -72,10 +70,8 @@ export const supabaseMock = {
   },
   team: {
     getAll: (): TeamMember[] => {
-      const data = localStorage.getItem(STORAGE_KEY_TEAM);
-      if (!data) return INITIAL_TEAM;
-      const parsed = JSON.parse(data);
-      return parsed.map((m: any) => ({
+      const data = safeParse(STORAGE_KEY_TEAM, INITIAL_TEAM);
+      return data.map((m: any) => ({
         ...m,
         weekly_closures: Array.isArray(m.weekly_closures) ? m.weekly_closures.map(Number) : []
       }));
@@ -95,10 +91,7 @@ export const supabaseMock = {
     }
   },
   appointments: {
-    getAll: (): Appointment[] => {
-      const data = localStorage.getItem(STORAGE_KEY_APPOINTMENTS);
-      return data ? JSON.parse(data) : [];
-    },
+    getAll: (): Appointment[] => safeParse(STORAGE_KEY_APPOINTMENTS, []),
     upsert: (app: Appointment) => {
       const current = supabaseMock.appointments.getAll();
       const { services, profiles, ...cleanApp } = app;
@@ -122,10 +115,7 @@ export const supabaseMock = {
     }
   },
   requests: {
-    getAll: (): LeaveRequest[] => {
-      const data = localStorage.getItem(STORAGE_KEY_REQUESTS);
-      return data ? JSON.parse(data) : [];
-    },
+    getAll: (): LeaveRequest[] => safeParse(STORAGE_KEY_REQUESTS, []),
     create: (r: any) => {
       const current = supabaseMock.requests.getAll();
       const newReq = { ...r, id: Math.random().toString(36).substr(2, 9), created_at: new Date().toISOString() };
@@ -152,11 +142,8 @@ export const supabaseMock = {
   },
   salonClosures: {
     getAll: (): SalonClosure[] => {
-      const data = localStorage.getItem(STORAGE_KEY_SALON_CLOSURES);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      // Assicura che i dati siano nel formato corretto {date, name}
-      return parsed.map((c: any) => {
+      const data = safeParse(STORAGE_KEY_SALON_CLOSURES, []);
+      return data.map((c: any) => {
         if (typeof c === 'string') return { date: c, name: 'Chiusura Straordinaria' };
         return { date: c.date, name: c.name || 'Chiusura Straordinaria' };
       });
