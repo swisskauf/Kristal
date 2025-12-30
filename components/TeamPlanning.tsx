@@ -63,7 +63,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   };
 
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
-    // 1. Chiusura Atelier
+    // 1. Chiusura Atelier (Globale)
     if (salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const [h, m] = hour.split(':').map(Number);
@@ -90,7 +90,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const member = team.find(t => t.name === memberName);
     if (!member) return null;
 
-    // 3. Assenze Approvate (Vacanze/Ferie)
+    // 3. Assenze Approvate (Vacanze/Ferie del singolo)
     const isAbsent = (member.absences_json || []).some(abs => {
       const start = new Date(abs.startDate).toISOString().split('T')[0];
       const end = new Date(abs.endDate).toISOString().split('T')[0];
@@ -121,7 +121,24 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in">
       <style>{`
-        .salon-closure-pattern { background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); }
+        .salon-closure-pattern { 
+          background-color: #fee2e2;
+          background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); 
+          position: relative;
+        }
+        .salon-closure-pattern::after {
+          content: 'CHIUSO';
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 8px;
+          font-weight: 900;
+          color: #ef4444;
+          letter-spacing: 0.1em;
+          opacity: 0.6;
+        }
         .vacation-pattern { background-image: repeating-linear-gradient(135deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); opacity: 0.6; }
       `}</style>
 
@@ -132,7 +149,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
             <h4 className="font-luxury font-bold text-2xl uppercase tracking-tight text-gray-900">Agenda Kristal</h4>
             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.3em] mt-1">
                {viewMode === 'weekly' 
-                 ? `Settimana ${weekDays[0].split('-')[2]} - ${weekDays[6].split('-')[2]} ${new Date(weekDays[0]).toLocaleDateString('it-IT', { month: 'long' })}` 
+                 ? `Settimana ${weekDays[0].split('-')[2]} - ${weekDays[6].split('-')[2]} ${new Date(weekDays[0]).toLocaleDateString('it-IT', { month: 'short' })}` 
                  : viewDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
@@ -168,22 +185,22 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                   </div>
                   {viewMode === 'daily' ? team.map(m => {
                     const status = getSlotStatus(m.name, weekDays[0], hour);
+                    const isSalonClosure = salonClosures.includes(weekDays[0]);
                     return (
                       <div 
                         key={`${m.name}-${hour}`} 
                         onClick={() => {
                           if (status?.type === 'APPOINTMENT') onAppointmentClick?.(status.appt);
-                          else if (status?.type !== 'VACATION' && status?.type !== 'SALON_CLOSURE' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, weekDays[0], hour);
+                          else if (!isSalonClosure && status?.type !== 'VACATION' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, weekDays[0], hour);
                         }}
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-md scale-[0.98]' : 'hover:bg-amber-50/10'}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${status?.type === 'APPOINTMENT' ? 'bg-black text-white shadow-md scale-[0.98]' : 'hover:bg-amber-50/10'} ${isSalonClosure ? 'salon-closure-pattern cursor-not-allowed opacity-40' : ''}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
                            <div className="text-[7px] font-bold uppercase truncate px-3">{status.appt.profiles?.full_name}</div>
                          )}
-                         {status?.type === 'SALON_CLOSURE' && <div className="w-full h-full salon-closure-pattern opacity-30 rounded-2xl"></div>}
-                         {status?.type === 'VACATION' && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-2xl"><span className="text-[7px] font-bold text-gray-400 uppercase">Assente</span></div>}
-                         {status?.type === 'CLOSURE' && <div className="w-full h-full bg-gray-100/30 rounded-2xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[9px] text-gray-300"></i></div>}
-                         {status?.type === 'BREAK' && <div className="w-full h-full bg-amber-50/20 rounded-2xl flex items-center justify-center"><i className="fas fa-coffee text-[10px] text-amber-200"></i></div>}
+                         {status?.type === 'VACATION' && !isSalonClosure && <div className="w-full h-full vacation-pattern flex items-center justify-center rounded-2xl"><span className="text-[7px] font-bold text-gray-400 uppercase">Assente</span></div>}
+                         {status?.type === 'CLOSURE' && !isSalonClosure && <div className="w-full h-full bg-gray-100/30 rounded-2xl flex items-center justify-center opacity-40"><i className="fas fa-lock text-[9px] text-gray-300"></i></div>}
+                         {status?.type === 'BREAK' && !isSalonClosure && <div className="w-full h-full bg-amber-50/20 rounded-2xl flex items-center justify-center"><i className="fas fa-coffee text-[10px] text-amber-200"></i></div>}
                       </div>
                     );
                   }) : weekDays.map(date => {
@@ -197,9 +214,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     return (
                       <div 
                         key={`${date}-${hour}`} 
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isSalonClosure ? 'salon-closure-pattern opacity-20' : 'hover:bg-amber-50/10'}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isSalonClosure ? 'salon-closure-pattern opacity-40' : 'hover:bg-amber-50/10'}`}
                       >
-                         {apptsAtHour.map(a => (
+                         {!isSalonClosure && apptsAtHour.map(a => (
                            <button key={a.id} onClick={() => onAppointmentClick?.(a)} className="w-3.5 h-3.5 rounded-full bg-black border-2 border-white shadow-sm hover:scale-125 transition-transform" />
                          ))}
                       </div>
