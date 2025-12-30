@@ -16,26 +16,31 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLoginClick,
   const isGuest = !user;
 
   const guestNav = [
-    { id: 'dashboard', label: "Kristal", icon: 'fa-concierge-bell' },
+    { id: 'dashboard', label: "Atelier", icon: 'fa-concierge-bell' },
+    { id: 'about_us', label: "Chi Siamo", icon: 'fa-gem' },
   ];
 
   const clientNav = [
     { id: 'dashboard', label: 'Home', icon: 'fa-home' },
+    { id: 'about_us', label: "Chi Siamo", icon: 'fa-gem' },
     { id: 'my_rituals', label: 'I Miei Ritual', icon: 'fa-calendar-check' },
   ];
 
   const collaboratorNav = [
     { id: 'dashboard', label: 'Dashboard', icon: 'fa-user-clock' },
+    { id: 'about_us', label: "Chi Siamo", icon: 'fa-gem' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
     { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
   ];
 
   const adminNav = [
     { id: 'dashboard', label: 'Vision', icon: 'fa-chart-line' },
+    { id: 'about_us', label: "Chi Siamo", icon: 'fa-gem' },
     { id: 'services_management', label: 'Servizi', icon: 'fa-book-open' },
     { id: 'team_schedule', label: 'Planning', icon: 'fa-calendar-alt' },
     { id: 'vacation_planning', label: 'Vacanze', icon: 'fa-plane-departure' },
     { id: 'team_management', label: 'Staff', icon: 'fa-users-cog' },
+    { id: 'about_management', label: 'Editor Atelier', icon: 'fa-pen-fancy' },
     { id: 'clients', label: 'Ospiti', icon: 'fa-address-book' },
     { id: 'impostazioni', label: 'Impostazioni', icon: 'fa-cog' },
   ];
