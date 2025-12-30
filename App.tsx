@@ -15,7 +15,7 @@ import InstagramGallery from './components/InstagramGallery';
 import GuestManagement from './components/GuestManagement';
 import NewGuestForm from './components/NewGuestForm';
 import { supabase, db } from './services/supabase';
-import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure } from './types';
+import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure, AboutUsContent } from './types';
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 import { sendLuxuryEmailNotification } from './services/emailService';
 
@@ -39,6 +39,7 @@ const App: React.FC = () => {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
+  const [aboutUs, setAboutUs] = useState<AboutUsContent | null>(null);
   
   // Modal & Form state
   const [newClosure, setNewClosure] = useState({ date: '', name: '' });
@@ -111,13 +112,14 @@ const App: React.FC = () => {
   const refreshData = useCallback(async () => {
     try {
       await ensureDataSeeding();
-      const [svcs, tm, appts, reqs, profs, closures] = await Promise.all([
+      const [svcs, tm, appts, reqs, profs, closures, about] = await Promise.all([
         db.services.getAll(),
         db.team.getAll(),
         db.appointments.getAll(),
         db.requests.getAll(),
         db.profiles.getAll(),
-        db.salonClosures.getAll()
+        db.salonClosures.getAll(),
+        db.aboutUs.get()
       ]);
       setServices(svcs || []);
       setTeam(tm || []);
@@ -125,6 +127,7 @@ const App: React.FC = () => {
       setRequests(reqs || []);
       setProfiles(profs || []);
       setSalonClosures(closures || []);
+      setAboutUs(about);
     } catch (e) {
       console.error("Data Refresh Error", e);
     } finally {
@@ -286,6 +289,16 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveAboutUs = async (content: AboutUsContent) => {
+    try {
+      await db.aboutUs.save(content);
+      setAboutUs(content);
+      showToast("Contenuti Atelier aggiornati.");
+    } catch (e) {
+      showToast("Errore nel salvataggio dei contenuti.", "error");
+    }
+  };
+
   const saveSettings = (newSettings: typeof settings) => {
     setSettings(newSettings);
     showToast("Impostazioni salvate.");
@@ -373,6 +386,105 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'about_us' && (
+          <div className="space-y-16 animate-in fade-in duration-1000 max-w-4xl mx-auto">
+             {aboutUs ? (
+               <div className="space-y-12">
+                  <header className="text-center space-y-4">
+                     <h2 className="text-6xl font-luxury font-bold text-gray-900 leading-tight">{aboutUs.title}</h2>
+                     <p className="text-amber-600 text-[12px] font-bold uppercase tracking-[0.4em]">{aboutUs.subtitle}</p>
+                  </header>
+                  <div className="relative aspect-[16/9] rounded-[4rem] overflow-hidden shadow-2xl border-8 border-white">
+                    <img src={aboutUs.imageUrl} className="w-full h-full object-cover" alt="Kristal Atelier" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+                  </div>
+                  <div className="prose prose-stone max-w-none">
+                     <p className="text-xl md:text-2xl font-light leading-relaxed text-gray-600 italic border-l-4 border-amber-600 pl-8">
+                       {aboutUs.description}
+                     </p>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-8 pt-12 border-t border-gray-100">
+                     <div className="text-center space-y-2">
+                        <i className="fas fa-history text-amber-600 text-2xl"></i>
+                        <h4 className="font-bold uppercase text-[10px] tracking-widest">Heritage</h4>
+                        <p className="text-[11px] text-gray-400">Dal 2010 a Lugano</p>
+                     </div>
+                     <div className="text-center space-y-2">
+                        <i className="fas fa-medal text-amber-600 text-2xl"></i>
+                        <h4 className="font-bold uppercase text-[10px] tracking-widest">Eccellenza</h4>
+                        <p className="text-[11px] text-gray-400">Master Stylists & Estetisti</p>
+                     </div>
+                     <div className="text-center space-y-2">
+                        <i className="fas fa-leaf text-amber-600 text-2xl"></i>
+                        <h4 className="font-bold uppercase text-[10px] tracking-widest">Sostenibilità</h4>
+                        <p className="text-[11px] text-gray-400">Prodotti Green Luxury</p>
+                     </div>
+                  </div>
+               </div>
+             ) : (
+               <div className="py-24 text-center">
+                  <div className="inline-block w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">Caricamento Storia Kristal...</p>
+               </div>
+             )}
+          </div>
+        )}
+
+        {activeTab === 'about_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in">
+             <header>
+                <h2 className="text-5xl font-luxury font-bold text-gray-900">Editor Atelier</h2>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Racconta la storia della bellezza</p>
+             </header>
+             <div className="bg-white p-12 rounded-[5rem] border border-gray-100 shadow-sm space-y-10 max-w-3xl">
+                <div className="space-y-6">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale</label>
+                      <input 
+                        type="text" 
+                        value={aboutUs?.title || ''} 
+                        onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)}
+                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
+                      />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo Evocativo</label>
+                      <input 
+                        type="text" 
+                        value={aboutUs?.subtitle || ''} 
+                        onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)}
+                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
+                      />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Immagine Atelier (URL)</label>
+                      <input 
+                        type="text" 
+                        value={aboutUs?.imageUrl || ''} 
+                        onChange={e => setAboutUs(prev => prev ? {...prev, imageUrl: e.target.value} : null)}
+                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs shadow-inner outline-none focus:ring-2 focus:ring-amber-500" 
+                      />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Narrazione</label>
+                      <textarea 
+                        rows={6}
+                        value={aboutUs?.description || ''} 
+                        onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)}
+                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-medium text-sm leading-relaxed shadow-inner outline-none focus:ring-2 focus:ring-amber-500 resize-none" 
+                      />
+                   </div>
+                </div>
+                <button 
+                   onClick={() => aboutUs && handleSaveAboutUs(aboutUs)}
+                   className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95"
+                >
+                   Pubblica Aggiornamenti
+                </button>
+             </div>
+          </div>
+        )}
+
         {activeTab === 'my_rituals' && user && (
           <div className="space-y-16 animate-in fade-in">
              <header className="flex items-center justify-between">
@@ -383,18 +495,21 @@ const App: React.FC = () => {
                <div className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl"><i className="fas fa-gem text-xl"></i></div>
              </header>
 
+             {/* GRUPPO: PROSSIME SESSIONI */}
              <section className="space-y-8">
                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-600 border-l-4 border-amber-600 pl-4">Prossime Sessioni</h3>
                <div className="grid md:grid-cols-2 gap-8">
                  {groupedGuestAppointments.upcoming.length > 0 ? groupedGuestAppointments.upcoming.map(a => (
-                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-gray-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group">
+                   <div key={a.id} className="bg-white p-12 rounded-[4rem] border border-gray-100 flex flex-col justify-between shadow-sm hover:shadow-2xl transition-all group border-t-8 border-t-amber-600">
                       <div className="flex justify-between items-start mb-10">
                          <div className="w-20 h-20 bg-black text-white rounded-[2rem] flex flex-col items-center justify-center group-hover:bg-amber-600 transition-colors shadow-lg">
                             <span className="text-[10px] uppercase font-bold text-amber-500 group-hover:text-white">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
                             <span className="text-3xl font-luxury font-bold">{new Date(a.date).getDate()}</span>
                          </div>
                          <div className="text-right flex flex-col items-end gap-3">
-                            <span className="px-4 py-2 bg-green-50 text-green-700 text-[9px] font-bold uppercase rounded-full border border-green-100">Confermato</span>
+                            <span className="px-4 py-2 bg-green-50 text-green-700 text-[9px] font-bold uppercase rounded-full border border-green-100 flex items-center gap-2">
+                               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Confermato
+                            </span>
                             <button onClick={() => downloadICS(a)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2 hover:text-black transition-colors"><i className="fas fa-calendar-plus"></i> Calendario</button>
                          </div>
                       </div>
@@ -423,24 +538,28 @@ const App: React.FC = () => {
                </div>
              </section>
 
+             {/* GRUPPO: I VOSTRI MOMENTI (PASSATI) */}
              <section className="space-y-8">
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 border-l-4 border-gray-100 pl-4">I Vostri Momenti</h3>
                 <div className="bg-white rounded-[4rem] border border-gray-50 overflow-hidden shadow-sm">
                    {groupedGuestAppointments.history.length > 0 ? groupedGuestAppointments.history.map((a, i) => (
                      <div key={a.id} className={`p-10 flex items-center justify-between transition-colors border-b border-gray-50 last:border-none ${i % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/20'} ${a.status === 'noshow' ? 'opacity-50 grayscale' : ''}`}>
                         <div className="flex items-center gap-10">
-                           <div className="text-center w-16">
-                              <p className="text-3xl font-luxury font-bold text-gray-900">{new Date(a.date).getDate()}</p>
-                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
+                           <div className="text-center w-16 grayscale">
+                              <p className="text-3xl font-luxury font-bold text-gray-400">{new Date(a.date).getDate()}</p>
+                              <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">{new Date(a.date).toLocaleDateString('it-IT', { month: 'short' })}</p>
                            </div>
                            <div className="space-y-1">
-                              <p className="font-bold text-lg text-gray-900">{a.services?.name}</p>
-                              <p className="text-[9px] text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).getFullYear()}</p>
+                              <p className="font-bold text-lg text-gray-500">{a.services?.name}</p>
+                              <p className="text-[9px] text-gray-300 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).getFullYear()}</p>
                            </div>
                         </div>
                         <div className="flex items-center gap-8">
-                           {a.status === 'noshow' && <span className="text-[8px] font-bold text-red-600 bg-red-50 px-4 py-1.5 rounded-full border border-red-100 uppercase tracking-widest">Non Effettuato</span>}
-                           <p className="font-luxury font-bold text-xl text-gray-900">CHF {a.services?.price}</p>
+                           <div className="text-right">
+                              {a.status === 'noshow' && <span className="text-[8px] font-bold text-red-400 bg-red-50 px-4 py-1.5 rounded-full border border-red-100 uppercase tracking-widest block mb-1">Non Effettuato</span>}
+                              <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2"><i className="fas fa-history"></i> Passato</span>
+                           </div>
+                           <p className="font-luxury font-bold text-xl text-gray-400">CHF {a.services?.price}</p>
                         </div>
                      </div>
                    )) : (
@@ -448,6 +567,29 @@ const App: React.FC = () => {
                    )}
                 </div>
              </section>
+
+             {/* GRUPPO: SESSIONI CANCELLATE */}
+             {groupedGuestAppointments.cancelled.length > 0 && (
+               <section className="space-y-8 animate-in slide-in-from-bottom-4">
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-red-300 border-l-4 border-red-100 pl-4">Sessioni Annullate</h3>
+                  <div className="bg-red-50/30 rounded-[4rem] border border-red-50 overflow-hidden">
+                     {groupedGuestAppointments.cancelled.map((a, i) => (
+                       <div key={a.id} className="p-8 flex items-center justify-between border-b border-red-50/50 last:border-none opacity-60">
+                          <div className="flex items-center gap-8">
+                             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-300 shadow-sm border border-red-50">
+                                <i className="fas fa-calendar-times"></i>
+                             </div>
+                             <div>
+                                <h5 className="font-bold text-sm text-red-900/50 line-through">{a.services?.name}</h5>
+                                <p className="text-[9px] text-red-300 font-bold uppercase tracking-widest">Programmato per il {new Date(a.date).toLocaleDateString()}</p>
+                             </div>
+                          </div>
+                          <span className="text-[9px] font-bold text-red-300 uppercase tracking-[0.3em] bg-white px-6 py-2 rounded-full border border-red-50 shadow-sm">Stornato</span>
+                       </div>
+                     ))}
+                  </div>
+               </section>
+             )}
           </div>
         )}
 
