@@ -27,21 +27,22 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
   const [viewDate, setViewDate] = useState(new Date());
 
-  const getCategoryColor = (category?: string) => {
+  // Definizione colori per categoria servizio per una distinzione visiva immediata
+  const getCategoryStyles = (category?: string) => {
     switch (category) {
-      case 'Donna': return 'bg-rose-50 border-rose-200 text-rose-700';
-      case 'Uomo': return 'bg-blue-50 border-blue-200 text-blue-700';
-      case 'Colore': return 'bg-purple-50 border-purple-200 text-purple-700';
-      case 'Trattamenti': return 'bg-emerald-50 border-emerald-200 text-emerald-700';
-      case 'Estetica': return 'bg-amber-50 border-amber-200 text-amber-700';
-      default: return 'bg-gray-50 border-gray-200 text-gray-700';
+      case 'Donna': return 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100';
+      case 'Uomo': return 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100';
+      case 'Colore': return 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100';
+      case 'Trattamenti': return 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100';
+      case 'Estetica': return 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100';
+      default: return 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100';
     }
   };
 
   const getCategoryDot = (category?: string) => {
     switch (category) {
       case 'Donna': return 'bg-rose-500';
-      case 'Uomo': return 'bg-blue-500';
+      case 'Uomo': return 'bg-sky-500';
       case 'Colore': return 'bg-purple-500';
       case 'Trattamenti': return 'bg-emerald-500';
       case 'Estetica': return 'bg-amber-500';
@@ -146,24 +147,26 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           background-color: #fee2e2;
           background-image: repeating-linear-gradient(45deg, #fee2e2, #fee2e2 10px, #fecaca 10px, #fecaca 20px); 
           position: relative;
+          border: 1px solid #fca5a5 !important;
         }
         .salon-closure-pattern::after {
-          content: 'ATELIER CHIUSO';
+          content: 'CHIUSURA ATELIER';
           position: absolute;
           inset: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 8px;
+          font-size: 7px;
           font-weight: 900;
-          color: #ef4444;
-          letter-spacing: 0.1em;
-          opacity: 0.6;
+          color: #b91c1c;
+          letter-spacing: 0.05em;
+          opacity: 0.7;
+          pointer-events: none;
         }
         .vacation-pattern { 
-          background-color: #f3f4f6;
-          background-image: repeating-linear-gradient(135deg, #f3f4f6, #f3f4f6 10px, #e5e7eb 10px, #e5e7eb 20px); 
-          opacity: 0.6; 
+          background-color: #f9fafb;
+          background-image: repeating-linear-gradient(135deg, #f9fafb, #f9fafb 8px, #f3f4f6 8px, #f3f4f6 16px); 
+          opacity: 0.8; 
         }
       `}</style>
 
@@ -213,10 +216,9 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     const status = getSlotStatus(m.name, dateStr, hour);
                     const isGlobalClosure = salonClosures && salonClosures.includes(dateStr);
                     
-                    let appointmentClasses = "";
-                    if (status?.type === 'APPOINTMENT') {
-                      appointmentClasses = getCategoryColor(status.appt.services?.category);
-                    }
+                    const slotStyles = status?.type === 'APPOINTMENT' 
+                      ? getCategoryStyles(status.appt.services?.category) 
+                      : 'hover:bg-amber-50/10';
 
                     return (
                       <div 
@@ -226,13 +228,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                           else if (!isGlobalClosure && status?.type !== 'VACATION' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, dateStr, hour);
                         }}
                         className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${
-                          status?.type === 'APPOINTMENT' ? `${appointmentClasses} shadow-md scale-[0.98] border-opacity-50` : 'hover:bg-amber-50/10'
-                        } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-40' : ''}`}
+                          status?.type === 'APPOINTMENT' ? `shadow-sm scale-[0.98] ${slotStyles}` : slotStyles
+                        } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-50' : ''}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
                            <div className="flex flex-col items-center justify-center overflow-hidden w-full px-2">
-                             <div className="text-[7px] font-black uppercase truncate leading-none mb-0.5">{status.appt.profiles?.full_name || 'Ospite'}</div>
-                             <div className="text-[6px] font-bold opacity-70 uppercase truncate">{status.appt.services?.name}</div>
+                             <div className="text-[8px] font-black uppercase truncate leading-none mb-0.5">{status.appt.profiles?.full_name || 'Ospite'}</div>
+                             <div className="text-[7px] font-bold opacity-60 uppercase truncate">{status.appt.services?.name}</div>
                            </div>
                          )}
                          {status?.type === 'VACATION' && !isGlobalClosure && (
@@ -246,7 +248,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                            </div>
                          )}
                          {status?.type === 'BREAK' && !isGlobalClosure && (
-                           <div className="w-full h-full bg-amber-50/10 rounded-2xl flex items-center justify-center">
+                           <div className="w-full h-full bg-amber-50/5 rounded-2xl flex items-center justify-center">
                              <i className="fas fa-coffee text-[10px] text-amber-200"></i>
                            </div>
                          )}
@@ -263,12 +265,13 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
                     return (
                       <div 
                         key={`${date}-${hour}`} 
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isGlobalClosure ? 'salon-closure-pattern opacity-40' : 'hover:bg-amber-50/10'}`}
+                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isGlobalClosure ? 'salon-closure-pattern opacity-50' : 'hover:bg-amber-50/10'}`}
                       >
                          {!isGlobalClosure && apptsAtHour.map(a => (
                            <button 
                              key={a.id} 
                              onClick={() => onAppointmentClick?.(a)} 
+                             title={`${a.profiles?.full_name}: ${a.services?.name}`}
                              className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm hover:scale-125 transition-transform ${getCategoryDot(a.services?.category)}`} 
                            />
                          ))}
