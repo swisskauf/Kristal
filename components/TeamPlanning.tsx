@@ -9,7 +9,6 @@ interface TeamPlanningProps {
   onSlotClick?: (memberName: string, date: string, hour: string) => void;
   onAppointmentClick?: (appt: Appointment) => void;
   currentUserMemberName?: string;
-  requests?: any[];
   isCollaborator?: boolean;
   salonClosures?: string[]; 
 }
@@ -17,10 +16,8 @@ interface TeamPlanningProps {
 const TeamPlanning: React.FC<TeamPlanningProps> = ({ 
   team, 
   appointments, 
-  onToggleVacation, 
   onSlotClick,
   onAppointmentClick,
-  currentUserMemberName, 
   isCollaborator = false,
   salonClosures = []
 }) => {
@@ -35,17 +32,6 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       case 'Trattamenti': return 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100';
       case 'Estetica': return 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100';
       default: return 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100';
-    }
-  };
-
-  const getCategoryDot = (category?: string) => {
-    switch (category) {
-      case 'Donna': return 'bg-rose-500';
-      case 'Uomo': return 'bg-sky-500';
-      case 'Colore': return 'bg-purple-500';
-      case 'Trattamenti': return 'bg-emerald-500';
-      case 'Estetica': return 'bg-amber-500';
-      default: return 'bg-gray-400';
     }
   };
 
@@ -77,15 +63,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     return hrs;
   }, []);
 
-  const moveTime = (offset: number) => {
-    const d = new Date(viewDate);
-    if (viewMode === 'weekly') d.setDate(d.getDate() + (offset * 7));
-    else d.setDate(d.getDate() + offset);
-    setViewDate(d);
-  };
-
   const getSlotStatus = (memberName: string, dateStr: string, hour: string) => {
-    // 0. Chiusura Globale Salone (MASSIMA PRIORITÀ)
     if (salonClosures && salonClosures.includes(dateStr)) return { type: 'SALON_CLOSURE' };
 
     const member = team.find(t => t.name === memberName);
@@ -96,47 +74,20 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 
     const appts = appointments.filter(a => {
       if (a.team_member_name !== memberName || a.status === 'cancelled') return false;
-      const appDate = new Date(a.date);
-      if (appDate.toISOString().split('T')[0] !== dateStr) return false;
-
-      const appStart = appDate.getHours() * 60 + appDate.getMinutes();
+      if (new Date(a.date).toISOString().split('T')[0] !== dateStr) return false;
+      const appStart = new Date(a.date).getHours() * 60 + new Date(a.date).getMinutes();
       const duration = a.services?.duration || 30;
-      const appEnd = appStart + duration;
-
-      return targetMin >= appStart && targetMin < appEnd;
+      return targetMin >= appStart && targetMin < appStart + duration;
     });
 
     if (appts.length > 0) {
-      const isStart = new Date(appts[0].date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) === hour;
-      return { type: 'APPOINTMENT', appt: appts[0], count: appts.length, isStart };
+      const isStart = new Date(appts[0].date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false }) === hour;
+      return { type: 'APPOINTMENT', appt: appts[0], isStart };
     }
-
-    const activeAbsence = (member.absences_json || []).find(abs => {
-      const absStart = new Date(abs.startDate).toISOString().split('T')[0];
-      const absEnd = new Date(abs.endDate).toISOString().split('T')[0];
-      if (dateStr >= absStart && dateStr <= absEnd) {
-        if (abs.isFullDay) return true;
-        if (abs.startTime && abs.endTime) {
-          return hour >= abs.startTime && hour < abs.endTime;
-        }
-      }
-      return false;
-    });
-    if (activeAbsence) return { type: 'VACATION', label: activeAbsence.type };
 
     const dObj = new Date(`${dateStr}T12:00:00`);
     if ((member.weekly_closures || []).includes(dObj.getDay())) return { type: 'CLOSURE' };
     
-    if ((member.unavailable_dates || []).includes(dateStr)) return { type: 'VACATION', label: 'Indisponibile' };
-
-    if (member.break_start_time && member.break_end_time && hour >= member.break_start_time && hour < member.break_end_time) {
-      return { type: 'BREAK' };
-    }
-
-    if (hour < (member.work_start_time || '08:30') || hour >= (member.work_end_time || '18:30')) {
-      return { type: 'NON_WORKING' };
-    }
-
     return null;
   };
 
@@ -146,134 +97,76 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         .salon-closure-pattern { 
           background-color: #fef2f2;
           background-image: repeating-linear-gradient(45deg, #fef2f2, #fef2f2 10px, #fee2e2 10px, #fee2e2 20px); 
-          position: relative;
           border: 1px solid #fecaca !important;
-        }
-        .salon-closure-pattern::after {
-          content: 'CHIUSURA';
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 7px;
-          font-weight: 900;
-          color: #ef4444;
-          letter-spacing: 0.1em;
-          opacity: 0.6;
-          pointer-events: none;
-        }
-        .vacation-pattern { 
-          background-color: #f9fafb;
-          background-image: repeating-linear-gradient(135deg, #f9fafb, #f9fafb 8px, #f3f4f6 8px, #f3f4f6 16px); 
-          opacity: 0.8; 
         }
       `}</style>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-        <div className="flex items-center gap-6">
-          <button onClick={() => moveTime(-1)} className="w-12 h-12 rounded-[1.5rem] border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-left text-xs"></i></button>
-          <div className="text-center min-w-[280px]">
-            <h4 className="font-luxury font-bold text-2xl uppercase tracking-tight text-gray-900">Agenda Kristal</h4>
-            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.3em] mt-1">
-               {viewMode === 'weekly' 
-                 ? `Settimana ${weekDays[0].split('-')[2]} - ${weekDays[6].split('-')[2]} ${new Date(weekDays[0]).toLocaleDateString('it-IT', { month: 'short' })}` 
-                 : viewDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-          </div>
-          <button onClick={() => moveTime(1)} className="w-12 h-12 rounded-[1.5rem] border border-gray-100 flex items-center justify-center hover:bg-gray-50 text-gray-400 transition-all"><i className="fas fa-chevron-right text-xs"></i></button>
+      <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] border border-gray-50 shadow-sm">
+        <div className="flex items-center gap-4">
+          <button onClick={() => {
+            const d = new Date(viewDate);
+            d.setDate(d.getDate() - (viewMode === 'weekly' ? 7 : 1));
+            setViewDate(d);
+          }} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50"><i className="fas fa-chevron-left text-xs text-gray-400"></i></button>
+          <h4 className="font-luxury font-bold text-xl">{viewDate.toLocaleDateString('it-IT', { month:'long', year:'numeric', day: viewMode==='daily'?'numeric':undefined })}</h4>
+          <button onClick={() => {
+            const d = new Date(viewDate);
+            d.setDate(d.getDate() + (viewMode === 'weekly' ? 7 : 1));
+            setViewDate(d);
+          }} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50"><i className="fas fa-chevron-right text-xs text-gray-400"></i></button>
         </div>
-        <div className="flex bg-gray-50/80 p-1.5 rounded-[1.8rem] border border-gray-100">
-          <button onClick={() => setViewMode('weekly')} className={`px-6 py-3 text-[10px] font-bold uppercase rounded-[1.2rem] transition-all ${viewMode === 'weekly' ? 'bg-black text-white shadow-xl' : 'text-gray-400'}`}>Settimana</button>
-          <button onClick={() => setViewMode('daily')} className={`px-6 py-3 text-[10px] font-bold uppercase rounded-[1.2rem] transition-all ${viewMode === 'daily' ? 'bg-black text-white shadow-xl' : 'text-gray-400'}`}>Giorno</button>
+        <div className="flex bg-gray-50 p-1 rounded-xl">
+           <button onClick={() => setViewMode('weekly')} className={`px-4 py-2 text-[9px] font-bold uppercase rounded-lg ${viewMode === 'weekly' ? 'bg-white text-black shadow-sm' : 'text-gray-400'}`}>Settimana</button>
+           <button onClick={() => setViewMode('daily')} className={`px-4 py-2 text-[9px] font-bold uppercase rounded-lg ${viewMode === 'daily' ? 'bg-white text-black shadow-sm' : 'text-gray-400'}`}>Giorno</button>
         </div>
       </div>
 
-      <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-6 md:p-10 overflow-x-auto scrollbar-hide">
-         <div className="min-w-[900px]">
-           <div className={`grid gap-3 ${viewMode === 'daily' ? `grid-cols-[80px_repeat(${team.length},1fr)]` : 'grid-cols-[80px_repeat(7,1fr)]'}`}>
-              <div className="sticky left-0 bg-white z-20"></div>
+      <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-6 overflow-x-auto scrollbar-hide">
+         <div className="min-w-[800px]">
+           <div className={`grid gap-2 ${viewMode === 'daily' ? `grid-cols-[80px_repeat(${team.length},1fr)]` : 'grid-cols-[80px_repeat(7,1fr)]'}`}>
+              <div className="h-10"></div>
               {viewMode === 'daily' ? team.map(m => (
-                <div key={m.name} className="flex flex-col items-center gap-3 pb-6 border-b border-gray-50">
-                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.name}`} className="w-14 h-14 rounded-[1.5rem] object-cover border-4 border-white shadow-sm" />
-                   <h5 className="font-luxury font-bold text-sm text-gray-900">{m.name}</h5>
-                   <p className="text-[8px] text-gray-300 font-bold uppercase tracking-widest">Artista</p>
-                </div>
-              )) : weekDays.map(date => (
-                <div key={date} className="text-center pb-6 border-b border-gray-50">
-                  <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{new Date(`${date}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short' })}</p>
-                  <p className="text-xl font-luxury font-bold text-gray-900 mt-1">{new Date(`${date}T12:00:00`).getDate()}</p>
+                <div key={m.name} className="text-center font-luxury font-bold text-sm border-b pb-2">{m.name}</div>
+              )) : weekDays.map(d => (
+                <div key={d} className="text-center">
+                   <p className="text-[8px] font-bold uppercase text-amber-600">{new Date(`${d}T12:00:00`).toLocaleDateString('it-IT', { weekday:'short' })}</p>
+                   <p className="font-luxury font-bold text-lg">{new Date(`${d}T12:00:00`).getDate()}</p>
                 </div>
               ))}
 
               {hours.map(hour => (
                 <React.Fragment key={hour}>
-                  <div className="sticky left-0 bg-white z-20 flex items-center justify-end pr-6 h-14">
-                     <span className="text-[8px] font-bold text-gray-300 uppercase">{hour}</span>
-                  </div>
+                  <div className="flex items-center justify-end pr-4 text-[8px] font-bold text-gray-300 uppercase">{hour}</div>
                   {viewMode === 'daily' ? team.map(m => {
-                    const dateStr = weekDays[0];
-                    const status = getSlotStatus(m.name, dateStr, hour);
-                    const isGlobalClosure = status?.type === 'SALON_CLOSURE';
-                    
-                    const slotStyles = status?.type === 'APPOINTMENT' 
-                      ? getCategoryStyles(status.appt.services?.category) 
-                      : 'hover:bg-amber-50/10';
-
+                    const status = getSlotStatus(m.name, weekDays[0], hour);
+                    const isGlobal = status?.type === 'SALON_CLOSURE';
                     return (
                       <div 
-                        key={`${m.name}-${hour}`} 
+                        key={`${m.name}-${hour}`}
                         onClick={() => {
                           if (status?.type === 'APPOINTMENT') onAppointmentClick?.(status.appt);
-                          else if (!isGlobalClosure && status?.type !== 'VACATION' && status?.type !== 'CLOSURE' && onSlotClick) onSlotClick(m.name, dateStr, hour);
+                          else if (!isGlobal && status?.type !== 'CLOSURE') onSlotClick?.(m.name, weekDays[0], hour);
                         }}
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center cursor-pointer transition-all ${
-                          status?.type === 'APPOINTMENT' ? `shadow-sm scale-[0.98] ${slotStyles}` : slotStyles
-                        } ${isGlobalClosure ? 'salon-closure-pattern cursor-not-allowed opacity-60' : ''}`}
+                        className={`h-12 rounded-xl border border-gray-50 flex items-center justify-center transition-all ${
+                          status?.type === 'APPOINTMENT' ? getCategoryStyles(status.appt.services?.category) : 'hover:bg-amber-50/20'
+                        } ${isGlobal ? 'salon-closure-pattern opacity-60' : ''} ${status?.type === 'CLOSURE' ? 'bg-gray-50 opacity-40' : ''}`}
                       >
                          {status?.type === 'APPOINTMENT' && status.isStart && (
-                           <div className="flex flex-col items-center justify-center overflow-hidden w-full px-2">
-                             <div className="text-[8px] font-black uppercase truncate leading-none mb-0.5">{status.appt.profiles?.full_name || 'Ospite'}</div>
-                             <div className="text-[7px] font-bold opacity-60 uppercase truncate">{status.appt.services?.name}</div>
-                           </div>
-                         )}
-                         {status?.type === 'VACATION' && !isGlobalClosure && (
-                           <div className="w-full h-full vacation-pattern flex flex-col items-center justify-center rounded-2xl">
-                             <span className="text-[7px] font-bold text-gray-400 uppercase">{status.label || 'Assente'}</span>
-                           </div>
-                         )}
-                         {status?.type === 'CLOSURE' && !isGlobalClosure && (
-                           <div className="w-full h-full bg-gray-50 rounded-2xl flex items-center justify-center opacity-50">
-                             <i className="fas fa-lock text-[9px] text-gray-300"></i>
-                           </div>
-                         )}
-                         {status?.type === 'BREAK' && !isGlobalClosure && (
-                           <div className="w-full h-full bg-amber-50/5 rounded-2xl flex items-center justify-center">
-                             <i className="fas fa-coffee text-[10px] text-amber-200"></i>
-                           </div>
+                           <div className="text-[7px] font-bold uppercase truncate px-1">{status.appt.profiles?.full_name}</div>
                          )}
                       </div>
                     );
-                  }) : weekDays.map(date => {
-                    const isGlobalClosure = salonClosures && salonClosures.includes(date);
-                    const apptsAtHour = appointments.filter(a => {
-                       const d = new Date(a.date).toISOString().split('T')[0];
-                       const h = new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
-                       return d === date && h === hour && a.status !== 'cancelled';
+                  }) : weekDays.map(d => {
+                    const isGlobal = salonClosures?.includes(d);
+                    const atHour = appointments.filter(a => {
+                       const ad = new Date(a.date).toISOString().split('T')[0];
+                       const ah = new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
+                       return ad === d && ah === hour && a.status !== 'cancelled';
                     });
-
                     return (
-                      <div 
-                        key={`${date}-${hour}`} 
-                        className={`h-14 rounded-2xl border border-gray-50 flex items-center justify-center gap-1 transition-all ${isGlobalClosure ? 'salon-closure-pattern opacity-60' : 'hover:bg-amber-50/10'}`}
-                      >
-                         {!isGlobalClosure && apptsAtHour.map(a => (
-                           <button 
-                             key={a.id} 
-                             onClick={() => onAppointmentClick?.(a)} 
-                             title={`${a.profiles?.full_name}: ${a.services?.name}`}
-                             className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm hover:scale-125 transition-transform ${getCategoryDot(a.services?.category)}`} 
-                           />
+                      <div key={`${d}-${hour}`} className={`h-12 border border-gray-50 flex gap-0.5 items-center justify-center rounded-xl ${isGlobal ? 'salon-closure-pattern' : ''}`}>
+                         {!isGlobal && atHour.map(a => (
+                            <div key={a.id} onClick={() => onAppointmentClick?.(a)} className={`w-2 h-2 rounded-full cursor-pointer ${a.services?.category === 'Donna' ? 'bg-rose-400' : 'bg-amber-400'}`}></div>
                          ))}
                       </div>
                     );
