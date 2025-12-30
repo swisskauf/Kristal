@@ -14,7 +14,7 @@ const STORAGE_KEY_ABOUT_US = 'kristal_about_us';
 const DEFAULT_ABOUT_US: AboutUsContent = {
   title: "Kristal Atelier",
   subtitle: "L'Essenza della Bellezza a Lugano",
-  description: "Da oltre un decennio, Kristal rappresenta il punto d'incontro tra l'artigianalità svizzera e l'avanguardia stilistica internazionale. Nel nostro atelier, ogni rituale è studiato per esaltare l'unicità di ogni ospite, utilizzando esclusivamente prodotti d'eccellenza e tecniche sartoriali. La nostra filosofia si basa sull'ascolto e sulla creazione di un'armonia perfetta tra immagine e benessere interiore.",
+  description: "Da oltre un decennio, Kristal rappresenta il punto d'incontro tra l'artigianalità svizzera e l'avanguardia stilistica internazionale. Nel nostro atelier, ogni rituale è studiato per esaltare l'unicità di ogni ospite, utilizzando esclusivamente prodotti d'eccellenza e tecniche sartoriali.",
   imageUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=1200&h=600&auto=format&fit=crop"
 };
 
@@ -145,6 +145,7 @@ export const supabaseMock = {
       return null;
     },
     delete: (id: string) => {
+      // Fix: Use getAll() instead of non-existent get() to satisfy the filter
       const current = supabaseMock.requests.getAll();
       const filtered = current.filter((r: any) => r.id !== id);
       localStorage.setItem(STORAGE_KEY_REQUESTS, JSON.stringify(filtered));
@@ -152,13 +153,7 @@ export const supabaseMock = {
     }
   },
   salonClosures: {
-    getAll: (): SalonClosure[] => {
-      const data = safeParse(STORAGE_KEY_SALON_CLOSURES, []);
-      return data.map((c: any) => {
-        if (typeof c === 'string') return { date: c, name: 'Chiusura Straordinaria' };
-        return { date: c.date, name: c.name || 'Chiusura Straordinaria' };
-      });
-    },
+    getAll: (): SalonClosure[] => safeParse(STORAGE_KEY_SALON_CLOSURES, []),
     save: (closures: SalonClosure[]) => {
       localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(closures));
       return closures;
