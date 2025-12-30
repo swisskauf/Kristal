@@ -46,7 +46,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
     const getRev = (appts: Appointment[]) => appts.filter(a => a.status === 'confirmed').reduce((acc, a) => acc + (a.services?.price || 0), 0);
     return {
       daily: getRev(myAppointments.filter(a => a.date.startsWith(todayStr))),
-      vacationRemaining: (member.total_vacation_days || 25) - (member.absences_json?.filter(a => a.type === 'vacation').length || 0)
+      vacationRemaining: (member.total_vacation_days_per_year || 25) - (member.absences_json?.filter(a => a.type === 'vacation').length || 0)
     };
   }, [myAppointments, member]);
 
@@ -128,7 +128,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-8">Registro Richieste Personali</h3>
           <div className="space-y-4">
             {requests.filter(r => r.member_name === member.name).sort((a,b) => b.created_at.localeCompare(a.created_at)).slice(0, 5).map(req => {
-              const isRevocation = req.type === 'availability_change';
+              const isRevocation = req.type === 'availability_change' as string;
               return (
                 <div key={req.id} className="p-6 border border-gray-50 rounded-3xl flex justify-between items-center bg-gray-50/50">
                   <div className="flex items-center gap-4">
