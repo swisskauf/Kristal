@@ -2,8 +2,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { Appointment, Service, User } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 const EMAIL_SYSTEM_INSTRUCTION = `Sei l'ufficio relazioni esterne di "Kristal Atelier". 
 Il tuo compito è scrivere email di conferma e aggiornamento per i "Ritual" di bellezza. 
 Il tono deve essere estremamente raffinato, accogliente e professionale (Luxury Italian Style).
@@ -26,6 +24,13 @@ export async function sendLuxuryEmailNotification({ type, appointment, client, s
     return null;
   }
 
+  // Inizializzazione Lazy e Sicura
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("Email Service: API Key mancante. Generazione testo saltata.");
+    return null;
+  }
+
   const dateStr = new Date(appointment.date).toLocaleDateString('it-IT', { 
     weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' 
   });
@@ -41,6 +46,8 @@ export async function sendLuxuryEmailNotification({ type, appointment, client, s
   }
 
   try {
+    const ai = new GoogleGenAI({ apiKey });
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
