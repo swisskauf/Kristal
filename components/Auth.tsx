@@ -37,22 +37,44 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
     try {
       if (isRegistering) {
-        // Registrazione ESCLUSIVA come Client
-        const { error } = await supabase.auth.signUp({
+        // 1. Registrazione in Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: { 
               full_name: fullName, 
               phone, 
-              role: 'client', // Forzato a client
+              role: 'client',
               gender, 
               dob, 
               avatar
             },
           }
         });
-        if (error) throw error;
+
+        if (authError) throw authError;
+
+        // 2. INSERIMENTO MANUALE PROFILO (Fix Critico)
+        // Assicura che il profilo esista in public.profiles anche se il Trigger SQL fallisce o non esiste.
+        if (authData.user) {
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: authData.user.id,
+                email: email,
+                full_name: fullName,
+                phone: phone,
+                role: 'client',
+                gender: gender,
+                dob: dob,
+                avatar: avatar || null
+            }, { onConflict: 'id' });
+            
+            if (profileError) {
+                console.error("Errore creazione profilo DB:", profileError);
+                // Non blocchiamo il flusso, ma logghiamo l'errore
+            }
+        }
+
         setEmailSent(true);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -64,11 +86,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             email: data.user.email!,
             fullName: profile?.full_name || 'Ospite Kristal',
             phone: profile?.phone || '',
-            role: profile?.role || 'client'
+            role: profile?.role || 'client',
+            avatar: profile?.avatar
           });
         }
       }
     } catch (err: any) {
+      console.error("Auth Error:", err);
       setErrorMsg(err.message || 'Errore durante l\'autenticazione.');
     } finally {
       setLoading(false);
@@ -79,14 +103,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     return (
       <div className="w-full bg-white rounded-[4rem] p-12 text-center shadow-2xl">
         <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-8 text-amber-600">
-           <i className="fas fa-envelope-open-text text-3xl"></i>
+           <i className="fas fa-check-circle text-3xl"></i>
         </div>
-        <h2 className="text-3xl font-luxury font-bold mb-4">Benvenuti in Kristal</h2>
+        <h2 className="text-3xl font-luxury font-bold mb-4">Profilo Creato</h2>
         <p className="text-gray-500 text-xs mb-10 leading-relaxed">
-          Abbiamo inviato un link di conferma a <strong>{email}</strong>.<br/>
-          Verificate la vostra email per accedere ai rituali esclusivi.
+          Benvenuto <strong>{fullName}</strong>.<br/>
+          Il tuo profilo è stato registrato nell'archivio Kristal.<br/><br/>
+          <span className="text-amber-600 font-bold">Nota:</span> Se hai la conferma email attiva su Supabase, controlla la posta. Altrimenti, puoi accedere subito.
         </p>
-        <button onClick={() => setEmailSent(false)} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest border border-amber-600 px-10 py-4 rounded-full hover:bg-amber-600 hover:text-white transition-all">Torna al Login</button>
+        <button onClick={() => { setEmailSent(false); setIsRegistering(false); }} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest border border-amber-600 px-10 py-4 rounded-full hover:bg-amber-600 hover:text-white transition-all">Accedi Ora</button>
       </div>
     );
   }
