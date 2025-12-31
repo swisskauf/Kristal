@@ -37,8 +37,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
     try {
       if (isRegistering) {
-        // 1. Registrazione in Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Registrazione: I dati vengono passati ai metadata.
+        // Il TRIGGER SQL 'handle_new_user' si occuperà di creare la riga in public.profiles.
+        const { error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -55,31 +56,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         if (authError) throw authError;
 
-        // 2. INSERIMENTO MANUALE PROFILO (Fix Critico)
-        // Assicura che il profilo esista in public.profiles anche se il Trigger SQL fallisce o non esiste.
-        if (authData.user) {
-            const { error: profileError } = await supabase.from('profiles').upsert({
-                id: authData.user.id,
-                email: email,
-                full_name: fullName,
-                phone: phone,
-                role: 'client',
-                gender: gender,
-                dob: dob,
-                avatar: avatar || null
-            }, { onConflict: 'id' });
-            
-            if (profileError) {
-                console.error("Errore creazione profilo DB:", profileError);
-                // Non blocchiamo il flusso, ma logghiamo l'errore
-            }
-        }
-
         setEmailSent(true);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
+          // Fetch del profilo per ottenere il ruolo e il nome completo aggiornati
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
           onLogin({
             id: data.user.id,
@@ -108,8 +90,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <h2 className="text-3xl font-luxury font-bold mb-4">Profilo Creato</h2>
         <p className="text-gray-500 text-xs mb-10 leading-relaxed">
           Benvenuto <strong>{fullName}</strong>.<br/>
-          Il tuo profilo è stato registrato nell'archivio Kristal.<br/><br/>
-          <span className="text-amber-600 font-bold">Nota:</span> Se hai la conferma email attiva su Supabase, controlla la posta. Altrimenti, puoi accedere subito.
+          Il tuo profilo è stato registrato automaticamente.<br/><br/>
+          <span className="text-amber-600 font-bold">Nota:</span> Se hai attivato la conferma email su Supabase, verifica la posta prima di accedere.
         </p>
         <button onClick={() => { setEmailSent(false); setIsRegistering(false); }} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest border border-amber-600 px-10 py-4 rounded-full hover:bg-amber-600 hover:text-white transition-all">Accedi Ora</button>
       </div>
