@@ -37,8 +37,11 @@ const mockAuth = {
   onAuthStateChange: (cb: any) => {
     authListeners.add(cb);
     const user = supabaseMock.auth.getUser();
+    // FIX: Emette sempre un evento iniziale per permettere l'inizializzazione dell'app
     if (user) {
       cb('SIGNED_IN', { user, session: { user } });
+    } else {
+      cb('SIGNED_OUT', null);
     }
     return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
