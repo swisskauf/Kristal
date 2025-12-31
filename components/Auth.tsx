@@ -49,23 +49,39 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     try {
       if (isRegistering) {
         // REGISTRAZIONE AUTOMATICA
-        // Passiamo TUTTI i dati nei metadata. Il Trigger SQL 'handle_new_user' li userà per popolare public.profiles.
+        // Passiamo TUTTI i dati nei metadata per il Trigger SQL
         const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: { 
               full_name: fullName, 
-              phone: phone || '', 
+              phone: String(phone || ''), 
               role: 'client',
               gender: gender || 'F', 
-              dob: dob || '', 
+              dob: String(dob || ''), 
               avatar: avatar || ''
             },
           }
         });
 
         if (authError) throw authError;
+
+        if (data.user) {
+            // CRITICAL DOUBLE-TAP: Forza il salvataggio dei dati nel DB pubblico
+            // Questo assicura che Telefono e Data di Nascita vengano salvati
+            // anche se il Trigger SQL perde il colpo sui metadati.
+            await supabase.from('profiles').upsert({
+                id: data.user.id,
+                email: email,
+                full_name: fullName,
+                phone: String(phone || ''),
+                dob: String(dob || ''),
+                gender: gender || 'F',
+                role: 'client',
+                avatar: avatar || ''
+            });
+        }
 
         // Se l'autologin è attivo su Supabase, effettuiamo subito il login logico nell'app
         if (data.user && !data.session) {
