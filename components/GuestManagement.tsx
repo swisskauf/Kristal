@@ -9,9 +9,11 @@ interface GuestManagementProps {
   onRefresh: () => void;
   onEditGuest?: (guest: any) => void;
   onAddGuest?: () => void;
+  onDeleteGuest?: (id: string) => void;
+  onBlockGuest?: (guest: any) => void;
 }
 
-const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointments, onRefresh, onEditGuest, onAddGuest }) => {
+const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointments, onRefresh, onEditGuest, onAddGuest, onDeleteGuest, onBlockGuest }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGuest, setSelectedGuest] = useState<any | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'history' | 'technical'>('info');
@@ -158,9 +160,19 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                   onClick={() => setSelectedGuest(g)}
                   className={`p-8 flex items-center gap-6 cursor-pointer border-b border-gray-50 transition-all ${selectedGuest?.id === g.id ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
                 >
-                  <img src={g.avatar || `https://ui-avatars.com/api/?name=${g.full_name}`} className="w-12 h-12 rounded-2xl object-cover border border-gray-100" />
+                  <div className="relative">
+                    <img src={g.avatar || `https://ui-avatars.com/api/?name=${g.full_name}`} className={`w-12 h-12 rounded-2xl object-cover border border-gray-100 ${g.is_blocked ? 'grayscale opacity-50' : ''}`} />
+                    {g.is_blocked && (
+                      <div className="absolute inset-0 bg-red-500/20 rounded-2xl flex items-center justify-center">
+                        <i className="fas fa-ban text-red-600 text-xs"></i>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 overflow-hidden">
-                    <p className="font-bold text-sm truncate uppercase tracking-tighter">{g.full_name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-bold text-sm truncate uppercase tracking-tighter ${g.is_blocked ? 'line-through opacity-60' : ''}`}>{g.full_name}</p>
+                      {g.is_blocked && <span className="text-[6px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded uppercase">Bloccato</span>}
+                    </div>
                     <p className={`text-[8px] font-bold uppercase tracking-widest mt-1 ${selectedGuest?.id === g.id ? 'text-amber-500' : 'text-gray-400'}`}>{g.phone || 'Nessun telefono'}</p>
                   </div>
                   <i className="fas fa-chevron-right text-[10px] opacity-20"></i>
@@ -173,13 +185,17 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
 
         <div className="min-h-[650px]">
           {selectedGuest ? (
-            <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-12 space-y-12 animate-in slide-in-from-right-4">
-               <header className="flex items-start justify-between">
+            <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm p-12 space-y-12 animate-in slide-in-from-right-4 relative overflow-hidden">
+               {selectedGuest.is_blocked && (
+                 <div className="absolute top-0 left-0 w-full h-2 bg-red-500 animate-pulse"></div>
+               )}
+               
+               <header className="flex items-start justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-8">
                     <div className="relative group cursor-pointer w-24 h-24">
                       <img 
                         src={selectedGuest.avatar || `https://ui-avatars.com/api/?name=${selectedGuest.full_name}`} 
-                        className="w-full h-full rounded-[2.5rem] object-cover border-4 border-white shadow-xl transition-all group-hover:opacity-80" 
+                        className={`w-full h-full rounded-[2.5rem] object-cover border-4 border-white shadow-xl transition-all group-hover:opacity-80 ${selectedGuest.is_blocked ? 'grayscale' : ''}`} 
                       />
                       <label className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer bg-black/20 rounded-[2.5rem]">
                         <i className="fas fa-camera text-xl text-white"></i>
@@ -187,12 +203,29 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                       </label>
                     </div>
                     <div>
-                       <h3 className="text-4xl font-luxury font-bold text-gray-900">{selectedGuest.full_name}</h3>
+                       <h3 className="text-4xl font-luxury font-bold text-gray-900 flex items-center gap-3">
+                         {selectedGuest.full_name}
+                         {selectedGuest.is_blocked && <i className="fas fa-ban text-red-500 text-xl" title="Accesso Negato"></i>}
+                       </h3>
                        <p className="text-amber-600 text-[9px] font-bold uppercase tracking-widest mt-1">Ospite d'onore dal {new Date(selectedGuest.created_at || Date.now()).getFullYear()}</p>
                     </div>
                   </div>
-                  <div className="flex gap-4">
-                     <button onClick={() => onEditGuest?.(selectedGuest)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors" title="Modifica Profilo"><i className="fas fa-edit"></i></button>
+                  <div className="flex gap-3">
+                     <button 
+                       onClick={() => onBlockGuest?.(selectedGuest)} 
+                       className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-md ${selectedGuest.is_blocked ? 'bg-red-500 text-white' : 'bg-white text-gray-400 hover:text-red-500 border border-gray-100'}`}
+                       title={selectedGuest.is_blocked ? "Sblocca Ospite" : "Blocca Ospite"}
+                     >
+                       <i className={`fas ${selectedGuest.is_blocked ? 'fa-unlock' : 'fa-ban'}`}></i>
+                     </button>
+                     <button 
+                       onClick={() => onDeleteGuest?.(selectedGuest.id)} 
+                       className="w-12 h-12 bg-white text-gray-400 border border-gray-100 rounded-2xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all shadow-md"
+                       title="Elimina Definitivamente"
+                     >
+                       <i className="fas fa-trash-alt"></i>
+                     </button>
+                     <button onClick={() => onEditGuest?.(selectedGuest)} className="w-12 h-12 bg-black text-white rounded-2xl flex items-center justify-center hover:bg-amber-600 transition-colors shadow-lg" title="Modifica Profilo"><i className="fas fa-edit"></i></button>
                   </div>
                </header>
 
