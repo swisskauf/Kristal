@@ -360,6 +360,31 @@ const App: React.FC = () => {
     }
   };
 
+  // Funzione helper per calcolare i giorni lavorativi effettivi
+  const calculateWorkingDays = (startStr: string, endStr: string, member: TeamMember) => {
+    if (!startStr || !endStr) return 0;
+    let count = 0;
+    let curr = new Date(startStr);
+    const end = new Date(endStr);
+    const closureDates = salonClosures.map(c => c.date); // 'YYYY-MM-DD'
+
+    while (curr <= end) {
+        const dateString = curr.toISOString().split('T')[0];
+        const dayOfWeek = curr.getDay(); // 0 = Sunday
+
+        // Check global closure
+        const isHoliday = closureDates.includes(dateString);
+        // Check weekly closure (default [0] if undefined)
+        const isWeeklyOff = (member.weekly_closures || [0]).includes(dayOfWeek);
+
+        if (!isHoliday && !isWeeklyOff) {
+            count++;
+        }
+        curr.setDate(curr.getDate() + 1);
+    }
+    return count;
+  };
+
   const handleRequestAction = async (id: string, action: 'approved' | 'rejected') => {
     try {
       const req = requests.find(r => r.id === id);
@@ -371,7 +396,11 @@ const App: React.FC = () => {
         const member = team.find(t => t.name === req.member_name);
         if (member) {
           const hoursPerDay = member.hours_per_day_contract || 8.5;
-          const hoursUsed = req.is_full_day ? hoursPerDay : 4; 
+          
+          // CALCOLO GIORNI LAVORATIVI EFFETTIVI
+          const workingDays = calculateWorkingDays(req.start_date, req.end_date, member);
+          const hoursUsed = req.is_full_day ? (workingDays * hoursPerDay) : 4; 
+
           const startDateISO = new Date(req.start_date).toISOString();
           const endDateISO = new Date(req.end_date).toISOString();
 
@@ -399,9 +428,10 @@ const App: React.FC = () => {
         }
       }
       
-      showToast(action === 'approved' ? "Richiesta approvata. Agenda bloccata." : "Richiesta respinta.");
+      showToast(action === 'approved' ? "Richiesta approvata. Agenda aggiornata." : "Richiesta respinta.");
       refreshData(true);
     } catch (e) {
+      console.error(e);
       showToast("Errore durante l'elaborazione HR.", "error");
     }
   };
@@ -529,6 +559,7 @@ const App: React.FC = () => {
                   onSendRequest={async (r) => { await db.requests.create({...r, member_name: currentMember.name}); refreshData(true); }}
                   onUpdateProfile={async (p) => { await db.profiles.upsert({ ...profiles.find(pr => pr.id === user?.id), ...p }); refreshData(true); }}
                   onAddManualAppointment={() => { setFormInitialData(null); setIsFormOpen(true); }}
+                  salonClosures={salonClosures}
                 />
             ) : (
                 <div className="space-y-20">
@@ -567,6 +598,7 @@ const App: React.FC = () => {
         {activeTab === 'team_management' && isAdmin && (
            <HRManagement 
              team={team} 
+             salonClosures={salonClosures}
              onEditMember={(m) => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} 
              onAddMember={() => setIsNewStaffModalOpen(true)}
              onUpdateMember={handleSaveStaff}
