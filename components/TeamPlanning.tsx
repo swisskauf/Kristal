@@ -33,8 +33,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
     const MAX_DAYS_AHEAD = 2; // Oggi, Domani, Dopodomani
 
     return profiles.filter(p => {
-      // Verifica robusta: deve avere una data di nascita valida
-      if (!p.dob || p.dob === '') return false;
+      // Verifica robusta: deve avere una data di nascita valida e non essere vuota
+      if (!p.dob || p.dob === '' || p.dob === 'null') return false;
       
       // Tentativo di parsing della data
       const dobDate = new Date(p.dob);
@@ -48,6 +48,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
       const checkDiff = (bday: Date) => {
         const diffTime = bday.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        // Accetta date da oggi fino a 2 giorni dopo
         return diffDays >= 0 && diffDays <= MAX_DAYS_AHEAD;
       };
 
@@ -203,8 +204,8 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
         }
       `}</style>
 
-      {/* Celebration Lounge Banner in Planning - ALWAYS RENDER if guests exist, to test layout */}
-      {birthdayGuests.length > 0 ? (
+      {/* Celebration Lounge Banner in Planning - Mostra SE ci sono compleanni */}
+      {birthdayGuests.length > 0 && (
         <div className="bg-gradient-to-r from-gray-900 to-black text-white p-6 rounded-[2.5rem] shadow-xl relative overflow-hidden flex items-center gap-6 animate-in slide-in-from-top-4">
            <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-birthday-cake text-6xl rotate-12"></i></div>
            <div className="flex-none">
@@ -227,7 +228,7 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
               ))}
            </div>
         </div>
-      ) : null}
+      )}
 
       <div className="flex flex-col md:flex-row justify-between items-center bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm gap-6">
         <div className="flex items-center gap-6">
