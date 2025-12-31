@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TeamMember, AbsenceEntry, AbsenceType } from '../types';
 
 interface TeamManagementProps {
@@ -17,6 +17,9 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
   const [vacationDays, setVacationDays] = useState(member.total_vacation_days_per_year || 25);
   const [contractHours, setContractHours] = useState(member.hours_per_day_contract || 8.5);
   const [overtimeBalance, setOvertimeBalance] = useState(member.overtime_balance_hours || 0);
+  
+  // Gestione Storico Assenze/Movimenti
+  const [absences, setAbsences] = useState<AbsenceEntry[]>(member.absences_json || []);
   
   // Working Hours & Breaks
   const [workStart, setWorkStart] = useState(member.work_start_time || '08:30');
@@ -36,7 +39,27 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
 
   const handleApplyAdjustment = () => {
     if (otAdjustment === '' || otAdjustment === 0) return;
-    setOvertimeBalance(prev => prev + Number(otAdjustment));
+
+    const adjustmentVal = Number(otAdjustment);
+    const newBalance = overtimeBalance + adjustmentVal;
+    
+    // Aggiorno il saldo visuale
+    setOvertimeBalance(newBalance);
+
+    // Creo una voce di storico per tracciare la modifica
+    const newEntry: AbsenceEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      startDate: new Date().toISOString(), // Data di registrazione
+      endDate: new Date().toISOString(),
+      type: adjustmentVal > 0 ? 'overtime' : 'overtime_recovery',
+      isFullDay: false,
+      hoursCount: Math.abs(adjustmentVal),
+      notes: otNotes || 'Rettifica manuale banca ore'
+    };
+
+    // Aggiorno l'array locale delle assenze/movimenti
+    setAbsences(prev => [...prev, newEntry]);
+
     setOtAdjustment('');
     setOtNotes('');
     setShowApplySuccess(true);
@@ -58,8 +81,16 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
       total_vacation_days_per_year: vacationDays,
       hours_per_day_contract: contractHours,
       overtime_balance_hours: overtimeBalance,
+      absences_json: absences // Salvo l'array aggiornato con lo storico
     });
   };
+
+  // Filtro per mostrare solo i movimenti di banca ore nello storico del tab Bank
+  const bankHistory = useMemo(() => {
+    return absences
+      .filter(a => a.type === 'overtime' || a.type === 'overtime_recovery')
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+  }, [absences]);
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
@@ -167,15 +198,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
                 <div className="relative z-10 w-full md:w-auto">
                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2">Saldo Banca Ore Attuale</p>
                    <div className="flex items-center gap-2">
-                     <input 
-                        type="number" 
-                        value={overtimeBalance} 
-                        onChange={e => setOvertimeBalance(Number(e.target.value))}
-                        className="text-6xl font-luxury font-bold bg-transparent border-none text-white outline-none w-48 focus:border-b focus:border-amber-500"
-                     />
+                     <p className="text-6xl font-luxury font-bold text-white">{overtimeBalance}</p>
                      <span className="text-xl">h</span>
                    </div>
-                   <p className="text-[8px] text-gray-500 mt-2">Modificabile direttamente o tramite rettifica sotto</p>
+                   <p className="text-[8px] text-gray-500 mt-2">Saldo dinamico calcolato</p>
                 </div>
                 <div className="text-right relative z-10 w-full md:w-auto">
                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Equivalente Congedo</p>
@@ -213,7 +239,31 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
                      rows={2}
                    />
                 </div>
-                <p className="text-[9px] text-gray-400 italic px-2">Nota: Inserire un valore positivo per aggiungere ore, negativo per sottrarle. Premere "Applica" per aggiornare il saldo visualizzato sopra.</p>
+                <p className="text-[9px] text-gray-400 italic px-2">Nota: Il valore inserito aggiornerà il saldo e creerà una voce nello storico qui sotto.</p>
+             </div>
+
+             {/* Cronologia Movimenti */}
+             <div className="space-y-6">
+               <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-400 pl-4">Cronologia Movimenti</h4>
+               <div className="bg-gray-50 rounded-[3rem] p-6 max-h-[300px] overflow-y-auto scrollbar-hide space-y-3">
+                 {bankHistory.length > 0 ? bankHistory.map((entry) => (
+                   <div key={entry.id} className="bg-white p-5 rounded-3xl border border-gray-100 flex justify-between items-center">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2 h-2 rounded-full ${entry.type === 'overtime' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                          <p className="text-[10px] font-bold uppercase tracking-wide">{new Date(entry.startDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          <span className="text-[9px] text-gray-300">| {new Date(entry.startDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p className="text-xs font-medium text-gray-600 italic">{entry.notes || 'Nessuna nota'}</p>
+                      </div>
+                      <div className={`text-xl font-bold ${entry.type === 'overtime' ? 'text-green-600' : 'text-red-500'}`}>
+                        {entry.type === 'overtime' ? '+' : '-'}{entry.hoursCount}h
+                      </div>
+                   </div>
+                 )) : (
+                   <p className="text-center text-[10px] text-gray-400 font-bold uppercase py-8">Nessun movimento registrato</p>
+                 )}
+               </div>
              </div>
           </div>
         )}
