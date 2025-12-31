@@ -6,11 +6,32 @@ interface HRManagementProps {
   team: TeamMember[];
   onEditMember: (member: TeamMember) => void;
   onAddMember: () => void;
+  onUpdateMember: (member: TeamMember) => void;
 }
 
-const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMember }) => {
+const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMember, onUpdateMember }) => {
   const [viewMode, setViewMode] = useState<'cards' | 'calendar'>('cards');
   
+  // State for adding new absence
+  const [isAddAbsenceModalOpen, setIsAddAbsenceModalOpen] = useState(false);
+  const [newAbsenceData, setNewAbsenceData] = useState<{
+    memberId: string; // Using name as ID based on current structure
+    type: AbsenceType;
+    startDate: string;
+    endDate: string;
+    isFullDay: boolean;
+    hours: number;
+    notes: string;
+  }>({
+    memberId: '',
+    type: 'vacation',
+    startDate: '',
+    endDate: '',
+    isFullDay: true,
+    hours: 8.5,
+    notes: ''
+  });
+
   const getMemberHRStats = (member: TeamMember) => {
     const absences = member.absences_json || [];
     const hoursPerDay = member.hours_per_day_contract || 8.5;
@@ -72,7 +93,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
   }, [allAbsences]);
 
   const getTypeLabel = (type: string) => {
-    const map: any = { vacation: 'Ferie', sick: 'Malattia', training: 'Formazione', unpaid: 'Non Retribuito', overtime_recovery: 'Recupero', injury: 'Infortunio' };
+    const map: any = { vacation: 'Ferie', sick: 'Malattia', training: 'Formazione', unpaid: 'Non Retribuito', overtime_recovery: 'Recupero', injury: 'Infortunio', overtime: 'Straordinario' };
     return map[type] || type;
   };
 
@@ -82,8 +103,79 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
       case 'sick': return 'bg-red-100 text-red-800 border-red-200';
       case 'training': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       case 'overtime_recovery': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'overtime': return 'bg-green-100 text-green-800 border-green-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
+  };
+
+  const handleDeleteAbsence = (memberName: string, absenceId: string) => {
+    const member = team.find(m => m.name === memberName);
+    if (!member) return;
+
+    const absenceToDelete = member.absences_json?.find(a => a.id === absenceId);
+    if (!absenceToDelete) return;
+
+    // Calcolo impatto su banca ore
+    let updatedOvertime = member.overtime_balance_hours || 0;
+    if (absenceToDelete.type === 'overtime') {
+      updatedOvertime -= absenceToDelete.hoursCount; // Rimuovo ore extra accreditate
+    } else if (absenceToDelete.type === 'overtime_recovery') {
+      updatedOvertime += absenceToDelete.hoursCount; // Restituisco ore scalate
+    }
+
+    const updatedAbsences = member.absences_json?.filter(a => a.id !== absenceId) || [];
+
+    onUpdateMember({
+      ...member,
+      absences_json: updatedAbsences,
+      overtime_balance_hours: updatedOvertime
+    });
+  };
+
+  const handleSaveNewAbsence = () => {
+    if (!newAbsenceData.memberId || !newAbsenceData.startDate) return;
+
+    const member = team.find(m => m.name === newAbsenceData.memberId);
+    if (!member) return;
+
+    const startDateISO = new Date(newAbsenceData.startDate).toISOString();
+    const endDateISO = newAbsenceData.endDate ? new Date(newAbsenceData.endDate).toISOString() : startDateISO;
+
+    const newEntry: AbsenceEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      startDate: startDateISO,
+      endDate: endDateISO,
+      type: newAbsenceData.type,
+      isFullDay: newAbsenceData.isFullDay,
+      hoursCount: newAbsenceData.isFullDay ? (member.hours_per_day_contract || 8.5) : Number(newAbsenceData.hours),
+      notes: newAbsenceData.notes
+    };
+
+    // Calcolo impatto su banca ore
+    let updatedOvertime = member.overtime_balance_hours || 0;
+    if (newEntry.type === 'overtime') {
+      updatedOvertime += newEntry.hoursCount;
+    } else if (newEntry.type === 'overtime_recovery') {
+      updatedOvertime -= newEntry.hoursCount;
+    }
+
+    onUpdateMember({
+      ...member,
+      absences_json: [...(member.absences_json || []), newEntry],
+      overtime_balance_hours: updatedOvertime
+    });
+
+    setIsAddAbsenceModalOpen(false);
+    // Reset form defaults
+    setNewAbsenceData({
+      memberId: '',
+      type: 'vacation',
+      startDate: '',
+      endDate: '',
+      isFullDay: true,
+      hours: 8.5,
+      notes: ''
+    });
   };
 
   return (
@@ -109,8 +201,17 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
 
       {viewMode === 'calendar' ? (
         <div className="space-y-10 animate-in slide-in-from-bottom-4">
-           <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm">
-              <h3 className="text-2xl font-luxury font-bold mb-8">Registro Assenze & Chiusure</h3>
+           <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm relative">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-luxury font-bold">Registro Assenze & Chiusure</h3>
+                <button 
+                  onClick={() => setIsAddAbsenceModalOpen(true)}
+                  className="px-6 py-3 bg-amber-50 text-amber-700 border border-amber-100 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-100 transition-colors flex items-center gap-2"
+                >
+                  <i className="fas fa-calendar-plus"></i> Registra Assenza
+                </button>
+              </div>
+              
               {Object.keys(groupedAbsences).length === 0 ? (
                 <div className="text-center py-20 text-gray-300 font-bold uppercase text-xs tracking-widest border-2 border-dashed border-gray-100 rounded-[3rem]">
                   Nessuna assenza programmata
@@ -128,6 +229,14 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
                            {absences.map((abs) => (
                              <div key={abs.id} className="group bg-white border border-gray-100 p-6 rounded-[2.5rem] hover:shadow-lg transition-all hover:border-amber-100 relative overflow-hidden">
                                 <div className={`absolute top-0 right-0 w-20 h-20 -mr-10 -mt-10 rounded-full opacity-20 transition-all group-hover:scale-150 ${getTypeColor(abs.type).split(' ')[0]}`}></div>
+                                
+                                <button 
+                                  onClick={() => handleDeleteAbsence(abs.memberName, abs.id)}
+                                  className="absolute top-4 right-4 text-gray-300 hover:text-red-500 z-20 transition-colors bg-white/50 backdrop-blur-sm p-2 rounded-full w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                >
+                                  <i className="fas fa-trash-alt text-xs"></i>
+                                </button>
+
                                 <div className="flex items-start gap-4 relative z-10">
                                    <img src={abs.memberAvatar || `https://ui-avatars.com/api/?name=${abs.memberName}`} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
                                    <div>
@@ -261,6 +370,85 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
             <button className="px-10 py-5 border border-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all">Esporta PDF Registro</button>
          </div>
       </div>
+
+      {isAddAbsenceModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[2000] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl space-y-6 relative animate-in zoom-in-95">
+             <button onClick={() => setIsAddAbsenceModalOpen(false)} className="absolute top-8 right-8 text-gray-300 hover:text-black transition-colors"><i className="fas fa-times text-xl"></i></button>
+             <h3 className="text-2xl font-luxury font-bold">Registra Assenza</h3>
+             
+             <div className="space-y-4">
+               <div className="space-y-1">
+                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Membro Staff</label>
+                 <select 
+                   value={newAbsenceData.memberId} 
+                   onChange={e => setNewAbsenceData({...newAbsenceData, memberId: e.target.value})}
+                   className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none"
+                 >
+                   <option value="" disabled>Seleziona collaboratore...</option>
+                   {team.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                 </select>
+               </div>
+
+               <div className="space-y-1">
+                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Tipologia</label>
+                 <select 
+                   value={newAbsenceData.type} 
+                   onChange={e => setNewAbsenceData({...newAbsenceData, type: e.target.value as AbsenceType})}
+                   className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none"
+                 >
+                   <option value="vacation">Ferie / Vacanza</option>
+                   <option value="sick">Malattia</option>
+                   <option value="training">Formazione</option>
+                   <option value="overtime_recovery">Recupero Ore</option>
+                   <option value="unpaid">Non Retribuito</option>
+                   <option value="injury">Infortunio</option>
+                 </select>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Dal</label>
+                   <input type="date" value={newAbsenceData.startDate} onChange={e => setNewAbsenceData({...newAbsenceData, startDate: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none" />
+                 </div>
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Al</label>
+                   <input type="date" value={newAbsenceData.endDate} onChange={e => setNewAbsenceData({...newAbsenceData, endDate: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none" />
+                 </div>
+               </div>
+
+               <div className="flex items-center gap-4 py-2">
+                 <button 
+                    onClick={() => setNewAbsenceData({...newAbsenceData, isFullDay: true})}
+                    className={`flex-1 py-3 text-[9px] font-bold uppercase rounded-xl border ${newAbsenceData.isFullDay ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100'}`}
+                 >
+                    Giorno Intero
+                 </button>
+                 <button 
+                    onClick={() => setNewAbsenceData({...newAbsenceData, isFullDay: false})}
+                    className={`flex-1 py-3 text-[9px] font-bold uppercase rounded-xl border ${!newAbsenceData.isFullDay ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100'}`}
+                 >
+                    A Ore
+                 </button>
+               </div>
+
+               {!newAbsenceData.isFullDay && (
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Ore Totali</label>
+                   <input type="number" step="0.5" value={newAbsenceData.hours} onChange={e => setNewAbsenceData({...newAbsenceData, hours: Number(e.target.value)})} className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none" />
+                 </div>
+               )}
+
+               <div className="space-y-1">
+                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Note</label>
+                 <textarea value={newAbsenceData.notes} onChange={e => setNewAbsenceData({...newAbsenceData, notes: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none resize-none" rows={2} />
+               </div>
+             </div>
+
+             <button onClick={handleSaveNewAbsence} className="w-full py-5 bg-black text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-amber-600 transition-all shadow-xl">Conferma Inserimento</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
