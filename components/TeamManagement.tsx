@@ -200,7 +200,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
                       <button 
                         onClick={handleApplyAdjustment}
                         disabled={otAdjustment === '' || otAdjustment === 0}
-                        className="px-8 py-5 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="shrink-0 px-8 py-5 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Applica
                       </button>
