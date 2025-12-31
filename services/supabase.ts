@@ -1,12 +1,10 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 import { SalonClosure, AboutUsContent } from '../types';
 
 const getEnv = (key: string): string => {
-  if (typeof window === 'undefined') return '';
   // @ts-ignore
-  const v = (import.meta.env?.[key]) || (window.process?.env?.[key]) || '';
+  const v = import.meta.env?.[key] || process.env?.[key] || '';
   return String(v).trim();
 };
 
@@ -166,7 +164,6 @@ export const db = {
       }
       return await client.from('salon_closures').delete().eq('date', date);
     },
-    // Fix: Add save method to support bulk updates to closures array
     save: async (closures: SalonClosure[]) => {
       if (useMock) return supabaseMock.salonClosures.save(closures);
       return (await client.from('salon_closures').upsert(closures)).data;
