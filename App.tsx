@@ -367,27 +367,33 @@ const App: React.FC = () => {
           const hoursPerDay = member.hours_per_day_contract || 8.5;
           const hoursUsed = req.is_full_day ? hoursPerDay : 4; 
           
+          // Formattazione rigorosa ISO per startDate e endDate
+          // Importante per il confronto stringhe in TeamPlanning e AppointmentForm
+          const startDateISO = new Date(req.start_date).toISOString();
+          const endDateISO = new Date(req.end_date).toISOString();
+
           const newAbsence: AbsenceEntry = { 
             id: Math.random().toString(36).substr(2, 9), 
-            startDate: req.start_date, 
-            endDate: req.end_date, 
+            startDate: startDateISO,
+            endDate: endDateISO,
             type: req.type, 
             isFullDay: req.is_full_day,
             hoursCount: hoursUsed,
-            notes: req.notes
+            notes: req.notes,
+            startTime: req.start_time,
+            endTime: req.end_time
           };
 
           let updatedOvertime = member.overtime_balance_hours || 0;
           
-          // Logica Corretta:
-          // Se "overtime" -> Aggiungo ore al saldo (il dipendente ha lavorato di più)
-          // Se "overtime_recovery" -> Tolgo ore al saldo (il dipendente recupera usando le ore banca)
           if (req.type === 'overtime') {
              updatedOvertime += hoursUsed;
           } else if (req.type === 'overtime_recovery') {
              updatedOvertime -= hoursUsed;
           }
 
+          // Salva l'assenza in team_members.absences_json
+          // Questo attiverà automaticamente il blocco in agenda
           await db.team.upsert({ 
             ...member, 
             absences_json: [...(member.absences_json || []), newAbsence],
@@ -396,7 +402,7 @@ const App: React.FC = () => {
         }
       }
       
-      showToast(action === 'approved' ? "Richiesta approvata e registro HR aggiornato." : "Richiesta respinta.");
+      showToast(action === 'approved' ? "Richiesta approvata. Agenda bloccata." : "Richiesta respinta.");
       refreshData(true);
     } catch (e) {
       showToast("Errore durante l'elaborazione HR.", "error");
@@ -485,6 +491,8 @@ const App: React.FC = () => {
            />
         )}
 
+        {/* ... (resto del codice invariato) ... */}
+        
         {activeTab === 'about_us' && (
           <div className="space-y-24 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
              {aboutUs ? (
