@@ -406,13 +406,12 @@ const App: React.FC = () => {
     }
   };
 
-  // Funzione per eliminare un ospite
   const handleDeleteGuest = async (id: string) => {
     if (!confirm('Sei sicuro di voler eliminare definitivamente questo ospite e tutto il suo storico?')) return;
     try {
       await db.profiles.delete(id);
       
-      // Logout di sicurezza se l'utente eliminato è quello corrente (caso raro, ma possibile)
+      // Logout di sicurezza se l'utente eliminato è quello corrente
       if (user && user.id === id) {
           await supabase.auth.signOut();
           window.location.reload();
@@ -420,14 +419,13 @@ const App: React.FC = () => {
       }
 
       showToast("Ospite eliminato con successo.");
-      await refreshData(true); // Attende il refresh
+      await refreshData(true); 
       setSelectedGuestToEdit(null); 
     } catch (e) {
       showToast("Errore eliminazione ospite.", "error");
     }
   };
 
-  // Funzione per bloccare/sbloccare un ospite
   const handleBlockGuest = async (guest: any) => {
     const newStatus = !guest.is_blocked;
     try {
@@ -437,6 +435,43 @@ const App: React.FC = () => {
     } catch (e) {
       showToast("Errore modifica stato ospite.", "error");
     }
+  };
+
+  const handleSaveGuestFromAdmin = async (guestData: any) => {
+      try {
+          if (guestData.id) {
+              // Modifica esistente: usa upsert DB
+              const { password, ...dataToUpdate } = guestData; // Rimuovi password se presente
+              await db.profiles.upsert(dataToUpdate);
+              showToast("Profilo ospite aggiornato.");
+          } else {
+              // Creazione nuovo ospite: DEVE passare da Auth SignUp per creare l'ID e rispettare FK
+              const { data, error } = await supabase.auth.signUp({
+                  email: guestData.email,
+                  password: guestData.password,
+                  options: {
+                      data: {
+                          full_name: guestData.full_name,
+                          phone: guestData.phone,
+                          role: 'client',
+                          gender: guestData.gender,
+                          dob: guestData.dob,
+                          avatar: guestData.avatar
+                      }
+                  }
+              });
+
+              if (error) throw error;
+              if (data.user) {
+                   showToast("Ospite creato e sincronizzato.");
+              }
+          }
+          setIsGuestEditorOpen(false);
+          await refreshData(true);
+      } catch (err: any) {
+          console.error("Errore salvataggio ospite:", err);
+          showToast(err.message || "Errore durante il salvataggio.", "error");
+      }
   };
 
   // Modified loading check: allow rendering if aboutUs is null but show basic UI if loading is true AND no critical data
@@ -893,7 +928,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-xl rounded-[5rem] p-16 shadow-2xl relative overflow-y-auto max-h-[92vh]">
              <button onClick={() => setIsGuestEditorOpen(false)} className="absolute top-10 right-12 text-gray-300 hover:text-black"><i className="fas fa-times text-3xl"></i></button>
-             <NewGuestForm initialData={selectedGuestToEdit} onSave={async (g) => { await db.profiles.upsert(g); setIsGuestEditorOpen(false); refreshData(true); showToast("Profilo salvato."); }} onCancel={() => setIsGuestEditorOpen(false)} />
+             <NewGuestForm initialData={selectedGuestToEdit} onSave={handleSaveGuestFromAdmin} onCancel={() => setIsGuestEditorOpen(false)} />
           </div>
         </div>
       )}
