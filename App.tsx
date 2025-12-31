@@ -323,8 +323,7 @@ const App: React.FC = () => {
 
   const handleDeleteClosure = async (date: string) => {
     try {
-      const updated = salonClosures.filter(c => c.date !== date);
-      await db.salonClosures.save(updated);
+      await db.salonClosures.delete(date);
       await refreshData(true);
       showToast("Chiusura rimossa.");
     } catch (err) {
