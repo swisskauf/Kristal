@@ -172,6 +172,17 @@ export const db = {
             localStorage.setItem('kristal_profiles', JSON.stringify(filtered));
             return { error: null };
         }
+        
+        // Tenta di usare la funzione RPC per eliminare l'utente anche da auth.users
+        try {
+           const { error } = await client.rpc('delete_user_account', { user_id: id });
+           if (!error) return { error: null };
+           console.warn("RPC delete_user_account fallita, fallback su delete semplice:", error);
+        } catch (e) {
+           console.warn("RPC non disponibile o errore:", e);
+        }
+
+        // Fallback: elimina solo dal db pubblico se la RPC non esiste/fallisce
         return await client.from('profiles').delete().eq('id', id);
     }
   },
