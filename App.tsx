@@ -378,7 +378,13 @@ const App: React.FC = () => {
           };
 
           let updatedOvertime = member.overtime_balance_hours || 0;
-          if (req.type === 'overtime' || req.type === 'overtime_recovery') {
+          
+          // Logica Corretta:
+          // Se "overtime" -> Aggiungo ore al saldo (il dipendente ha lavorato di più)
+          // Se "overtime_recovery" -> Tolgo ore al saldo (il dipendente recupera usando le ore banca)
+          if (req.type === 'overtime') {
+             updatedOvertime += hoursUsed;
+          } else if (req.type === 'overtime_recovery') {
              updatedOvertime -= hoursUsed;
           }
 
@@ -475,6 +481,7 @@ const App: React.FC = () => {
            <HRManagement 
              team={team} 
              onEditMember={(m) => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} 
+             onAddMember={() => setIsNewStaffModalOpen(true)}
            />
         )}
 
