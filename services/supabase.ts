@@ -3,10 +3,27 @@ import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 import { SalonClosure, AboutUsContent } from '../types';
 
+// Helper sicuro per leggere variabili d'ambiente in Vite/Browser
 const getEnv = (key: string): string => {
-  // @ts-ignore
-  const v = import.meta.env?.[key] || process.env?.[key] || '';
-  return String(v).trim();
+  try {
+    // 1. Prova import.meta.env (Standard Vite)
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      // @ts-ignore
+      return String(import.meta.env[key]).trim();
+    }
+  } catch (e) {}
+
+  try {
+    // 2. Prova process.env solo se 'process' è definito (evita ReferenceError)
+    if (typeof process !== 'undefined' && process.env) {
+      // @ts-ignore
+      const val = process.env[key];
+      if (val) return String(val).trim();
+    }
+  } catch (e) {}
+
+  return '';
 };
 
 const supabaseUrl = getEnv('VITE_SUPABASE_URL');
