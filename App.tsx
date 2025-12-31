@@ -672,75 +672,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'about_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in max-w-4xl mx-auto">
-             <header>
-                <h2 className="text-5xl font-luxury font-bold text-gray-900">Editor Atelier</h2>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Racconta la bellezza di Kristal</p>
-             </header>
-             <div className="bg-white p-12 rounded-[5rem] border border-gray-100 shadow-sm space-y-10">
-                <div className="space-y-8">
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Immagine Hero Atelier</label>
-                      <div className="relative aspect-[16/6] bg-gray-50 rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 group cursor-pointer">
-                         <img src={aboutUs?.imageUrl} className="w-full h-full object-cover group-hover:opacity-70 transition-opacity" />
-                         <label className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white cursor-pointer">
-                            <i className="fas fa-camera text-3xl mb-2"></i>
-                            <span className="text-[10px] font-bold uppercase">Carica Foto Atelier</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleAtelierImageUpload} />
-                         </label>
-                      </div>
-                   </div>
-                   <div className="grid md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo</label>
-                         <input type="text" value={aboutUs?.title || ''} onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg" />
-                      </div>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo</label>
-                         <input type="text" value={aboutUs?.subtitle || ''} onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-sm" />
-                      </div>
-                   </div>
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Narrazione (Bio Atelier)</label>
-                      <textarea rows={8} value={aboutUs?.description || ''} onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-medium text-sm leading-relaxed resize-none" />
-                   </div>
-                </div>
-                <button onClick={() => aboutUs && handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-700 transition-all active:scale-95">Pubblica Modifiche</button>
-             </div>
-          </div>
-        )}
-
-        {activeTab === 'services_management' && isAdmin && (
-          <div className="space-y-12 animate-in fade-in">
-             <header className="flex items-center justify-between">
-                <div>
-                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Gestione Ritual</h2>
-                </div>
-                <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all"><i className="fas fa-plus"></i></button>
-             </header>
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {services.map(s => (
-                  <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all group">
-                     <div className="flex justify-between items-start mb-6">
-                        <span className="px-4 py-1.5 bg-gray-50 text-[8px] font-bold uppercase tracking-widest rounded-full">{s.category}</span>
-                        <div className="flex gap-2">
-                           <button onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="w-8 h-8 bg-gray-50 text-gray-400 rounded-xl hover:text-black transition-colors"><i className="fas fa-edit text-xs"></i></button>
-                        </div>
-                     </div>
-                     <h4 className="text-xl font-luxury font-bold text-gray-900 mb-1">{s.name}</h4>
-                     <p className="text-[10px] text-gray-400 font-bold uppercase mb-6">{s.duration} min</p>
-                     <p className="text-2xl font-luxury font-bold pt-6 border-t border-gray-50">CHF {s.price}</p>
-                  </div>
-                ))}
-             </div>
-          </div>
-        )}
-
         {activeTab === 'vacation_planning' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
              <header><h2 className="text-5xl font-luxury font-bold text-gray-900">Centro Congedi</h2></header>
-             <div className="grid lg:grid-cols-2 gap-12">
+             <div className="flex flex-col gap-20">
                 <div className="space-y-8">
                    <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900 border-l-4 border-amber-600 pl-4">Richieste Staff</h3>
                    <RequestManagement 
