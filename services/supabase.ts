@@ -61,25 +61,57 @@ const mockAuth = {
     const { email, password, options } = data;
     const metadata = options?.data || {};
     
-    // Create the user object including all metadata fields to ensure Profile is saved correctly
-    const user = { 
-      id: 'mock-user-' + Date.now(), 
-      email: email, 
-      fullName: metadata.full_name, 
-      role: metadata.role || 'client',
-      phone: metadata.phone,
-      gender: metadata.gender,
-      dob: metadata.dob, // Ensure DOB is passed
-      avatar: metadata.avatar,
-      address: metadata.address,
-      avs_number: metadata.avs_number,
-      iban: metadata.iban
-    };
+    // LOGICA PER MOCK
+    if (useMock) {
+      const id = 'mock-user-' + Date.now();
+      // Salva esplicitamente nel mock profile
+      const profile = {
+        id: id,
+        full_name: metadata.full_name,
+        email: email,
+        phone: metadata.phone,
+        role: metadata.role || 'client',
+        gender: metadata.gender,
+        dob: metadata.dob, // CRITICAL FIX: Ensure dob is passed
+        avatar: metadata.avatar,
+        address: metadata.address,
+        avs_number: metadata.avs_number,
+        iban: metadata.iban
+      };
+      
+      supabaseMock.profiles.upsert(profile);
+
+      const user = { 
+        id: id, 
+        email: email, 
+        ...metadata
+      };
+      
+      supabaseMock.auth.signIn(user as any);
+      const session = { user };
+      authListeners.forEach(cb => cb('SIGNED_IN', session));
+      return { data: { user, session }, error: null };
+    } 
     
-    supabaseMock.auth.signIn(user as any);
-    const session = { user };
-    authListeners.forEach(cb => cb('SIGNED_IN', session));
-    return { data: { user, session }, error: null };
+    // LOGICA PER SUPABASE REALE
+    // Passiamo tutti i metadati affinché il Trigger SQL li legga e li inserisca in Profiles
+    return await client.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: metadata.full_name,
+          role: metadata.role || 'client',
+          phone: metadata.phone,
+          dob: metadata.dob, // Passiamo DOB al DB reale
+          gender: metadata.gender,
+          avatar: metadata.avatar,
+          address: metadata.address,
+          avs_number: metadata.avs_number,
+          iban: metadata.iban
+        }
+      }
+    });
   },
   signOut: async () => { 
     supabaseMock.auth.signOut(); 
@@ -88,7 +120,7 @@ const mockAuth = {
   }
 };
 
-export const supabase = client || {
+export const supabase = client ? { ...client, auth: client.auth } : {
   auth: mockAuth,
   from: (table: string) => ({
     select: (cols: string = '*') => ({
@@ -102,6 +134,15 @@ export const supabase = client || {
   })
 };
 
+// Se siamo in modalità reale, sovrascriviamo l'auth del client con quello nativo
+if (client) {
+  // @ts-ignore
+  supabase.auth = client.auth;
+} else {
+  // @ts-ignore
+  supabase.auth = mockAuth;
+}
+
 export const db = {
   profiles: {
     getAll: async () => useMock ? supabaseMock.profiles.getAll() : (await client.from('profiles').select('*').order('full_name')).data || [],
@@ -109,7 +150,11 @@ export const db = {
       if (useMock) return (supabaseMock.profiles.getAll() as any[]).find(p => p.id === id) || null;
       return (await client.from('profiles').select('*').eq('id', id).maybeSingle()).data;
     },
-    upsert: async (p: any) => useMock ? supabaseMock.profiles.upsert(p) : (await client.from('profiles').upsert(p).select().single()).data
+    upsert: async (p: any) => {
+      if (useMock) return supabaseMock.profiles.upsert(p);
+      // Ensure we allow update on conflict
+      return (await client.from('profiles').upsert(p, { onConflict: 'id' }).select().single()).data;
+    }
   },
   services: {
     getAll: async () => useMock ? supabaseMock.services.getAll() : (await client.from('services').select('*').order('name')).data || [],
