@@ -411,9 +411,17 @@ const App: React.FC = () => {
     if (!confirm('Sei sicuro di voler eliminare definitivamente questo ospite e tutto il suo storico?')) return;
     try {
       await db.profiles.delete(id);
+      
+      // Logout di sicurezza se l'utente eliminato è quello corrente (caso raro, ma possibile)
+      if (user && user.id === id) {
+          await supabase.auth.signOut();
+          window.location.reload();
+          return;
+      }
+
       showToast("Ospite eliminato con successo.");
-      refreshData(true);
-      setSelectedGuestToEdit(null); // Chiudi pannelli aperti
+      await refreshData(true); // Attende il refresh
+      setSelectedGuestToEdit(null); 
     } catch (e) {
       showToast("Errore eliminazione ospite.", "error");
     }
@@ -697,7 +705,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Gestione Ospiti con nuove prop */}
+        {/* Tab Gestione Ospiti con refresh automatico */}
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="animate-in fade-in">
              <GuestManagement 
