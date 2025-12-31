@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { TeamMember, Appointment, LeaveRequest, User } from '../types';
+import { TeamMember, Appointment, LeaveRequest, User, SalonClosure } from '../types';
 
 interface CollaboratorDashboardProps {
   member: TeamMember;
@@ -10,9 +10,19 @@ interface CollaboratorDashboardProps {
   onSendRequest: (req: any) => void;
   onUpdateProfile: (p: any) => void;
   onAddManualAppointment: () => void;
+  salonClosures?: SalonClosure[];
 }
 
-const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, appointments, requests, user, onSendRequest, onUpdateProfile, onAddManualAppointment }) => {
+const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ 
+  member, 
+  appointments, 
+  requests, 
+  user, 
+  onSendRequest, 
+  onUpdateProfile, 
+  onAddManualAppointment,
+  salonClosures = []
+}) => {
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newReq, setNewReq] = useState({ type: 'vacation', start: '', end: '', notes: '' });
@@ -44,11 +54,48 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     const getRev = (appts: Appointment[]) => appts.filter(a => a.status === 'confirmed').reduce((acc, a) => acc + (a.services?.price || 0), 0);
+    
+    // Calcolo giorni ferie usati (solo approvati)
+    // Nota: Il calcolo accurato "netto" viene fatto lato server/DB in fase di approvazione e salvato in `hoursCount`.
+    // Qui stimiamo basandoci sulle assenze salvate nel JSON del membro.
+    const vacationHoursUsed = (member.absences_json || [])
+      .filter(a => a.type === 'vacation')
+      .reduce((acc, a) => acc + (a.hoursCount || 0), 0);
+    
+    const daysUsed = vacationHoursUsed / (member.hours_per_day_contract || 8.5);
+
     return {
       daily: getRev(myAppointments.filter(a => a.date.startsWith(todayStr))),
-      vacationRemaining: (member.total_vacation_days_per_year || 25) - (member.absences_json?.filter(a => a.type === 'vacation').length || 0)
+      vacationRemaining: parseFloat(((member.total_vacation_days_per_year || 25) - daysUsed).toFixed(1))
     };
   }, [myAppointments, member]);
+
+  const calculateWorkingDays = (start: string, end: string) => {
+    if (!start || !end) return 0;
+    let count = 0;
+    let curr = new Date(start);
+    const endDate = new Date(end);
+    const closureDates = salonClosures.map(c => c.date);
+
+    while (curr <= endDate) {
+      const dateString = curr.toISOString().split('T')[0];
+      const dayOfWeek = curr.getDay();
+      
+      const isHoliday = closureDates.includes(dateString);
+      const isWeeklyOff = (member.weekly_closures || [0]).includes(dayOfWeek);
+
+      if (!isHoliday && !isWeeklyOff) {
+        count++;
+      }
+      curr.setDate(curr.getDate() + 1);
+    }
+    return count;
+  };
+
+  const calculatedDays = useMemo(() => {
+    if (!newReq.start || !newReq.end) return 0;
+    return calculateWorkingDays(newReq.start, newReq.end);
+  }, [newReq.start, newReq.end, member, salonClosures]);
 
   const handleSubmitRequest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,6 +248,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
               <i className="fas fa-times text-2xl"></i>
             </button>
             <h3 className="text-2xl font-luxury font-bold">Nuova Richiesta</h3>
+            
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Tipo di Congedo</label>
@@ -211,6 +259,7 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
                   <option value="unpaid">Giorno Libero</option>
                 </select>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Inizio</label>
@@ -221,11 +270,24 @@ const CollaboratorDashboard: React.FC<CollaboratorDashboardProps> = ({ member, a
                   <input type="date" required value={newReq.end} onChange={e => setNewReq({...newReq, end: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs shadow-inner" />
                 </div>
               </div>
+
+              {/* Display Calculated Days */}
+              {calculatedDays > 0 && (
+                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex justify-between items-center">
+                   <div>
+                     <p className="text-[9px] font-bold uppercase text-amber-600 tracking-widest">Totale Stimato</p>
+                     <p className="text-xs font-medium text-gray-600 italic">Giorni lavorativi effettivi</p>
+                   </div>
+                   <p className="text-2xl font-luxury font-bold text-gray-900">{calculatedDays}</p>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-[9px] font-bold uppercase text-gray-400 ml-1">Note</label>
                 <textarea value={newReq.notes} onChange={e => setNewReq({...newReq, notes: e.target.value})} rows={3} placeholder="Note opzionali..." className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-xs resize-none shadow-inner" />
               </div>
             </div>
+
             <button type="submit" className="w-full py-5 bg-black text-white rounded-3xl font-bold uppercase text-[10px] tracking-widest shadow-2xl">Invia Richiesta</button>
           </form>
         </div>
