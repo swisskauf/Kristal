@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { supabaseMock } from './supabaseMock';
 import { SalonClosure, AboutUsContent } from '../types';
@@ -57,7 +58,24 @@ const mockAuth = {
     return { data: { user, session }, error: null };
   },
   signUp: async (data: any) => {
-    const user = { id: 'mock-user-' + Date.now(), email: data.email, fullName: data.options.data.full_name, role: data.options.data.role || 'client' };
+    const { email, password, options } = data;
+    const metadata = options?.data || {};
+    
+    // Create the user object including all metadata fields to ensure Profile is saved correctly
+    const user = { 
+      id: 'mock-user-' + Date.now(), 
+      email: email, 
+      fullName: metadata.full_name, 
+      role: metadata.role || 'client',
+      phone: metadata.phone,
+      gender: metadata.gender,
+      dob: metadata.dob, // Ensure DOB is passed
+      avatar: metadata.avatar,
+      address: metadata.address,
+      avs_number: metadata.avs_number,
+      iban: metadata.iban
+    };
+    
     supabaseMock.auth.signIn(user as any);
     const session = { user };
     authListeners.forEach(cb => cb('SIGNED_IN', session));
