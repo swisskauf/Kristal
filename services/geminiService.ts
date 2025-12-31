@@ -1,8 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 const SYSTEM_INSTRUCTION = `Sei "Kristal AI", l'esperta beauty consultant di 'Kristal Atelier', un salone di lusso a salonekristal.ch.
 Il tuo compito è consigliare i "Ritual" migliori per ogni ospite. Parla in modo elegante, raffinato e professionale. 
 Usa sempre l'italiano. Promuovi i seguenti servizi principali:
@@ -15,6 +13,15 @@ Sii concisa ma evocativa. Non usare Markdown eccessivo, prediligi la chiarezza.`
 
 export async function chatWithGemini(message: string, history: { role: string; parts: { text: string }[] }[] = []) {
   try {
+    // Inizializzazione Lazy e Sicura
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      console.warn("Gemini API Key mancante. Chat AI disabilitata.");
+      return "Il servizio di assistenza virtuale è attualmente in manutenzione. Vi preghiamo di contattare l'Atelier telefonicamente.";
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [...history, { role: "user", parts: [{ text: message }] }],
