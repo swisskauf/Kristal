@@ -695,6 +695,10 @@ const App: React.FC = () => {
                            <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-[11px] font-bold text-amber-600">{a.team_member_name[0]}</div>
                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                         </div>
+                        <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
+                           <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Per modifiche urgenti</p>
+                           <a href="tel:+41919234567" className="text-[10px] font-bold text-gray-900 hover:text-amber-600 transition-colors">+41 91 923 45 67</a>
+                        </div>
                       </div>
                    </div>
                  )) : (
@@ -826,6 +830,10 @@ const App: React.FC = () => {
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'cancelled')} className="py-5 bg-red-50 text-red-600 border border-red-100 rounded-3xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Annulla</button>
                <button onClick={() => downloadICS(selectedAppointmentDetail)} className="col-span-2 py-5 bg-amber-50 text-amber-600 rounded-3xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-3"><i className="fas fa-calendar-plus"></i> Calendario</button>
                <button onClick={() => handleUpdateAppointmentStatus(selectedAppointmentDetail.id, 'confirmed')} className="col-span-2 py-6 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-2xl shadow-black/20 hover:bg-amber-700 transition-all">Conferma Ritual</button>
+             </div>
+             <div className="mt-8 text-center">
+                <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-1">Per modifiche urgenti</p>
+                <a href="tel:+41919234567" className="text-[12px] font-bold text-gray-900 hover:text-amber-600 transition-colors">+41 91 923 45 67</a>
              </div>
           </div>
         </div>
