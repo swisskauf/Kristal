@@ -127,8 +127,6 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                   </div>
                   <div className="flex gap-4">
                      <button onClick={() => onEditGuest?.(selectedGuest)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors" title="Modifica Profilo"><i className="fas fa-edit"></i></button>
-                     <a href={`tel:${selectedGuest.phone}`} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors"><i className="fas fa-phone-alt"></i></a>
-                     <a href={`mailto:${selectedGuest.email}`} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-black transition-colors"><i className="fas fa-envelope"></i></a>
                   </div>
                </header>
 
