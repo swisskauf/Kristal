@@ -5,6 +5,7 @@ import { TeamMember, Appointment } from '../types';
 interface TeamPlanningProps {
   team: TeamMember[];
   appointments: Appointment[];
+  profiles?: any[]; // Aggiunto profiles per il controllo compleanni
   onToggleVacation: (memberName: string, date: string) => void;
   onSlotClick?: (memberName: string, date: string, hour: string) => void;
   onAppointmentClick?: (appt: Appointment) => void;
@@ -15,7 +16,8 @@ interface TeamPlanningProps {
 
 const TeamPlanning: React.FC<TeamPlanningProps> = ({ 
   team, 
-  appointments, 
+  appointments,
+  profiles = [],
   onSlotClick,
   onAppointmentClick,
   isCollaborator = false,
@@ -23,6 +25,31 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>(isCollaborator ? 'daily' : 'weekly');
   const [viewDate, setViewDate] = useState(new Date());
+
+  // Logica Compleanni (Celebration Lounge)
+  const birthdayGuests = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const MAX_DAYS_AHEAD = 2; // Oggi, Domani, Dopodomani
+
+    return profiles.filter(p => {
+      if (p.role !== 'client' || !p.dob) return false;
+      
+      const dobDate = new Date(p.dob);
+      const bdayThisYear = new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate());
+      
+      // Gestione cambio anno
+      const bdayNextYear = new Date(today.getFullYear() + 1, dobDate.getMonth(), dobDate.getDate());
+
+      const checkDiff = (bday: Date) => {
+        const diffTime = bday.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        return diffDays >= 0 && diffDays <= MAX_DAYS_AHEAD;
+      };
+
+      return checkDiff(bdayThisYear) || checkDiff(bdayNextYear);
+    });
+  }, [profiles]);
 
   const getCategoryStyles = (category?: string) => {
     switch (category) {
@@ -171,6 +198,32 @@ const TeamPlanning: React.FC<TeamPlanningProps> = ({
           box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
         }
       `}</style>
+
+      {/* Celebration Lounge Banner in Planning */}
+      {birthdayGuests.length > 0 && (
+        <div className="bg-gradient-to-r from-gray-900 to-black text-white p-6 rounded-[2.5rem] shadow-xl relative overflow-hidden flex items-center gap-6 animate-in slide-in-from-top-4">
+           <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-birthday-cake text-6xl rotate-12"></i></div>
+           <div className="flex-none">
+              <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-black shadow-lg shadow-amber-500/30">
+                 <i className="fas fa-gift text-xl"></i>
+              </div>
+           </div>
+           <div className="flex-1">
+              <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.3em]">Celebration Lounge</h4>
+              <p className="text-sm font-luxury text-white">Oggi festeggiamo {birthdayGuests.length} ospiti speciali. Sconto compleanno attivo.</p>
+           </div>
+           <div className="flex -space-x-3 overflow-hidden py-1">
+              {birthdayGuests.map(bg => (
+                <img 
+                  key={bg.id} 
+                  src={bg.avatar || `https://ui-avatars.com/api/?name=${bg.full_name}`} 
+                  className="inline-block h-10 w-10 rounded-full ring-2 ring-black object-cover" 
+                  title={`${bg.full_name} - ${new Date(bg.dob).getDate()}/${new Date(bg.dob).getMonth()+1}`}
+                />
+              ))}
+           </div>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row justify-between items-center bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm gap-6">
         <div className="flex items-center gap-6">
