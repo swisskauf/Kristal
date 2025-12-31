@@ -58,6 +58,9 @@ const App: React.FC = () => {
   const [selectedGuestToEdit, setSelectedGuestToEdit] = useState<any | null>(null);
   const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<any | null>(null);
   
+  // New State for Booking Success Modal
+  const [confirmedBooking, setConfirmedBooking] = useState<Appointment | null>(null);
+  
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -235,7 +238,7 @@ const App: React.FC = () => {
       'BEGIN:VEVENT',
       `DTSTART:${formatICSDate(start)}`,
       `DTEND:${formatICSDate(end)}`,
-      `SUMMARY:Kristal Atelier - ${appt.services?.name}`,
+      `SUMMARY:Kristal Atelier - ${appt.services?.name || 'Rituale di Bellezza'}`,
       `DESCRIPTION:Rituale di bellezza con ${appt.team_member_name}`,
       `LOCATION:Kristal Atelier, Lugano`,
       'END:VEVENT',
@@ -263,8 +266,14 @@ const App: React.FC = () => {
       setIsFormOpen(false); 
       setFormInitialData(null); 
       
-      // Feedback immediato ma non bloccante per l'email
-      showToast(isEdit ? "Rituale aggiornato." : "Rituale programmato.");
+      // Se è un nuovo appuntamento lato cliente, mostriamo il modale di conferma
+      if (!isEdit && !isAdmin && !isCollaborator) {
+         // Recuperiamo il servizio per avere i dettagli nel modale
+         const fullService = services.find(s => s.id === a.service_id);
+         setConfirmedBooking({ ...apptToNotify, services: fullService } as Appointment);
+      } else {
+         showToast(isEdit ? "Rituale aggiornato." : "Rituale programmato.");
+      }
 
       // Logica Notifica Email Automatica (Background)
       if (settings.emailNotificationsEnabled) {
@@ -283,7 +292,7 @@ const App: React.FC = () => {
           }).then(emailBody => {
             if (emailBody) {
                addNotification(isEdit ? 'Modifica Ritual' : 'Conferma Ritual', emailBody);
-               showToast("Email di notifica inviata al cliente.", "info");
+               if (isEdit || isAdmin || isCollaborator) showToast("Email di notifica inviata al cliente.", "info");
             }
           });
         }
@@ -686,7 +695,6 @@ const App: React.FC = () => {
                             <span className="px-4 py-2 bg-green-50 text-green-700 text-[9px] font-bold uppercase rounded-full border border-green-100 flex items-center gap-2">
                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Confermato
                             </span>
-                            <button onClick={() => downloadICS(a)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2 hover:text-black transition-colors"><i className="fas fa-calendar-plus"></i> Calendario</button>
                          </div>
                       </div>
                       <div className="space-y-6 relative z-10">
@@ -695,9 +703,13 @@ const App: React.FC = () => {
                            <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-[11px] font-bold text-amber-600">{a.team_member_name[0]}</div>
                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">{a.team_member_name} • {new Date(a.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                         </div>
-                        <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
-                           <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Per modifiche urgenti</p>
-                           <a href="tel:+41919234567" className="text-[10px] font-bold text-gray-900 hover:text-amber-600 transition-colors">+41 91 923 45 67</a>
+                        <div className="mt-6 pt-6 border-t border-gray-50 flex flex-wrap gap-4 items-center">
+                           <button onClick={() => downloadICS(a)} className="flex-1 py-4 bg-gray-50 text-gray-700 rounded-3xl text-[9px] font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-sm flex items-center justify-center gap-2">
+                              <i className="fas fa-calendar-plus"></i> Calendario
+                           </button>
+                           <a href="tel:+41919234567" className="flex-1 py-4 bg-red-50 text-red-800 rounded-3xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2 border border-red-100">
+                              <i className="fas fa-phone-alt"></i> Annulla (Chiama)
+                           </a>
                         </div>
                       </div>
                    </div>
@@ -765,6 +777,44 @@ const App: React.FC = () => {
 
       {/* Modals */}
       {settings.aiAssistantEnabled && <AIAssistant />}
+
+      {confirmedBooking && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2500] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-md rounded-[4rem] p-12 shadow-2xl relative animate-in zoom-in-95 text-center space-y-8 border-[10px] border-white/50 bg-clip-padding">
+             <div className="w-20 h-20 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-green-500/30">
+                <i className="fas fa-check text-3xl"></i>
+             </div>
+             <div>
+                <h3 className="text-3xl font-luxury font-bold text-gray-900 mb-2">Prenotazione Confermata</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Vi aspettiamo in Atelier</p>
+             </div>
+             
+             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                <p className="text-lg font-bold text-gray-900 mb-1">{confirmedBooking.services?.name}</p>
+                <p className="text-xs text-gray-500 font-medium">
+                  {new Date(confirmedBooking.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  <br />
+                  ore {new Date(confirmedBooking.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+             </div>
+
+             <div className="space-y-3">
+                <button 
+                  onClick={() => downloadICS(confirmedBooking)} 
+                  className="w-full py-5 bg-black text-white rounded-3xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all flex items-center justify-center gap-3"
+                >
+                  <i className="fas fa-calendar-plus text-sm"></i> Aggiungi al Calendario
+                </button>
+                <button 
+                  onClick={() => setConfirmedBooking(null)} 
+                  className="w-full py-4 text-gray-400 font-bold uppercase text-[9px] tracking-widest hover:text-black transition-colors"
+                >
+                  Chiudi
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
 
       {isNewStaffModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[2100] flex items-center justify-center p-6">
