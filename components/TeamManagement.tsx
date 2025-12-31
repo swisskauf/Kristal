@@ -189,18 +189,18 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
                    {showApplySuccess && <span className="text-green-600 text-[10px] font-bold uppercase animate-pulse"><i className="fas fa-check"></i> Applicato</span>}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                   <div className="flex gap-4">
+                   <div className="flex items-center gap-4 w-full">
                       <input 
                         type="number" 
                         placeholder="Ore (+/-)" 
                         value={otAdjustment} 
-                        onChange={e => setOtAdjustment(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="flex-1 p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner outline-none focus:ring-2 focus:ring-amber-500"
+                        onChange={e => setOtAdjustment(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                        className="flex-1 min-w-0 w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner outline-none focus:ring-2 focus:ring-amber-500"
                       />
                       <button 
                         onClick={handleApplyAdjustment}
                         disabled={otAdjustment === '' || otAdjustment === 0}
-                        className="shrink-0 px-8 py-5 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-none shrink-0 px-8 py-5 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                       >
                         Applica
                       </button>
