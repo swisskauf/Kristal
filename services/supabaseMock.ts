@@ -30,15 +30,21 @@ const safeParse = (key: string, fallback: any) => {
 export const supabaseMock = {
   auth: {
     getUser: () => safeParse(STORAGE_KEY_USER, null),
-    signIn: (user: User) => {
+    signIn: (user: User | any) => {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      // FIX: Mappatura completa dei campi metadati nel profilo
       supabaseMock.profiles.upsert({
         id: user.id,
         full_name: user.fullName,
         email: user.email,
         phone: user.phone,
         role: user.role,
-        avatar: user.avatar
+        avatar: user.avatar,
+        dob: user.dob,           // Fix: Data di nascita
+        gender: user.gender,     // Fix: Genere
+        address: user.address,
+        avs_number: user.avs_number,
+        iban: user.iban
       });
       return user;
     },
@@ -159,9 +165,24 @@ export const supabaseMock = {
   },
   salonClosures: {
     getAll: (): SalonClosure[] => safeParse(STORAGE_KEY_SALON_CLOSURES, []),
+    add: (closure: SalonClosure) => {
+       const current = supabaseMock.salonClosures.getAll();
+       const exists = current.find(c => c.date === closure.date);
+       if (!exists) {
+         current.push(closure);
+         localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(current));
+       }
+       return closure;
+    },
     save: (closures: SalonClosure[]) => {
       localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(closures));
       return closures;
+    },
+    delete: (date: string) => {
+      const current = supabaseMock.salonClosures.getAll();
+      const filtered = current.filter(c => c.date !== date);
+      localStorage.setItem(STORAGE_KEY_SALON_CLOSURES, JSON.stringify(filtered));
+      return { error: null };
     }
   },
   aboutUs: {
