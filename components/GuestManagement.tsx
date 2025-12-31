@@ -34,26 +34,26 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
+    // Configurazione finestra compleanno (Oggi + 2 giorni futuri)
+    const MAX_DAYS_AHEAD = 2;
+
     return profiles.filter(p => {
       if (p.role !== 'client' || !p.dob) return false;
       
       const dobDate = new Date(p.dob);
       const bdayThisYear = new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate());
       
-      // Calcolo differenza in giorni
-      const diffTime = bdayThisYear.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      // Controllo edge case fine anno (es. oggi 31 Dicembre, compleanno 1 Gennaio)
-      let diffNextYear = -1;
-      if (diffDays < 0) {
-         const bdayNextYear = new Date(today.getFullYear() + 1, dobDate.getMonth(), dobDate.getDate());
-         const diffTimeNext = bdayNextYear.getTime() - today.getTime();
-         diffNextYear = Math.ceil(diffTimeNext / (1000 * 60 * 60 * 24));
-      }
+      // Gestione fine anno (es. Oggi è Dic 30, compleanno 1 Gen)
+      const bdayNextYear = new Date(today.getFullYear() + 1, dobDate.getMonth(), dobDate.getDate());
 
-      // Restituisce true se è oggi (0), domani (1) o dopodomani (2)
-      return (diffDays >= 0 && diffDays <= 2) || (diffNextYear >= 0 && diffNextYear <= 2);
+      const checkDiff = (bday: Date) => {
+        const diffTime = bday.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        // 0 = Oggi, 1 = Domani, 2 = Dopodomani
+        return diffDays >= 0 && diffDays <= MAX_DAYS_AHEAD;
+      };
+
+      return checkDiff(bdayThisYear) || checkDiff(bdayNextYear);
     });
   }, [profiles]);
 
@@ -110,29 +110,40 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
         </div>
       </header>
 
+      {/* Celebration Lounge - Compleanni */}
       {birthdayGuests.length > 0 && (
         <div className="bg-gradient-to-r from-gray-900 to-black text-white p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden animate-in slide-in-from-top-6">
            <div className="absolute top-0 right-0 p-8 opacity-20"><i className="fas fa-birthday-cake text-8xl rotate-12"></i></div>
            <div className="relative z-10">
               <div className="flex items-center gap-3 mb-6">
                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-500">Celebration Lounge • Sconti Attivi</h3>
+                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-500">Celebration Lounge • Occasioni Speciali</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {birthdayGuests.map(bg => (
-                   <div key={bg.id} className="bg-white/10 backdrop-blur-md p-4 rounded-[2rem] flex items-center gap-4 border border-white/10 hover:bg-white/20 transition-all cursor-pointer" onClick={() => setSelectedGuest(bg)}>
-                      <img src={bg.avatar || `https://ui-avatars.com/api/?name=${bg.full_name}`} className="w-14 h-14 rounded-full border-2 border-amber-500/50" />
-                      <div>
-                         <p className="font-bold text-sm text-white">{bg.full_name}</p>
-                         <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[8px] font-bold uppercase tracking-widest text-amber-400">
-                               {new Date(bg.dob).getDate() === new Date().getDate() ? 'Oggi' : new Date(bg.dob).toLocaleDateString('it-IT', {day: 'numeric', month: 'long'})}
-                            </span>
-                            <span className="px-2 py-0.5 bg-amber-500 text-black text-[7px] font-bold uppercase rounded-full">Sconto -20%</span>
-                         </div>
+                 {birthdayGuests.map(bg => {
+                    const today = new Date();
+                    const bday = new Date(bg.dob);
+                    // Calcolo giorno visuale
+                    const isToday = bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth();
+                    
+                    return (
+                      <div key={bg.id} className="bg-white/10 backdrop-blur-md p-4 rounded-[2rem] flex items-center gap-4 border border-white/10 hover:bg-white/20 transition-all cursor-pointer" onClick={() => setSelectedGuest(bg)}>
+                          <div className="relative">
+                            <img src={bg.avatar || `https://ui-avatars.com/api/?name=${bg.full_name}`} className="w-14 h-14 rounded-full border-2 border-amber-500/50" />
+                            {isToday && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span></span>}
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-white">{bg.full_name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[8px] font-bold uppercase tracking-widest text-amber-400">
+                                  {isToday ? 'Oggi!' : new Date(bg.dob).toLocaleDateString('it-IT', {day: 'numeric', month: 'long'})}
+                                </span>
+                                <span className="px-2 py-0.5 bg-amber-500 text-black text-[7px] font-bold uppercase rounded-full">Sconto -20%</span>
+                            </div>
+                          </div>
                       </div>
-                   </div>
-                 ))}
+                    );
+                 })}
               </div>
            </div>
         </div>
@@ -207,7 +218,7 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                           </div>
                           <div className="bg-gray-50 p-6 rounded-[2rem]">
                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Data Nascita</p>
-                             <p className="text-sm font-bold">{selectedGuest.dob ? new Date(selectedGuest.dob).toLocaleDateString() : 'Non dichiarata'}</p>
+                             <p className="text-sm font-bold">{selectedGuest.dob ? new Date(selectedGuest.dob).toLocaleDateString('it-IT') : 'Non dichiarata'}</p>
                           </div>
                           <div className="bg-gray-50 p-6 rounded-[2rem]">
                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Telefono</p>
