@@ -147,6 +147,9 @@ const App: React.FC = () => {
         setUser(null);
         setActiveTab('dashboard');
       } else if (session?.user) {
+        // FIX: Ensure auth modal is closed when session is detected
+        setIsAuthOpen(false); 
+        
         const profile = await db.profiles.get(session.user.id).catch(() => null);
         const email = session.user.email?.toLowerCase();
         let role: any = profile?.role || 'client';
@@ -196,12 +199,10 @@ const App: React.FC = () => {
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
         
-        // Notifica Email per Cancellazione
         if (status === 'cancelled' && settings.emailNotificationsEnabled) {
           const clientProfile = profiles.find(p => p.id === appt.client_id);
           const serviceInfo = services.find(s => s.id === appt.service_id);
           if (clientProfile) {
-            // Await the email generation to show immediate feedback in notifications
             const emailBody = await sendLuxuryEmailNotification({
               type: 'cancellation',
               appointment: appt,
@@ -266,23 +267,19 @@ const App: React.FC = () => {
       setIsFormOpen(false); 
       setFormInitialData(null); 
       
-      // Se è un nuovo appuntamento lato cliente, mostriamo il modale di conferma
       if (!isEdit && !isAdmin && !isCollaborator) {
-         // Recuperiamo il servizio per avere i dettagli nel modale
          const fullService = services.find(s => s.id === a.service_id);
          setConfirmedBooking({ ...apptToNotify, services: fullService } as Appointment);
       } else {
          showToast(isEdit ? "Rituale aggiornato." : "Rituale programmato.");
       }
 
-      // Logica Notifica Email Automatica (Background)
       if (settings.emailNotificationsEnabled) {
         const clientProfile = profiles.find(p => p.id === client_id);
         const serviceInfo = services.find(s => s.id === a.service_id);
         const oldData = isEdit ? appointments.find(ex => ex.id === a.id) : null;
         
         if (clientProfile) {
-           // Generazione Email
            sendLuxuryEmailNotification({
             type: isEdit ? 'update' : 'confirmation',
             appointment: apptToNotify as any,
@@ -365,9 +362,6 @@ const App: React.FC = () => {
         if (member) {
           const hoursPerDay = member.hours_per_day_contract || 8.5;
           const hoursUsed = req.is_full_day ? hoursPerDay : 4; 
-          
-          // Formattazione rigorosa ISO per startDate e endDate
-          // Importante per il confronto stringhe in TeamPlanning e AppointmentForm
           const startDateISO = new Date(req.start_date).toISOString();
           const endDateISO = new Date(req.end_date).toISOString();
 
@@ -384,15 +378,9 @@ const App: React.FC = () => {
           };
 
           let updatedOvertime = member.overtime_balance_hours || 0;
-          
-          if (req.type === 'overtime') {
-             updatedOvertime += hoursUsed;
-          } else if (req.type === 'overtime_recovery') {
-             updatedOvertime -= hoursUsed;
-          }
+          if (req.type === 'overtime') updatedOvertime += hoursUsed;
+          else if (req.type === 'overtime_recovery') updatedOvertime -= hoursUsed;
 
-          // Salva l'assenza in team_members.absences_json
-          // Questo attiverà automaticamente il blocco in agenda
           await db.team.upsert({ 
             ...member, 
             absences_json: [...(member.absences_json || []), newAbsence],
@@ -405,6 +393,31 @@ const App: React.FC = () => {
       refreshData(true);
     } catch (e) {
       showToast("Errore durante l'elaborazione HR.", "error");
+    }
+  };
+
+  // Funzione per eliminare un ospite
+  const handleDeleteGuest = async (id: string) => {
+    if (!confirm('Sei sicuro di voler eliminare definitivamente questo ospite e tutto il suo storico?')) return;
+    try {
+      await db.profiles.delete(id);
+      showToast("Ospite eliminato con successo.");
+      refreshData(true);
+      setSelectedGuestToEdit(null); // Chiudi pannelli aperti
+    } catch (e) {
+      showToast("Errore eliminazione ospite.", "error");
+    }
+  };
+
+  // Funzione per bloccare/sbloccare un ospite
+  const handleBlockGuest = async (guest: any) => {
+    const newStatus = !guest.is_blocked;
+    try {
+      await db.profiles.upsert({ ...guest, is_blocked: newStatus });
+      showToast(newStatus ? "Ospite bloccato. Accesso negato." : "Ospite riattivato.");
+      refreshData(true);
+    } catch (e) {
+      showToast("Errore modifica stato ospite.", "error");
     }
   };
 
@@ -482,6 +495,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Altri tab invariati ... */}
         {activeTab === 'team_management' && isAdmin && (
            <HRManagement 
              team={team} 
@@ -491,8 +505,7 @@ const App: React.FC = () => {
            />
         )}
 
-        {/* ... (resto del codice invariato) ... */}
-        
+        {/* ... Tab About Us e Services Management invariati ... */}
         {activeTab === 'about_us' && (
           <div className="space-y-24 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
              {aboutUs ? (
@@ -663,7 +676,7 @@ const App: React.FC = () => {
             <TeamPlanning 
               team={team} 
               appointments={appointments} 
-              profiles={profiles} // Nuova prop passata
+              profiles={profiles} 
               onToggleVacation={() => {}} 
               onSlotClick={(memberName, date, hour) => { setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() }); setIsFormOpen(true); }} 
               onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
@@ -673,6 +686,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Tab Gestione Ospiti con nuove prop */}
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="animate-in fade-in">
              <GuestManagement 
@@ -681,12 +695,15 @@ const App: React.FC = () => {
                onRefresh={() => refreshData(true)} 
                onEditGuest={(guest) => { setSelectedGuestToEdit(guest); setIsGuestEditorOpen(true); }}
                onAddGuest={() => { setSelectedGuestToEdit(null); setIsGuestEditorOpen(true); }}
+               onDeleteGuest={handleDeleteGuest}
+               onBlockGuest={handleBlockGuest}
              />
           </div>
         )}
 
         {activeTab === 'my_rituals' && user && (
           <div className="space-y-20 animate-in fade-in">
+             {/* ... contenuto My Rituals invariato ... */}
              <header className="flex items-center justify-between">
                <div>
                   <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
@@ -767,6 +784,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Tab Impostazioni invariato ... */}
         {activeTab === 'impostazioni' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
              <h2 className="text-5xl font-luxury font-bold text-gray-900">Configurazione</h2>
