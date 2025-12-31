@@ -348,7 +348,7 @@ const App: React.FC = () => {
       setIsNewStaffModalOpen(false);
       setIsTeamEditorOpen(false);
       await refreshData(true);
-      showToast("Staff salvato con successo.");
+      showToast("Dati Staff aggiornati.");
     } catch (err) {
       showToast("Errore salvataggio.", "error");
     }
@@ -488,6 +488,7 @@ const App: React.FC = () => {
              team={team} 
              onEditMember={(m) => { setSelectedTeamMember(m); setIsTeamEditorOpen(true); }} 
              onAddMember={() => setIsNewStaffModalOpen(true)}
+             onUpdateMember={handleSaveStaff}
            />
         )}
 
