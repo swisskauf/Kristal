@@ -147,7 +147,7 @@ const App: React.FC = () => {
         setUser(null);
         setActiveTab('dashboard');
       } else if (session?.user) {
-        // FIX: Ensure auth modal is closed when session is detected
+        // FIX: Critical login bug fix. Ensure modal is forced closed immediately.
         setIsAuthOpen(false); 
         
         const profile = await db.profiles.get(session.user.id).catch(() => null);
