@@ -142,15 +142,19 @@ const App: React.FC = () => {
   }, [ensureDataSeeding]);
 
   useEffect(() => {
-    // FIX: Initial load regardless of auth state to ensure UI shows up
+    // Force data load immediately
     refreshData();
+
+    // Safety timeout to prevent infinite loading screen
+    const safetyTimer = setTimeout(() => {
+        setLoading(false);
+    }, 4000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setActiveTab('dashboard');
       } else if (session?.user) {
-        // FIX: Ensure auth modal is closed when session is detected
         setIsAuthOpen(false); 
         
         const profile = await db.profiles.get(session.user.id).catch(() => null);
@@ -169,7 +173,10 @@ const App: React.FC = () => {
       }
       refreshData();
     });
-    return () => subscription.unsubscribe();
+    return () => {
+        subscription.unsubscribe();
+        clearTimeout(safetyTimer);
+    };
   }, [refreshData]);
 
   const isAdmin = user?.role === 'admin';
@@ -424,7 +431,8 @@ const App: React.FC = () => {
     }
   };
 
-  if (loading && !aboutUs) {
+  // Modified loading check: allow rendering if aboutUs is null but show basic UI if loading is true AND no critical data
+  if (loading && !aboutUs && !services.length) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white space-y-6">
         <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
