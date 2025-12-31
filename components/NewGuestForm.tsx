@@ -14,7 +14,18 @@ const NewGuestForm: React.FC<NewGuestFormProps> = ({ onSave, onCancel, initialDa
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [password, setPassword] = useState('');
   const [gender, setGender] = useState<'M' | 'F' | 'Other'>(initialData?.gender || 'F');
-  const [dob, setDob] = useState(initialData?.dob || '');
+  
+  // FIX: Gestione sicura del formato data per l'input type="date"
+  const formatInitialDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      return dateStr.split('T')[0];
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const [dob, setDob] = useState(formatInitialDate(initialData?.dob));
   const [avatar, setAvatar] = useState<string | null>(initialData?.avatar || null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
