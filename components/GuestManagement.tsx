@@ -24,6 +24,12 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
     onRefresh();
   }, []);
 
+  const formatSafeDate = (dateStr: string | undefined) => {
+    if (!dateStr) return 'Non dichiarata';
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? 'Data non valida' : d.toLocaleDateString('it-IT');
+  };
+
   const filteredGuests = useMemo(() => {
     return profiles.filter(p => {
       // LOGICA ROBUSTA: Se non è admin o collaborator, è un cliente (anche se il ruolo è null)
@@ -232,7 +238,7 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                           </div>
                           <div className="bg-gray-50 p-6 rounded-[2rem]">
                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Data Nascita</p>
-                             <p className="text-sm font-bold">{selectedGuest.dob ? new Date(selectedGuest.dob).toLocaleDateString('it-IT') : 'Non dichiarata'}</p>
+                             <p className="text-sm font-bold">{formatSafeDate(selectedGuest.dob)}</p>
                           </div>
                           <div className="bg-gray-50 p-6 rounded-[2rem]">
                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Telefono</p>
