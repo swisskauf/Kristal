@@ -48,32 +48,52 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
     try {
       if (isRegistering) {
-        // Registrazione: I dati vengono passati ai metadata.
-        // Il TRIGGER SQL 'handle_new_user' si occuperà di creare la riga in public.profiles.
-        const { error: authError } = await supabase.auth.signUp({
+        // REGISTRAZIONE AUTOMATICA
+        // Passiamo TUTTI i dati nei metadata. Il Trigger SQL 'handle_new_user' li userà per popolare public.profiles.
+        const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: { 
               full_name: fullName, 
-              phone, 
+              phone: phone || '', 
               role: 'client',
-              gender, 
-              dob, 
-              avatar // Ora contiene la stringa Base64 dell'immagine caricata
+              gender: gender || 'F', 
+              dob: dob || '', 
+              avatar: avatar || ''
             },
           }
         });
 
         if (authError) throw authError;
 
-        setEmailSent(true);
+        // Se l'autologin è attivo su Supabase, effettuiamo subito il login logico nell'app
+        if (data.user && !data.session) {
+            setEmailSent(true); // Conferma email richiesta
+        } else if (data.user && data.session) {
+             // Login immediato post-registrazione
+             onLogin({
+                id: data.user.id,
+                email: data.user.email!,
+                fullName: fullName,
+                phone: phone,
+                role: 'client',
+                avatar: avatar
+             });
+        }
       } else {
+        // LOGIN
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
-          // Fetch del profilo per ottenere il ruolo e il nome completo aggiornati
+          // Recuperiamo il profilo aggiornato dal DB pubblico
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+          
+          if (profile && profile.is_blocked) {
+              await supabase.auth.signOut();
+              throw new Error("Accesso negato. Contattare l'Atelier.");
+          }
+
           onLogin({
             id: data.user.id,
             email: data.user.email!,
@@ -101,10 +121,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <h2 className="text-3xl font-luxury font-bold mb-4">Profilo Creato</h2>
         <p className="text-gray-500 text-xs mb-10 leading-relaxed">
           Benvenuto <strong>{fullName}</strong>.<br/>
-          Il tuo profilo è stato registrato automaticamente.<br/><br/>
-          <span className="text-amber-600 font-bold">Nota:</span> Se hai attivato la conferma email su Supabase, verifica la posta prima di accedere.
+          Il tuo profilo è stato registrato.<br/>
+          Controlla la tua email per confermare l'account.
         </p>
-        <button onClick={() => { setEmailSent(false); setIsRegistering(false); }} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest border border-amber-600 px-10 py-4 rounded-full hover:bg-amber-600 hover:text-white transition-all">Accedi Ora</button>
+        <button onClick={() => { setEmailSent(false); setIsRegistering(false); }} className="text-[10px] font-bold text-amber-600 uppercase tracking-widest border border-amber-600 px-10 py-4 rounded-full hover:bg-amber-600 hover:text-white transition-all">Torna al Login</button>
       </div>
     );
   }
