@@ -6,7 +6,6 @@ import { SalonClosure, AboutUsContent } from '../types';
 // Helper sicuro per leggere variabili d'ambiente in Vite/Browser
 const getEnv = (key: string): string => {
   try {
-    // 1. Prova import.meta.env (Standard Vite)
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
       // @ts-ignore
@@ -15,7 +14,6 @@ const getEnv = (key: string): string => {
   } catch (e) {}
 
   try {
-    // 2. Prova process.env solo se 'process' è definito (evita ReferenceError)
     if (typeof process !== 'undefined' && process.env) {
       // @ts-ignore
       const val = process.env[key];
@@ -54,23 +52,16 @@ const mockAuth = {
   onAuthStateChange: (cb: any) => {
     authListeners.add(cb);
     const user = supabaseMock.auth.getUser();
-    // FIX: Emette sempre un evento iniziale per permettere l'inizializzazione dell'app
     if (user) {
-      cb('SIGNED_IN', { user, session: { user } });
+      // Timeout per simulare asincronicità ed evitare blocchi nel ciclo di render
+      setTimeout(() => cb('SIGNED_IN', { user, session: { user } }), 0);
     } else {
-      cb('SIGNED_OUT', null);
+      setTimeout(() => cb('SIGNED_OUT', null), 0);
     }
     return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
   signInWithPassword: async ({ email }: any) => {
-    // 1. Controllo se l'utente esiste e se è BLOCCATO
-    let existingProfile;
-    if (useMock) {
-        existingProfile = (supabaseMock.profiles.getAll() as any[]).find(p => p.email?.toLowerCase() === email.toLowerCase());
-    } else {
-        const { data } = await client.from('profiles').select('*').eq('email', email).maybeSingle();
-        existingProfile = data;
-    }
+    const existingProfile = (supabaseMock.profiles.getAll() as any[]).find(p => p.email?.toLowerCase() === email.toLowerCase());
 
     if (existingProfile && existingProfile.is_blocked) {
         return { data: { user: null, session: null }, error: { message: "Account sospeso. Contattare l'atelier." } };
@@ -78,33 +69,23 @@ const mockAuth = {
 
     const role = email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client');
     
-    // Fallback Mock Login
-    if (useMock) {
-        const user = { 
-          id: existingProfile?.id || 'mock-user-' + Date.now(), 
-          email, 
-          fullName: existingProfile?.full_name || (role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal')), 
-          role 
-        };
-        supabaseMock.auth.signIn(user as any);
-        const session = { user };
-        authListeners.forEach(cb => cb('SIGNED_IN', session));
-        return { data: { user, session }, error: null };
-    } 
-    
-    // Real Supabase Login
-    const { data, error } = await client.auth.signInWithPassword({ email, password: 'password' }); // Note: Pass real password in production logic
-    return { data, error };
+    const user = { 
+        id: existingProfile?.id || 'mock-user-' + Date.now(), 
+        email, 
+        fullName: existingProfile?.full_name || (role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal')), 
+        role 
+    };
+    supabaseMock.auth.signIn(user as any);
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
   },
   signUp: async (data: any) => {
     const { email, password, options } = data;
     const metadata = options?.data || {};
     
-    // LOGICA PER MOCK
-    if (useMock) {
-      const id = 'mock-user-' + Date.now();
-      // Salva esplicitamente nel mock profile
-      const profile = {
+    const id = 'mock-user-' + Date.now();
+    const profile = {
         id: id,
         full_name: metadata.full_name,
         email: email,
@@ -117,40 +98,20 @@ const mockAuth = {
         avs_number: metadata.avs_number,
         iban: metadata.iban,
         is_blocked: false
-      };
-      
-      supabaseMock.profiles.upsert(profile);
+    };
+    
+    supabaseMock.profiles.upsert(profile);
 
-      const user = { 
+    const user = { 
         id: id, 
         email: email, 
         ...metadata
-      };
-      
-      supabaseMock.auth.signIn(user as any);
-      const session = { user };
-      authListeners.forEach(cb => cb('SIGNED_IN', session));
-      return { data: { user, session }, error: null };
-    } 
+    };
     
-    // LOGICA PER SUPABASE REALE
-    return await client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: metadata.full_name,
-          role: metadata.role || 'client',
-          phone: metadata.phone,
-          dob: metadata.dob, 
-          gender: metadata.gender,
-          avatar: metadata.avatar,
-          address: metadata.address,
-          avs_number: metadata.avs_number,
-          iban: metadata.iban
-        }
-      }
-    });
+    supabaseMock.auth.signIn(user as any);
+    const session = { user };
+    authListeners.forEach(cb => cb('SIGNED_IN', session));
+    return { data: { user, session }, error: null };
   },
   signOut: async () => { 
     supabaseMock.auth.signOut(); 
@@ -159,33 +120,39 @@ const mockAuth = {
   }
 };
 
-export const supabase = client ? { ...client, auth: { ...client.auth, signInWithPassword: mockAuth.signInWithPassword } } : {
-  auth: mockAuth,
-  from: (table: string) => ({
-    select: (cols: string = '*') => ({
-      eq: (col: string, val: any) => ({ 
-        maybeSingle: async () => ({ data: null, error: null }), 
-        single: async () => ({ data: null, error: null }),
-        order: (oCol: string) => ({ data: [], error: null })
-      }),
-      order: (oCol: string) => ({ data: [], error: null })
-    })
-  })
-};
+let supabaseExport: any;
 
-// Override parziale per gestire il blocco utente anche con Supabase reale nel metodo custom
 if (client) {
-    // @ts-ignore
-    supabase.auth.signInWithPassword = async ({ email, password }) => {
-        // Controllo preventivo profilo bloccato
-        const { data: profile } = await client.from('profiles').select('is_blocked').eq('email', email).maybeSingle();
-        if (profile && profile.is_blocked) {
-             return { data: { user: null, session: null }, error: { message: "Account sospeso per motivi amministrativi." } };
-        }
-        return await client.auth.signInWithPassword({ email, password });
-    };
+  // Real Supabase - Override sicuro del metodo signInWithPassword SULL'ISTANZA esistente.
+  // NON usare spread operator (...) sull'oggetto client, altrimenti si perdono i metodi della classe (come onAuthStateChange).
+  const originalSignIn = client.auth.signInWithPassword.bind(client.auth);
+  client.auth.signInWithPassword = async (credentials: any) => {
+     const { email } = credentials;
+     const { data: profile } = await client.from('profiles').select('is_blocked').eq('email', email).maybeSingle();
+     if (profile && profile.is_blocked) {
+          return { data: { user: null, session: null }, error: { message: "Account sospeso per motivi amministrativi." } };
+     }
+     return originalSignIn(credentials);
+  };
+  supabaseExport = client;
+} else {
+  // Mock Supabase
+  supabaseExport = {
+    auth: mockAuth,
+    from: (table: string) => ({
+      select: (cols: string = '*') => ({
+        eq: (col: string, val: any) => ({ 
+          maybeSingle: async () => ({ data: null, error: null }), 
+          single: async () => ({ data: null, error: null }),
+          order: (oCol: string) => ({ data: [], error: null })
+        }),
+        order: (oCol: string) => ({ data: [], error: null })
+      })
+    })
+  };
 }
 
+export const supabase = supabaseExport;
 
 export const db = {
   profiles: {
