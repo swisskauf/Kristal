@@ -43,19 +43,38 @@ const mockAuth = {
     return { data: { subscription: { unsubscribe: () => authListeners.delete(cb) } } };
   },
   signInWithPassword: async ({ email }: any) => {
+    // 1. Controllo se l'utente esiste e se è BLOCCATO
+    let existingProfile;
+    if (useMock) {
+        existingProfile = (supabaseMock.profiles.getAll() as any[]).find(p => p.email?.toLowerCase() === email.toLowerCase());
+    } else {
+        const { data } = await client.from('profiles').select('*').eq('email', email).maybeSingle();
+        existingProfile = data;
+    }
+
+    if (existingProfile && existingProfile.is_blocked) {
+        return { data: { user: null, session: null }, error: { message: "Account sospeso. Contattare l'atelier." } };
+    }
+
     const role = email === 'serop.serop@outlook.com' ? 'admin' : (email === 'sirop.sirop@outlook.sa' ? 'collaborator' : 'client');
-    const existingUser = (supabaseMock.profiles.getAll() as any[]).find(p => p.email?.toLowerCase() === email.toLowerCase());
     
-    const user = { 
-      id: existingUser?.id || 'mock-user-' + Date.now(), 
-      email, 
-      fullName: existingUser?.full_name || (role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal')), 
-      role 
-    };
-    supabaseMock.auth.signIn(user as any);
-    const session = { user };
-    authListeners.forEach(cb => cb('SIGNED_IN', session));
-    return { data: { user, session }, error: null };
+    // Fallback Mock Login
+    if (useMock) {
+        const user = { 
+          id: existingProfile?.id || 'mock-user-' + Date.now(), 
+          email, 
+          fullName: existingProfile?.full_name || (role === 'admin' ? 'Direzione Kristal' : (role === 'collaborator' ? 'Maurizio Stylist' : 'Ospite Kristal')), 
+          role 
+        };
+        supabaseMock.auth.signIn(user as any);
+        const session = { user };
+        authListeners.forEach(cb => cb('SIGNED_IN', session));
+        return { data: { user, session }, error: null };
+    } 
+    
+    // Real Supabase Login
+    const { data, error } = await client.auth.signInWithPassword({ email, password: 'password' }); // Note: Pass real password in production logic
+    return { data, error };
   },
   signUp: async (data: any) => {
     const { email, password, options } = data;
@@ -72,11 +91,12 @@ const mockAuth = {
         phone: metadata.phone,
         role: metadata.role || 'client',
         gender: metadata.gender,
-        dob: metadata.dob, // CRITICAL FIX: Ensure dob is passed
+        dob: metadata.dob, 
         avatar: metadata.avatar,
         address: metadata.address,
         avs_number: metadata.avs_number,
-        iban: metadata.iban
+        iban: metadata.iban,
+        is_blocked: false
       };
       
       supabaseMock.profiles.upsert(profile);
@@ -94,7 +114,6 @@ const mockAuth = {
     } 
     
     // LOGICA PER SUPABASE REALE
-    // Passiamo tutti i metadati affinché il Trigger SQL li legga e li inserisca in Profiles
     return await client.auth.signUp({
       email,
       password,
@@ -103,7 +122,7 @@ const mockAuth = {
           full_name: metadata.full_name,
           role: metadata.role || 'client',
           phone: metadata.phone,
-          dob: metadata.dob, // Passiamo DOB al DB reale
+          dob: metadata.dob, 
           gender: metadata.gender,
           avatar: metadata.avatar,
           address: metadata.address,
@@ -120,7 +139,7 @@ const mockAuth = {
   }
 };
 
-export const supabase = client ? { ...client, auth: client.auth } : {
+export const supabase = client ? { ...client, auth: { ...client.auth, signInWithPassword: mockAuth.signInWithPassword } } : {
   auth: mockAuth,
   from: (table: string) => ({
     select: (cols: string = '*') => ({
@@ -134,14 +153,19 @@ export const supabase = client ? { ...client, auth: client.auth } : {
   })
 };
 
-// Se siamo in modalità reale, sovrascriviamo l'auth del client con quello nativo
+// Override parziale per gestire il blocco utente anche con Supabase reale nel metodo custom
 if (client) {
-  // @ts-ignore
-  supabase.auth = client.auth;
-} else {
-  // @ts-ignore
-  supabase.auth = mockAuth;
+    // @ts-ignore
+    supabase.auth.signInWithPassword = async ({ email, password }) => {
+        // Controllo preventivo profilo bloccato
+        const { data: profile } = await client.from('profiles').select('is_blocked').eq('email', email).maybeSingle();
+        if (profile && profile.is_blocked) {
+             return { data: { user: null, session: null }, error: { message: "Account sospeso per motivi amministrativi." } };
+        }
+        return await client.auth.signInWithPassword({ email, password });
+    };
 }
+
 
 export const db = {
   profiles: {
@@ -152,8 +176,16 @@ export const db = {
     },
     upsert: async (p: any) => {
       if (useMock) return supabaseMock.profiles.upsert(p);
-      // Ensure we allow update on conflict
       return (await client.from('profiles').upsert(p, { onConflict: 'id' }).select().single()).data;
+    },
+    delete: async (id: string) => {
+        if (useMock) {
+            const current = supabaseMock.profiles.getAll();
+            const filtered = current.filter((p:any) => p.id !== id);
+            localStorage.setItem('kristal_profiles', JSON.stringify(filtered));
+            return { error: null };
+        }
+        return await client.from('profiles').delete().eq('id', id);
     }
   },
   services: {
