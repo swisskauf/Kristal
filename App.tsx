@@ -142,12 +142,15 @@ const App: React.FC = () => {
   }, [ensureDataSeeding]);
 
   useEffect(() => {
+    // FIX: Initial load regardless of auth state to ensure UI shows up
+    refreshData();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setActiveTab('dashboard');
       } else if (session?.user) {
-        // FIX: Critical login bug fix. Ensure modal is forced closed immediately.
+        // FIX: Ensure auth modal is closed when session is detected
         setIsAuthOpen(false); 
         
         const profile = await db.profiles.get(session.user.id).catch(() => null);
