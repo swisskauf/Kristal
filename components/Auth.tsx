@@ -24,6 +24,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -49,7 +60,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               role: 'client',
               gender, 
               dob, 
-              avatar
+              avatar // Ora contiene la stringa Base64 dell'immagine caricata
             },
           }
         });
@@ -112,8 +123,21 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           <div className="grid md:grid-cols-2 gap-4">
             {isRegistering && (
               <>
-                <div className="space-y-1 md:col-span-2">
-                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 text-center">Creazione Profilo Ospite</p>
+                <div className="space-y-1 md:col-span-2 flex flex-col items-center">
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Creazione Profilo Ospite</p>
+                   <div className="relative group cursor-pointer w-24 h-24 mb-4">
+                      {avatar ? (
+                        <img src={avatar} className="w-full h-full rounded-[2rem] object-cover border-2 border-amber-500 shadow-lg" />
+                      ) : (
+                        <div className="w-full h-full rounded-[2rem] bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 group-hover:border-amber-400 group-hover:text-amber-500 transition-all">
+                           <i className="fas fa-camera text-2xl"></i>
+                        </div>
+                      )}
+                      <label className="absolute inset-0 flex items-center justify-center opacity-0 cursor-pointer">
+                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                      </label>
+                      <p className="text-[7px] font-bold text-center mt-2 text-gray-400 uppercase tracking-widest">{avatar ? 'Cambia Foto' : 'Carica Foto'}</p>
+                   </div>
                 </div>
                 <div className="space-y-1">
                   <label htmlFor="reg-fullname" className="text-[8px] font-bold text-gray-400 uppercase ml-2">Nome Completo</label>
@@ -162,13 +186,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               <div className="space-y-1 md:col-span-2">
                 <label htmlFor="reg-confirm-password" className="text-[8px] font-bold text-gray-400 uppercase ml-2">Conferma Password</label>
                 <input id="reg-confirm-password" name="confirm-password" type="password" autoComplete="new-password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold focus:ring-2 focus:ring-amber-500 transition-all" placeholder="••••••••" />
-              </div>
-            )}
-
-            {isRegistering && (
-               <div className="space-y-1 md:col-span-2">
-                <label htmlFor="reg-avatar" className="text-[8px] font-bold text-gray-400 uppercase ml-2">URL Foto Profilo (Opzionale)</label>
-                <input id="reg-avatar" name="photo" type="text" value={avatar} onChange={(e) => setAvatar(e.target.value)} className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none text-xs font-bold focus:ring-2 focus:ring-amber-500 transition-all" placeholder="https://..." />
               </div>
             )}
           </div>
