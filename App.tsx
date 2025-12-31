@@ -441,21 +441,22 @@ const App: React.FC = () => {
       try {
           if (guestData.id) {
               // Modifica esistente: usa upsert DB
-              const { password, ...dataToUpdate } = guestData; // Rimuovi password se presente
+              const { password, ...dataToUpdate } = guestData; 
               await db.profiles.upsert(dataToUpdate);
               showToast("Profilo ospite aggiornato.");
           } else {
-              // Creazione nuovo ospite: DEVE passare da Auth SignUp per creare l'ID e rispettare FK
+              // Creazione nuovo ospite: 
+              // 1. Auth SignUp
               const { data, error } = await supabase.auth.signUp({
                   email: guestData.email,
                   password: guestData.password,
                   options: {
                       data: {
                           full_name: guestData.full_name,
-                          phone: guestData.phone,
+                          phone: String(guestData.phone || ''), // Force string
                           role: 'client',
                           gender: guestData.gender,
-                          dob: guestData.dob,
+                          dob: String(guestData.dob || ''), // Force string
                           avatar: guestData.avatar
                       }
                   }
@@ -463,7 +464,20 @@ const App: React.FC = () => {
 
               if (error) throw error;
               if (data.user) {
-                   showToast("Ospite creato e sincronizzato.");
+                   // 2. CRITICAL DOUBLE-TAP: Forza l'aggiornamento del profilo immediatamente
+                   // Questo corregge eventuali perdite di dati del Trigger SQL (es. numero di telefono)
+                   await db.profiles.upsert({
+                      id: data.user.id,
+                      email: guestData.email,
+                      full_name: guestData.full_name,
+                      phone: String(guestData.phone || ''),
+                      role: 'client',
+                      gender: guestData.gender,
+                      dob: String(guestData.dob || ''),
+                      avatar: guestData.avatar
+                   });
+                   
+                   showToast("Ospite creato e sincronizzato perfettamente.");
               }
           }
           setIsGuestEditorOpen(false);
