@@ -1,15 +1,16 @@
 
 import React, { useMemo, useState } from 'react';
-import { TeamMember, AbsenceEntry, AbsenceType } from '../types';
+import { TeamMember, AbsenceEntry, AbsenceType, SalonClosure } from '../types';
 
 interface HRManagementProps {
   team: TeamMember[];
   onEditMember: (member: TeamMember) => void;
   onAddMember: () => void;
   onUpdateMember: (member: TeamMember) => void;
+  salonClosures?: SalonClosure[];
 }
 
-const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMember, onUpdateMember }) => {
+const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMember, onUpdateMember, salonClosures = [] }) => {
   const [viewMode, setViewMode] = useState<'cards' | 'calendar'>('cards');
   
   // State for adding new absence
@@ -36,11 +37,12 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
     const absences = member.absences_json || [];
     const hoursPerDay = member.hours_per_day_contract || 8.5;
     
+    // Il calcolo preciso ora si basa su hoursCount che è salvato correttamente (giorni lavorativi * ore)
     const calculateDays = (type: AbsenceType) => {
-      const hours = absences
+      const totalHours = absences
         .filter(a => a.type === type)
         .reduce((acc, a) => acc + (a.hoursCount || 0), 0);
-      return parseFloat((hours / hoursPerDay).toFixed(1));
+      return parseFloat((totalHours / hoursPerDay).toFixed(1));
     };
 
     const vacationUsed = calculateDays('vacation');
@@ -62,9 +64,6 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
   };
 
   const allAbsences = useMemo(() => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    
     // Appiattisce tutte le assenze di tutti i membri in un unico array
     const entries = team.flatMap(m => 
       (m.absences_json || []).map(a => ({
@@ -132,6 +131,36 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
     });
   };
 
+  const calculateWorkingDays = (start: string, end: string, member: TeamMember) => {
+    if (!start || !end) return 0;
+    let count = 0;
+    let curr = new Date(start);
+    const endDate = new Date(end);
+    const closureDates = salonClosures.map(c => c.date);
+
+    while (curr <= endDate) {
+      const dateString = curr.toISOString().split('T')[0];
+      const dayOfWeek = curr.getDay();
+      
+      const isHoliday = closureDates.includes(dateString);
+      const isWeeklyOff = (member.weekly_closures || [0]).includes(dayOfWeek);
+
+      if (!isHoliday && !isWeeklyOff) {
+        count++;
+      }
+      curr.setDate(curr.getDate() + 1);
+    }
+    return count;
+  };
+
+  const manualEntryCalculatedDays = useMemo(() => {
+     if (!newAbsenceData.startDate || !newAbsenceData.memberId) return 0;
+     const member = team.find(m => m.name === newAbsenceData.memberId);
+     if (!member) return 0;
+     const end = newAbsenceData.endDate || newAbsenceData.startDate;
+     return calculateWorkingDays(newAbsenceData.startDate, end, member);
+  }, [newAbsenceData.startDate, newAbsenceData.endDate, newAbsenceData.memberId, team, salonClosures]);
+
   const handleSaveNewAbsence = () => {
     if (!newAbsenceData.memberId || !newAbsenceData.startDate) return;
 
@@ -141,13 +170,20 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
     const startDateISO = new Date(newAbsenceData.startDate).toISOString();
     const endDateISO = newAbsenceData.endDate ? new Date(newAbsenceData.endDate).toISOString() : startDateISO;
 
+    // CALCOLO ORE ESATTE
+    const hoursPerDay = member.hours_per_day_contract || 8.5;
+    const workingDays = calculateWorkingDays(newAbsenceData.startDate, newAbsenceData.endDate || newAbsenceData.startDate, member);
+    
+    // Se è giorno intero, usa i giorni calcolati. Se è a ore, usa l'input manuale
+    const finalHoursCount = newAbsenceData.isFullDay ? (workingDays * hoursPerDay) : Number(newAbsenceData.hours);
+
     const newEntry: AbsenceEntry = {
       id: Math.random().toString(36).substr(2, 9),
       startDate: startDateISO,
       endDate: endDateISO,
       type: newAbsenceData.type,
       isFullDay: newAbsenceData.isFullDay,
-      hoursCount: newAbsenceData.isFullDay ? (member.hours_per_day_contract || 8.5) : Number(newAbsenceData.hours),
+      hoursCount: finalHoursCount,
       notes: newAbsenceData.notes
     };
 
@@ -416,6 +452,16 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
                    <input type="date" value={newAbsenceData.endDate} onChange={e => setNewAbsenceData({...newAbsenceData, endDate: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 border-none text-xs font-bold outline-none" />
                  </div>
                </div>
+
+               {manualEntryCalculatedDays > 0 && newAbsenceData.isFullDay && (
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex justify-between items-center">
+                    <div>
+                      <p className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">Giorni Calcolati</p>
+                      <p className="text-xs font-medium text-gray-600 italic">Esclusi chiusure/festività</p>
+                    </div>
+                    <p className="text-xl font-luxury font-bold text-gray-900">{manualEntryCalculatedDays}</p>
+                  </div>
+               )}
 
                <div className="flex items-center gap-4 py-2">
                  <button 
