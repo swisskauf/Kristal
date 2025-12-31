@@ -30,14 +30,17 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
   const [iban, setIban] = useState(member.iban || '');
 
   // Bank Adjustment Local State
-  const [otAdjustment, setOtAdjustment] = useState<number>(0);
+  const [otAdjustment, setOtAdjustment] = useState<number | ''>('');
   const [otNotes, setOtNotes] = useState('');
+  const [showApplySuccess, setShowApplySuccess] = useState(false);
 
   const handleApplyAdjustment = () => {
-    if (otAdjustment === 0) return;
-    setOvertimeBalance(prev => prev + otAdjustment);
-    setOtAdjustment(0);
+    if (otAdjustment === '' || otAdjustment === 0) return;
+    setOvertimeBalance(prev => prev + Number(otAdjustment));
+    setOtAdjustment('');
     setOtNotes('');
+    setShowApplySuccess(true);
+    setTimeout(() => setShowApplySuccess(false), 2000);
   };
 
   const handleSave = () => {
@@ -159,32 +162,45 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
 
         {activeTab === 'bank' && (
           <div className="space-y-10 animate-in slide-in-from-right-4">
-             <div className="bg-gradient-to-br from-black to-gray-800 text-white p-12 rounded-[4rem] shadow-2xl flex items-center justify-between group overflow-hidden relative">
+             <div className="bg-gradient-to-br from-black to-gray-800 text-white p-12 rounded-[4rem] shadow-2xl flex flex-col md:flex-row items-center justify-between group overflow-hidden relative gap-6">
                 <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-125 transition-transform duration-1000"><i className="fas fa-piggy-bank text-8xl"></i></div>
-                <div className="relative z-10">
-                   <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2">Saldo Banca Ore</p>
-                   <h3 className="text-6xl font-luxury font-bold">{overtimeBalance} <span className="text-xl">h</span></h3>
+                <div className="relative z-10 w-full md:w-auto">
+                   <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2">Saldo Banca Ore Attuale</p>
+                   <div className="flex items-center gap-2">
+                     <input 
+                        type="number" 
+                        value={overtimeBalance} 
+                        onChange={e => setOvertimeBalance(Number(e.target.value))}
+                        className="text-6xl font-luxury font-bold bg-transparent border-none text-white outline-none w-48 focus:border-b focus:border-amber-500"
+                     />
+                     <span className="text-xl">h</span>
+                   </div>
+                   <p className="text-[8px] text-gray-500 mt-2">Modificabile direttamente o tramite rettifica sotto</p>
                 </div>
-                <div className="text-right relative z-10">
+                <div className="text-right relative z-10 w-full md:w-auto">
                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Equivalente Congedo</p>
                    <p className="text-3xl font-luxury font-bold">{(overtimeBalance / contractHours).toFixed(1)} <span className="text-[11px]">gg</span></p>
                 </div>
              </div>
 
              <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-                <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-amber-600 pl-6">Rettifica Manuale Straordinari</h4>
+                <div className="flex justify-between items-center">
+                   <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-900 border-l-4 border-amber-600 pl-6">Rettifica Manuale</h4>
+                   {showApplySuccess && <span className="text-green-600 text-[10px] font-bold uppercase animate-pulse"><i className="fas fa-check"></i> Applicato</span>}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                    <div className="flex gap-4">
                       <input 
                         type="number" 
                         placeholder="Ore (+/-)" 
-                        value={otAdjustment || ''} 
-                        onChange={e => setOtAdjustment(Number(e.target.value))}
+                        value={otAdjustment} 
+                        onChange={e => setOtAdjustment(e.target.value === '' ? '' : Number(e.target.value))}
                         className="flex-1 p-5 rounded-3xl bg-gray-50 border-none font-bold text-lg shadow-inner outline-none focus:ring-2 focus:ring-amber-500"
                       />
                       <button 
                         onClick={handleApplyAdjustment}
-                        className="px-8 py-5 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all active:scale-95"
+                        disabled={otAdjustment === '' || otAdjustment === 0}
+                        className="px-8 py-5 bg-black text-white rounded-3xl text-[11px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Applica
                       </button>
@@ -197,6 +213,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ member, onSave, onClose
                      rows={2}
                    />
                 </div>
+                <p className="text-[9px] text-gray-400 italic px-2">Nota: Inserire un valore positivo per aggiungere ore, negativo per sottrarle. Premere "Applica" per aggiornare il saldo visualizzato sopra.</p>
              </div>
           </div>
         )}
