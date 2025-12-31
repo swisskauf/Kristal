@@ -661,7 +661,10 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in">
             <h2 className="text-4xl font-luxury font-bold text-gray-900">Agenda Atelier</h2>
             <TeamPlanning 
-              team={team} appointments={appointments} onToggleVacation={() => {}} 
+              team={team} 
+              appointments={appointments} 
+              profiles={profiles} // Nuova prop passata
+              onToggleVacation={() => {}} 
               onSlotClick={(memberName, date, hour) => { setFormInitialData({ team_member_name: memberName, date: new Date(`${date}T${hour}:00`).toISOString() }); setIsFormOpen(true); }} 
               onAppointmentClick={(a) => setSelectedAppointmentDetail(a)}
               currentUserMemberName={currentMember?.name} isCollaborator={isCollaborator}
