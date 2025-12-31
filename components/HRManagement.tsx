@@ -5,9 +5,10 @@ import { TeamMember, AbsenceEntry, AbsenceType } from '../types';
 interface HRManagementProps {
   team: TeamMember[];
   onEditMember: (member: TeamMember) => void;
+  onAddMember: () => void;
 }
 
-const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
+const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMember }) => {
   
   const getMemberHRStats = (member: TeamMember) => {
     const absences = member.absences_json || [];
@@ -51,23 +52,31 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700">
-      <header className="flex justify-between items-end border-b border-gray-100 pb-8">
+      <header className="flex flex-col md:flex-row justify-between items-end border-b border-gray-100 pb-8 gap-6">
         <div>
           <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">HR & Talent Management</h2>
           <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Analisi Capitale Umano Kristal Atelier</p>
         </div>
-        <div className="hidden md:flex gap-6">
-           <div className="text-center">
-              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Totale Team</p>
-              <p className="text-2xl font-luxury font-bold">{team.length}</p>
+        <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+           <div className="hidden md:flex gap-6">
+             <div className="text-center">
+                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Totale Team</p>
+                <p className="text-2xl font-luxury font-bold">{team.length}</p>
+             </div>
+             <div className="h-10 w-px bg-gray-100"></div>
+             <div className="text-center">
+                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Ferie Tot. Rimanenti</p>
+                <p className="text-2xl font-luxury font-bold text-amber-600">
+                  {team.reduce((acc, m) => acc + getMemberHRStats(m).vacationRemaining, 0).toFixed(0)}
+                </p>
+             </div>
            </div>
-           <div className="h-10 w-px bg-gray-100"></div>
-           <div className="text-center">
-              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Ferie Tot. Rimanenti</p>
-              <p className="text-2xl font-luxury font-bold text-amber-600">
-                {team.reduce((acc, m) => acc + getMemberHRStats(m).vacationRemaining, 0).toFixed(0)}
-              </p>
-           </div>
+           <button 
+             onClick={onAddMember}
+             className="px-8 py-4 bg-black text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all flex items-center gap-2"
+           >
+             <i className="fas fa-plus"></i> Nuovo Collaboratore
+           </button>
         </div>
       </header>
 
@@ -93,7 +102,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
         </div>
       )}
 
-      <div className="grid gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {team.map((member, idx) => {
           const stats = getMemberHRStats(member);
           const vacationPercent = (stats.vacationUsed / member.total_vacation_days_per_year) * 100;
@@ -104,7 +113,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
               className="bg-white rounded-[4rem] border border-gray-50 shadow-sm hover:shadow-2xl transition-all duration-500 group overflow-hidden animate-in slide-in-from-bottom-4"
               style={{ animationDelay: `${idx * 100}ms` }}
             >
-              <div className="p-10 flex flex-col lg:flex-row gap-12 items-center">
+              <div className="p-10 flex flex-col xl:flex-row gap-12 items-center">
                 {/* Artist Profile & Main Actions */}
                 <div className="flex flex-col items-center text-center space-y-4 min-w-[220px]">
                   <div className="relative">
@@ -123,7 +132,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
                 </div>
 
                 {/* HR Metrics Grid */}
-                <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-8 w-full">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 w-full">
                   {/* Vacation Progress */}
                   <div className="space-y-4">
                     <div className="flex justify-between items-end">
@@ -133,14 +142,14 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
                     <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                       <div 
                         className={`h-full rounded-full transition-all duration-1000 ${vacationPercent > 85 ? 'bg-amber-500' : 'bg-black'}`}
-                        style={{ width: `${vacationPercent}%` }}
+                        style={{ width: `${Math.min(vacationPercent, 100)}%` }}
                       ></div>
                     </div>
                     <p className="text-[7px] text-gray-300 font-bold uppercase">Utilizzate: {stats.vacationUsed} / {member.total_vacation_days_per_year}</p>
                   </div>
 
                   {/* Overtime Gold Card */}
-                  <div className="bg-amber-50/50 p-6 rounded-[2.5rem] border border-amber-100/50 flex flex-col justify-between group/ot transition-all hover:bg-amber-100/50">
+                  <div className="bg-amber-50/50 p-6 rounded-[2.5rem] border border-amber-100/50 flex flex-col justify-between group/ot transition-all hover:bg-amber-100/50 min-h-[140px]">
                     <div className="flex justify-between items-start">
                        <p className="text-[8px] font-bold text-amber-700 uppercase tracking-widest">Banca Ore</p>
                        <i className="fas fa-history text-[10px] text-amber-300"></i>
@@ -157,7 +166,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
                   </div>
 
                   {/* Health Status */}
-                  <div className="p-6 rounded-[2.5rem] border border-gray-50 flex flex-col justify-between bg-white shadow-inner">
+                  <div className="p-6 rounded-[2.5rem] border border-gray-50 flex flex-col justify-between bg-white shadow-inner min-h-[140px]">
                     <p className="text-[8px] font-bold text-rose-400 uppercase tracking-widest">Salute & Infortuni</p>
                     <div className="py-2">
                        <p className="text-2xl font-luxury font-bold text-gray-900">{stats.sickDays + stats.injuryDays} <span className="text-[10px] text-gray-300">gg</span></p>
@@ -173,7 +182,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember }) => {
                   </div>
 
                   {/* Other Status */}
-                  <div className="p-6 rounded-[2.5rem] border border-gray-50 flex flex-col justify-between bg-white shadow-inner">
+                  <div className="p-6 rounded-[2.5rem] border border-gray-50 flex flex-col justify-between bg-white shadow-inner min-h-[140px]">
                     <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest">Formazione</p>
                     <div className="py-2">
                        <p className="text-2xl font-luxury font-bold text-gray-900">{stats.trainingDays} <span className="text-[10px] text-gray-300">gg</span></p>
