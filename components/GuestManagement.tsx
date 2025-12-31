@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Appointment, User } from '../types';
 import { db } from '../services/supabase';
 
@@ -19,12 +19,23 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'history' | 'technical'>('info');
   const [newNote, setNewNote] = useState({ category: 'Colore', content: '' });
 
+  // Forza il refresh dei dati quando il componente viene montato per assicurare di vedere i nuovi iscritti
+  useEffect(() => {
+    onRefresh();
+  }, []);
+
   const filteredGuests = useMemo(() => {
-    return profiles.filter(p => p.role === 'client' && (
-      p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.email && p.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.phone && p.phone.includes(searchTerm))
-    )).sort((a, b) => a.full_name.localeCompare(b.full_name));
+    return profiles.filter(p => {
+      // Includi chi ha ruolo 'client' oppure chi non ha ruolo definito (default client)
+      // Esclude admin e staff dalla lista ospiti
+      const isClient = p.role === 'client' || !p.role; 
+      const matchesSearch = 
+        (p.full_name && p.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (p.email && p.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (p.phone && p.phone.includes(searchTerm));
+      
+      return isClient && matchesSearch;
+    }).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
   }, [profiles, searchTerm]);
 
   const guestAppointments = useMemo(() => {
@@ -35,23 +46,18 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
   const birthdayGuests = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    // Configurazione finestra compleanno (Oggi + 2 giorni futuri)
     const MAX_DAYS_AHEAD = 2;
 
     return profiles.filter(p => {
-      if (p.role !== 'client' || !p.dob) return false;
+      if ((p.role && p.role !== 'client') || !p.dob) return false;
       
       const dobDate = new Date(p.dob);
       const bdayThisYear = new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate());
-      
-      // Gestione fine anno (es. Oggi è Dic 30, compleanno 1 Gen)
       const bdayNextYear = new Date(today.getFullYear() + 1, dobDate.getMonth(), dobDate.getDate());
 
       const checkDiff = (bday: Date) => {
         const diffTime = bday.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-        // 0 = Oggi, 1 = Domani, 2 = Dopodomani
         return diffDays >= 0 && diffDays <= MAX_DAYS_AHEAD;
       };
 
@@ -93,7 +99,7 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h2 className="text-5xl font-luxury font-bold text-gray-900 tracking-tighter">Archivio Ospiti</h2>
-          <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Patrimonio Esperienziale Kristal</p>
+          <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Patrimonio Esperienziale Kristal ({filteredGuests.length})</p>
         </div>
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="relative group w-full md:w-auto">
@@ -106,13 +112,15 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                className="pl-14 pr-8 py-5 bg-white border border-gray-100 rounded-[2rem] w-full md:w-80 text-xs font-bold shadow-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
              />
           </div>
+          <button onClick={onRefresh} className="w-12 h-12 bg-white text-gray-400 border border-gray-100 rounded-2xl flex items-center justify-center hover:bg-black hover:text-white transition-all shadow-md" title="Aggiorna Lista">
+            <i className="fas fa-sync-alt"></i>
+          </button>
           <button onClick={onAddGuest} className="w-full md:w-auto px-8 py-5 bg-black text-white rounded-[2rem] text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all">
             Nuovo Ospite
           </button>
         </div>
       </header>
 
-      {/* Celebration Lounge - Compleanni */}
       {birthdayGuests.length > 0 && (
         <div className="bg-gradient-to-r from-gray-900 to-black text-white p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden animate-in slide-in-from-top-6">
            <div className="absolute top-0 right-0 p-8 opacity-20"><i className="fas fa-birthday-cake text-8xl rotate-12"></i></div>
@@ -125,7 +133,6 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                  {birthdayGuests.map(bg => {
                     const today = new Date();
                     const bday = new Date(bg.dob);
-                    // Calcolo giorno visuale
                     const isToday = bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth();
                     
                     return (
@@ -178,7 +185,9 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                   <i className="fas fa-chevron-right text-[10px] opacity-20"></i>
                 </div>
               )) : (
-                <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">Nessun ospite trovato</div>
+                <div className="p-20 text-center text-gray-300 italic text-[10px] uppercase tracking-widest">
+                   {profiles.length > 0 ? "Nessun ospite trovato con questi filtri" : "Caricamento archivio..."}
+                </div>
               )}
            </div>
         </div>
@@ -207,7 +216,7 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
                          {selectedGuest.full_name}
                          {selectedGuest.is_blocked && <i className="fas fa-ban text-red-500 text-xl" title="Accesso Negato"></i>}
                        </h3>
-                       <p className="text-amber-600 text-[9px] font-bold uppercase tracking-widest mt-1">Ospite d'onore dal {new Date(selectedGuest.created_at || Date.now()).getFullYear()}</p>
+                       <p className="text-amber-600 text-[9px] font-bold uppercase tracking-widest mt-1">Ospite d'onore</p>
                     </div>
                   </div>
                   <div className="flex gap-3">
