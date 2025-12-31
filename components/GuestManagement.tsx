@@ -30,6 +30,33 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
     return appointments.filter(a => a.client_id === selectedGuest.id).sort((a, b) => b.date.localeCompare(a.date));
   }, [selectedGuest, appointments]);
 
+  const birthdayGuests = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return profiles.filter(p => {
+      if (p.role !== 'client' || !p.dob) return false;
+      
+      const dobDate = new Date(p.dob);
+      const bdayThisYear = new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate());
+      
+      // Calcolo differenza in giorni
+      const diffTime = bdayThisYear.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      // Controllo edge case fine anno (es. oggi 31 Dicembre, compleanno 1 Gennaio)
+      let diffNextYear = -1;
+      if (diffDays < 0) {
+         const bdayNextYear = new Date(today.getFullYear() + 1, dobDate.getMonth(), dobDate.getDate());
+         const diffTimeNext = bdayNextYear.getTime() - today.getTime();
+         diffNextYear = Math.ceil(diffTimeNext / (1000 * 60 * 60 * 24));
+      }
+
+      // Restituisce true se è oggi (0), domani (1) o dopodomani (2)
+      return (diffDays >= 0 && diffDays <= 2) || (diffNextYear >= 0 && diffNextYear <= 2);
+    });
+  }, [profiles]);
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && selectedGuest) {
@@ -82,6 +109,34 @@ const GuestManagement: React.FC<GuestManagementProps> = ({ profiles, appointment
           </button>
         </div>
       </header>
+
+      {birthdayGuests.length > 0 && (
+        <div className="bg-gradient-to-r from-gray-900 to-black text-white p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden animate-in slide-in-from-top-6">
+           <div className="absolute top-0 right-0 p-8 opacity-20"><i className="fas fa-birthday-cake text-8xl rotate-12"></i></div>
+           <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-6">
+                 <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-500">Celebration Lounge • Sconti Attivi</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {birthdayGuests.map(bg => (
+                   <div key={bg.id} className="bg-white/10 backdrop-blur-md p-4 rounded-[2rem] flex items-center gap-4 border border-white/10 hover:bg-white/20 transition-all cursor-pointer" onClick={() => setSelectedGuest(bg)}>
+                      <img src={bg.avatar || `https://ui-avatars.com/api/?name=${bg.full_name}`} className="w-14 h-14 rounded-full border-2 border-amber-500/50" />
+                      <div>
+                         <p className="font-bold text-sm text-white">{bg.full_name}</p>
+                         <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[8px] font-bold uppercase tracking-widest text-amber-400">
+                               {new Date(bg.dob).getDate() === new Date().getDate() ? 'Oggi' : new Date(bg.dob).toLocaleDateString('it-IT', {day: 'numeric', month: 'long'})}
+                            </span>
+                            <span className="px-2 py-0.5 bg-amber-500 text-black text-[7px] font-bold uppercase rounded-full">Sconto -20%</span>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_2fr] gap-10">
         <div className="bg-white rounded-[4rem] border border-gray-50 shadow-sm overflow-hidden h-fit">
