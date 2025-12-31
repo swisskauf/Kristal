@@ -7,8 +7,9 @@
     <title>Kristal Salon | Atelier di Bellezza Luxury</title>
     <meta name="description" content="Prenota il tuo rituale di bellezza presso Kristal. Taglio, colore, estetica e gestione professionale.">
     <script>
-      // Polyfill critico per evitare crash "process is not defined" nel browser
+      // Polyfill CRITICI per prevenire "White Screen of Death"
       window.process = window.process || { env: {} };
+      window.global = window; // Necessario per alcune librerie Node-based
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
