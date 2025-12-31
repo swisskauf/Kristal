@@ -108,6 +108,8 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
   };
 
   const handleDeleteAbsence = (memberName: string, absenceId: string) => {
+    if (!confirm('Confermi la cancellazione definitiva di questa assenza dal registro?')) return;
+
     const member = team.find(m => m.name === memberName);
     if (!member) return;
 
@@ -124,6 +126,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
 
     const updatedAbsences = member.absences_json?.filter(a => a.id !== absenceId) || [];
 
+    // Aggiorna immediatamente il membro nel DB e nello stato globale
     onUpdateMember({
       ...member,
       absences_json: updatedAbsences,
@@ -268,16 +271,17 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
                                 
                                 <button 
                                   onClick={() => handleDeleteAbsence(abs.memberName, abs.id)}
-                                  className="absolute top-4 right-4 text-gray-300 hover:text-red-500 z-20 transition-colors bg-white/50 backdrop-blur-sm p-2 rounded-full w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                  className="absolute top-4 right-4 text-red-500 z-20 transition-all bg-white shadow-md p-2 rounded-xl w-10 h-10 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white"
+                                  title="Cancella dal registro"
                                 >
-                                  <i className="fas fa-trash-alt text-xs"></i>
+                                  <i className="fas fa-trash-alt text-sm"></i>
                                 </button>
 
                                 <div className="flex items-start gap-4 relative z-10">
                                    <img src={abs.memberAvatar || `https://ui-avatars.com/api/?name=${abs.memberName}`} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
-                                   <div>
-                                      <h5 className="font-bold text-sm text-gray-900">{abs.memberName}</h5>
-                                      <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mb-2">{abs.role}</p>
+                                   <div className="min-w-0">
+                                      <h5 className="font-bold text-sm text-gray-900 truncate">{abs.memberName}</h5>
+                                      <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mb-2 truncate">{abs.role}</p>
                                       <div className={`inline-block px-3 py-1 rounded-lg border text-[8px] font-bold uppercase tracking-wide ${getTypeColor(abs.type)}`}>
                                          {getTypeLabel(abs.type)}
                                       </div>
@@ -285,7 +289,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
                                 </div>
                                 <div className="mt-6 pt-4 border-t border-gray-50 flex justify-between items-end relative z-10">
                                    <div>
-                                      <p className="text-[9px] font-bold text-gray-300 uppercase">Durata</p>
+                                      <p className="text-[9px] font-bold text-gray-300 uppercase">Dal - Al</p>
                                       <p className="text-xs font-bold text-gray-900">
                                         {new Date(abs.startDate).getDate()} - {new Date(abs.endDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long'})}
                                       </p>
@@ -296,7 +300,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ team, onEditMember, onAddMe
                                    </div>
                                 </div>
                                 {abs.notes && (
-                                  <p className="mt-4 text-[9px] text-gray-400 italic bg-gray-50 p-3 rounded-xl">"{abs.notes}"</p>
+                                  <p className="mt-4 text-[9px] text-gray-400 italic bg-gray-50 p-3 rounded-xl line-clamp-2">"{abs.notes}"</p>
                                 )}
                              </div>
                            ))}
