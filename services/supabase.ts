@@ -268,16 +268,20 @@ export const db = {
     },
     save: async (content: AboutUsContent) => {
       if (useMock) return supabaseMock.aboutUs.save(content);
+      
+      console.log("Saving About Us content to Supabase...");
+      
       // Upsert: tries to update, if not found inserts
       const { data, error } = await client.from('settings')
         .upsert({ key: 'about_us', value: content }, { onConflict: 'key' })
         .select();
         
       if (error) {
-          console.error("Supabase Save Error:", error);
+          console.error("Supabase Save Error Details:", error);
           throw error;
       }
       
+      console.log("Save successful:", data);
       // Se select() non ritorna dati (può capitare con alcune policy), ritorniamo il content inviato
       return data?.[0]?.value || content;
     }
