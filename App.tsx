@@ -81,10 +81,16 @@ const App: React.FC = () => {
 
   const handleAtelierImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && aboutUs) {
+    if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAboutUs({ ...aboutUs, imageUrl: reader.result as string });
+        // BUG FIX: Gestione robusta stato nullo
+        setAboutUs(prev => ({
+          title: prev?.title || 'Titolo Atelier',
+          subtitle: prev?.subtitle || 'Sottotitolo',
+          description: prev?.description || '',
+          imageUrl: reader.result as string
+        }));
       };
       reader.readAsDataURL(file);
     }
@@ -133,7 +139,8 @@ const App: React.FC = () => {
       setRequests(reqs || []);
       setProfiles(profs || []);
       setSalonClosures(closures || []);
-      setAboutUs(about || null);
+      // Se aboutUs è null dal DB, forniamo un oggetto vuoto per evitare crash dell'editor
+      setAboutUs(about || { title: '', subtitle: '', description: '', imageUrl: '' });
     } catch (e) {
       console.error("Data Refresh Error", e);
     } finally {
@@ -142,13 +149,8 @@ const App: React.FC = () => {
   }, [ensureDataSeeding]);
 
   useEffect(() => {
-    // Force data load immediately
     refreshData();
-
-    // Safety timeout to prevent infinite loading screen
-    const safetyTimer = setTimeout(() => {
-        setLoading(false);
-    }, 4000);
+    const safetyTimer = setTimeout(() => setLoading(false), 4000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
@@ -156,12 +158,12 @@ const App: React.FC = () => {
         setActiveTab('dashboard');
       } else if (session?.user) {
         setIsAuthOpen(false); 
-        
         const profile = await db.profiles.get(session.user.id).catch(() => null);
         const email = session.user.email?.toLowerCase();
         let role: any = profile?.role || 'client';
         if (email === 'serop.serop@outlook.com') role = 'admin';
         else if (email === 'sirop.sirop@outlook.sa') role = 'collaborator';
+        
         setUser({ 
           id: session.user.id, 
           email: session.user.email!, 
@@ -171,9 +173,8 @@ const App: React.FC = () => {
           avatar: profile?.avatar 
         });
         
-        // Redirect intelligente solo se siamo sulla dashboard guest
         if (activeTab === 'dashboard') {
-           // Rimaniamo su dashboard ma ora come user loggato
+           // Remain on dashboard
         }
       }
       refreshData(true);
@@ -213,23 +214,20 @@ const App: React.FC = () => {
       const appt = appointments.find(a => a.id === id);
       if (appt) {
         await db.appointments.upsert({ ...appt, status });
-        
         if (status === 'cancelled' && settings.emailNotificationsEnabled) {
           const clientProfile = profiles.find(p => p.id === appt.client_id);
           const serviceInfo = services.find(s => s.id === appt.service_id);
           if (clientProfile) {
-            const emailBody = await sendLuxuryEmailNotification({
+            sendLuxuryEmailNotification({
               type: 'cancellation',
               appointment: appt,
               client: clientProfile,
               service: serviceInfo
+            }).then(emailBody => {
+               if (emailBody) addNotification('Cancellazione Ritual', emailBody);
             });
-            if (emailBody) {
-               addNotification('Cancellazione Ritual', emailBody);
-            }
           }
         }
-
         showToast(`Rituale aggiornato.`);
         refreshData(true);
         setSelectedAppointmentDetail(null);
@@ -247,20 +245,13 @@ const App: React.FC = () => {
     const start = new Date(appt.date);
     const duration = appt.services?.duration || 30;
     const end = new Date(start.getTime() + duration * 60 * 1000);
-    
     const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'BEGIN:VEVENT',
-      `DTSTART:${formatICSDate(start)}`,
-      `DTEND:${formatICSDate(end)}`,
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT',
+      `DTSTART:${formatICSDate(start)}`, `DTEND:${formatICSDate(end)}`,
       `SUMMARY:Kristal Atelier - ${appt.services?.name || 'Rituale di Bellezza'}`,
       `DESCRIPTION:Rituale di bellezza con ${appt.team_member_name}`,
-      `LOCATION:Kristal Atelier, Lugano`,
-      'END:VEVENT',
-      'END:VCALENDAR'
+      `LOCATION:Kristal Atelier, Lugano`, 'END:VEVENT', 'END:VCALENDAR'
     ].join('\n');
-
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const link = document.createElement('a');
     link.href = window.URL.createObjectURL(blob);
@@ -275,7 +266,6 @@ const App: React.FC = () => {
       const isEdit = !!a.id;
       const client_id = (isAdmin || isCollaborator) ? (a.client_id || formInitialData?.client_id) : user?.id;
       const savedApptData = { ...a, client_id };
-      
       const result = await db.appointments.upsert(savedApptData as any); 
       const apptToNotify = result || savedApptData;
 
@@ -293,7 +283,6 @@ const App: React.FC = () => {
         const clientProfile = profiles.find(p => p.id === client_id);
         const serviceInfo = services.find(s => s.id === a.service_id);
         const oldData = isEdit ? appointments.find(ex => ex.id === a.id) : null;
-        
         if (clientProfile) {
            sendLuxuryEmailNotification({
             type: isEdit ? 'update' : 'confirmation',
@@ -302,14 +291,10 @@ const App: React.FC = () => {
             service: serviceInfo,
             oldData: oldData
           }).then(emailBody => {
-            if (emailBody) {
-               addNotification(isEdit ? 'Modifica Ritual' : 'Conferma Ritual', emailBody);
-               if (isEdit || isAdmin || isCollaborator) showToast("Email di notifica inviata al cliente.", "info");
-            }
+            if (emailBody) addNotification(isEdit ? 'Modifica Ritual' : 'Conferma Ritual', emailBody);
           });
         }
       }
-
       await refreshData(true); 
     } catch (err) {
       showToast("Errore nel salvataggio.", "error");
@@ -365,26 +350,18 @@ const App: React.FC = () => {
     }
   };
 
-  // Funzione helper per calcolare i giorni lavorativi effettivi
   const calculateWorkingDays = (startStr: string, endStr: string, member: TeamMember) => {
     if (!startStr || !endStr) return 0;
     let count = 0;
     let curr = new Date(startStr);
     const end = new Date(endStr);
-    const closureDates = salonClosures.map(c => c.date); // 'YYYY-MM-DD'
-
+    const closureDates = salonClosures.map(c => c.date);
     while (curr <= end) {
         const dateString = curr.toISOString().split('T')[0];
-        const dayOfWeek = curr.getDay(); // 0 = Sunday
-
-        // Check global closure
+        const dayOfWeek = curr.getDay();
         const isHoliday = closureDates.includes(dateString);
-        // Check weekly closure (default [0] if undefined)
         const isWeeklyOff = (member.weekly_closures || [0]).includes(dayOfWeek);
-
-        if (!isHoliday && !isWeeklyOff) {
-            count++;
-        }
+        if (!isHoliday && !isWeeklyOff) count++;
         curr.setDate(curr.getDate() + 1);
     }
     return count;
@@ -394,37 +371,25 @@ const App: React.FC = () => {
     try {
       const req = requests.find(r => r.id === id);
       if (!req) return;
-
       await db.requests.update(id, { status: action });
-      
       if (action === 'approved') {
         const member = team.find(t => t.name === req.member_name);
         if (member) {
           const hoursPerDay = member.hours_per_day_contract || 8.5;
-          
-          // CALCOLO GIORNI LAVORATIVI EFFETTIVI
           const workingDays = calculateWorkingDays(req.start_date, req.end_date, member);
           const hoursUsed = req.is_full_day ? (workingDays * hoursPerDay) : 4; 
-
           const startDateISO = new Date(req.start_date).toISOString();
           const endDateISO = new Date(req.end_date).toISOString();
-
           const newAbsence: AbsenceEntry = { 
             id: Math.random().toString(36).substr(2, 9), 
-            startDate: startDateISO,
-            endDate: endDateISO,
-            type: req.type, 
-            isFullDay: req.is_full_day,
-            hoursCount: hoursUsed,
-            notes: req.notes,
-            startTime: req.start_time,
-            endTime: req.end_time
+            startDate: startDateISO, endDate: endDateISO,
+            type: req.type, isFullDay: req.is_full_day,
+            hoursCount: hoursUsed, notes: req.notes,
+            startTime: req.start_time, endTime: req.end_time
           };
-
           let updatedOvertime = member.overtime_balance_hours || 0;
           if (req.type === 'overtime') updatedOvertime += hoursUsed;
           else if (req.type === 'overtime_recovery') updatedOvertime -= hoursUsed;
-
           await db.team.upsert({ 
             ...member, 
             absences_json: [...(member.absences_json || []), newAbsence],
@@ -432,11 +397,9 @@ const App: React.FC = () => {
           });
         }
       }
-      
       showToast(action === 'approved' ? "Richiesta approvata. Agenda aggiornata." : "Richiesta respinta.");
       refreshData(true);
     } catch (e) {
-      console.error(e);
       showToast("Errore durante l'elaborazione HR.", "error");
     }
   };
@@ -445,14 +408,11 @@ const App: React.FC = () => {
     if (!confirm('Sei sicuro di voler eliminare definitivamente questo ospite e tutto il suo storico?')) return;
     try {
       await db.profiles.delete(id);
-      
-      // Logout di sicurezza se l'utente eliminato è quello corrente
       if (user && user.id === id) {
           await supabase.auth.signOut();
           window.location.reload();
           return;
       }
-
       showToast("Ospite eliminato con successo.");
       await refreshData(true); 
       setSelectedGuestToEdit(null); 
@@ -475,32 +435,26 @@ const App: React.FC = () => {
   const handleSaveGuestFromAdmin = async (guestData: any) => {
       try {
           if (guestData.id) {
-              // Modifica esistente: usa upsert DB
               const { password, ...dataToUpdate } = guestData; 
               await db.profiles.upsert(dataToUpdate);
               showToast("Profilo ospite aggiornato.");
           } else {
-              // Creazione nuovo ospite: 
-              // 1. Auth SignUp
               const { data, error } = await supabase.auth.signUp({
                   email: guestData.email,
                   password: guestData.password,
                   options: {
                       data: {
                           full_name: guestData.full_name,
-                          phone: String(guestData.phone || ''), // Force string
+                          phone: String(guestData.phone || ''), 
                           role: 'client',
                           gender: guestData.gender,
-                          dob: String(guestData.dob || ''), // Force string
+                          dob: String(guestData.dob || ''), 
                           avatar: guestData.avatar
                       }
                   }
               });
-
               if (error) throw error;
               if (data.user) {
-                   // 2. CRITICAL DOUBLE-TAP: Forza l'aggiornamento del profilo immediatamente
-                   // Questo corregge eventuali perdite di dati del Trigger SQL (es. numero di telefono)
                    await db.profiles.upsert({
                       id: data.user.id,
                       email: guestData.email,
@@ -511,14 +465,12 @@ const App: React.FC = () => {
                       dob: String(guestData.dob || ''),
                       avatar: guestData.avatar
                    });
-                   
                    showToast("Ospite creato e sincronizzato perfettamente.");
               }
           }
           setIsGuestEditorOpen(false);
           await refreshData(true);
       } catch (err: any) {
-          console.error("Errore salvataggio ospite:", err);
           showToast(err.message || "Errore durante il salvataggio.", "error");
       }
   };
@@ -526,11 +478,11 @@ const App: React.FC = () => {
   const handleLoginSuccess = (u: User) => {
     setUser(u);
     setIsAuthOpen(false);
-    setActiveTab('dashboard'); // Forza la visualizzazione della dashboard
+    setActiveTab('dashboard'); 
+    setLoading(false); // Sblocca immediatamente l'UI
     refreshData(true);
   };
 
-  // Modified loading check: allow rendering if aboutUs is null but show basic UI if loading is true AND no critical data
   if (loading && !aboutUs && !services.length) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white space-y-6">
@@ -574,7 +526,6 @@ const App: React.FC = () => {
                   salonClosures={salonClosures}
                 />
             ) : (
-                // GUEST / CLIENT VIEW
                 <div className="space-y-20 pb-20">
                   <header className="text-center space-y-6">
                     <div>
@@ -587,7 +538,6 @@ const App: React.FC = () => {
                       </button>
                     )}
                   </header>
-                  
                   <div className="grid md:grid-cols-2 gap-16">
                     {categories.map(cat => (
                       <div key={cat} className="space-y-8">
@@ -623,7 +573,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Altri tab invariati ... */}
         {activeTab === 'team_management' && isAdmin && (
            <HRManagement 
              team={team} 
@@ -725,19 +674,50 @@ const App: React.FC = () => {
                       </div>
                    </div>
 
+                   {/* BUG FIX: Utilizzo spread con fallback per evitare crash su stato nullo durante la digitazione */}
                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale</label>
-                      <input type="text" value={aboutUs?.title || ''} onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-luxury font-bold text-2xl focus:ring-2 focus:ring-amber-500 transition-all outline-none" />
+                      <input 
+                        type="text" 
+                        value={aboutUs?.title || ''} 
+                        onChange={e => setAboutUs(prev => ({ 
+                            title: e.target.value, 
+                            subtitle: prev?.subtitle || '', 
+                            description: prev?.description || '', 
+                            imageUrl: prev?.imageUrl || '' 
+                        }))} 
+                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-luxury font-bold text-2xl focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
+                      />
                    </div>
 
                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo / Tagline</label>
-                      <input type="text" value={aboutUs?.subtitle || ''} onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs uppercase tracking-widest text-amber-600 focus:ring-2 focus:ring-amber-500 transition-all outline-none" />
+                      <input 
+                        type="text" 
+                        value={aboutUs?.subtitle || ''} 
+                        onChange={e => setAboutUs(prev => ({ 
+                            title: prev?.title || '', 
+                            subtitle: e.target.value, 
+                            description: prev?.description || '', 
+                            imageUrl: prev?.imageUrl || '' 
+                        }))} 
+                        className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs uppercase tracking-widest text-amber-600 focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
+                      />
                    </div>
 
                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Storytelling</label>
-                      <textarea rows={10} value={aboutUs?.description || ''} onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)} className="w-full p-6 rounded-3xl bg-gray-50 border-none font-serif text-lg leading-relaxed text-gray-600 resize-none focus:ring-2 focus:ring-amber-500 transition-all outline-none" />
+                      <textarea 
+                        rows={10} 
+                        value={aboutUs?.description || ''} 
+                        onChange={e => setAboutUs(prev => ({ 
+                            title: prev?.title || '', 
+                            subtitle: prev?.subtitle || '', 
+                            description: e.target.value, 
+                            imageUrl: prev?.imageUrl || '' 
+                        }))} 
+                        className="w-full p-6 rounded-3xl bg-gray-50 border-none font-serif text-lg leading-relaxed text-gray-600 resize-none focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
+                      />
                    </div>
 
                    <button onClick={() => aboutUs && handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-3">
@@ -747,19 +727,21 @@ const App: React.FC = () => {
 
                 {/* Preview Column */}
                 <div className="bg-gray-100 rounded-[3rem] p-8 overflow-y-auto scrollbar-hide border border-gray-200 relative">
-                   <span className="absolute top-6 right-6 bg-black text-white px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest z-10 opacity-50">Live Preview</span>
+                   <span className="absolute top-6 right-6 bg-black text-white px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest z-10 opacity-50">Anteprima Live</span>
                    <div className="bg-white rounded-[2rem] p-8 shadow-xl min-h-full pointer-events-none select-none origin-top scale-95">
                       {aboutUs && (
                         <div className="space-y-8">
                            <div className="text-center space-y-2">
-                              <h2 className="text-4xl font-luxury font-bold text-gray-900">{aboutUs.title}</h2>
-                              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.4em]">{aboutUs.subtitle}</p>
+                              <h2 className="text-4xl font-luxury font-bold text-gray-900">{aboutUs.title || 'Titolo'}</h2>
+                              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.4em]">{aboutUs.subtitle || 'Sottotitolo'}</p>
                            </div>
-                           <div className="aspect-[21/9] rounded-[2rem] overflow-hidden bg-gray-100">
-                              <img src={aboutUs.imageUrl} className="w-full h-full object-cover" />
-                           </div>
+                           {aboutUs.imageUrl && (
+                               <div className="aspect-[21/9] rounded-[2rem] overflow-hidden bg-gray-100">
+                                  <img src={aboutUs.imageUrl} className="w-full h-full object-cover" />
+                               </div>
+                           )}
                            <p className="text-sm font-light leading-relaxed text-gray-600 text-center italic max-w-lg mx-auto">
-                              {aboutUs.description}
+                              {aboutUs.description || 'Descrizione...'}
                            </p>
                         </div>
                       )}
