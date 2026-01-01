@@ -49,6 +49,7 @@ const Layout: React.FC<LayoutProps> = ({
   const clientNav = [
     { id: 'dashboard', label: 'Home', icon: 'fa-home' },
     { id: 'my_rituals', label: 'I Miei Ritual', icon: 'fa-calendar-check' },
+    { id: 'about_us', label: 'Maison', icon: 'fa-gem' }, // Added here
   ];
 
   let navItems = guestNav();
