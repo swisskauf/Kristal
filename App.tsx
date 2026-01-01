@@ -153,7 +153,7 @@ const App: React.FC = () => {
       setProfiles(profs || []);
       setSalonClosures(closures || []);
       
-      // FIX: Se il DB ritorna dati validi, usali. Altrimenti, se lo stato è già popolato (es. dopo un save), mantienilo.
+      // FIX: Se il DB ritorna dati validi, usali. Altrimenti, se lo stato è già popolato, mantienilo.
       if (about && about.title) {
           setAboutUs(about);
       } else if (!aboutUs.title) { 
@@ -343,33 +343,31 @@ const App: React.FC = () => {
     }
   };
 
-  // FIX: Logica salvataggio definitiva
+  // FIX: Logica salvataggio About Us - Versione Definitiva
   const handleSaveAboutUs = async () => {
     if (!aboutUs) return;
-    setIsSaving(true); // Attiva spinner
+    setIsSaving(true); // Start Spinner
     
     try {
-      // 1. Chiamata al DB
       const result = await db.aboutUs.save(aboutUs);
       
-      // 2. Controllo risultato (db.aboutUs.save ora lancia errore se fallisce)
-      // Aggiorna lo stato locale con i dati SICURAMENTE salvati
+      // Update UI with confirmed data
       if (result) {
           setAboutUs(result);
-          showToast("Pubblicazione completata con successo!", "success");
+          showToast("Pubblicazione completata!", "success");
       } else {
-          // Fallback se result è null ma non ha lanciato errori (raro)
-          showToast("Dati inviati, verifica la pubblicazione.", "info");
+          showToast("Dati inviati (verifica pubblicazione).", "info");
       }
     } catch (e: any) {
       console.error("Critical Error saving About Us:", e);
-      // Messaggio errore utente
-      let msg = "Errore di connessione al Database.";
-      if (e.message?.includes("row level security")) msg = "Permesso negato. Contatta l'amministratore.";
-      if (e.message?.includes("settings")) msg = "Tabella mancante. Esegui SQL script.";
+      let msg = "Errore di connessione.";
+      // User friendly error mapping
+      if (e.message?.includes("policy")) msg = "Errore permessi DB (esegui SQL Script).";
+      else if (e.code === '42P01') msg = "Tabella 'settings' mancante (esegui SQL).";
+      
       showToast(msg, "error");
     } finally {
-      setIsSaving(false); // Disattiva spinner SEMPRE
+      setIsSaving(false); // Stop Spinner - SEMPRE
     }
   };
 
@@ -671,14 +669,13 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Compact Luxury Team Grid */}
+                  {/* Compact Luxury Team Grid (4 Colonne / 8 Persone) */}
                   <div className="py-24 relative">
                      <div className="max-w-7xl mx-auto px-6 mb-20 text-center">
                         <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.6em] mb-4">I Maestri</p>
                         <h3 className="text-6xl font-luxury font-bold text-gray-900">Talento & Passione</h3>
                      </div>
                      
-                     {/* Griglia a 4 colonne per supportare ~8 collaboratori */}
                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto px-4">
                         {team.map((member) => (
                            <div key={member.name} className="group relative aspect-[3/4] rounded-[2rem] overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-500">
