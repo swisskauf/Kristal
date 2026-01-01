@@ -110,6 +110,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               throw new Error("Accesso negato. Contattare l'Atelier.");
           }
 
+          // CHIAMATA CRITICA: Passa subito l'utente all'app principale senza aspettare il listener globale
+          // Questo risolve il problema "mi lasciava in attesa"
           onLogin({
             id: data.user.id,
             email: data.user.email!,
