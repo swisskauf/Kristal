@@ -170,8 +170,13 @@ const App: React.FC = () => {
           role, 
           avatar: profile?.avatar 
         });
+        
+        // Redirect intelligente solo se siamo sulla dashboard guest
+        if (activeTab === 'dashboard') {
+           // Rimaniamo su dashboard ma ora come user loggato
+        }
       }
-      refreshData();
+      refreshData(true);
     });
     return () => {
         subscription.unsubscribe();
@@ -518,6 +523,13 @@ const App: React.FC = () => {
       }
   };
 
+  const handleLoginSuccess = (u: User) => {
+    setUser(u);
+    setIsAuthOpen(false);
+    setActiveTab('dashboard'); // Forza la visualizzazione della dashboard
+    refreshData(true);
+  };
+
   // Modified loading check: allow rendering if aboutUs is null but show basic UI if loading is true AND no critical data
   if (loading && !aboutUs && !services.length) {
     return (
@@ -541,7 +553,7 @@ const App: React.FC = () => {
 
       <Layout 
         user={user} 
-        onLogout={() => supabase.auth.signOut()} 
+        onLogout={() => { supabase.auth.signOut(); setUser(null); }} 
         onLoginClick={() => setIsAuthOpen(true)} 
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
@@ -562,25 +574,42 @@ const App: React.FC = () => {
                   salonClosures={salonClosures}
                 />
             ) : (
-                <div className="space-y-20">
-                  <header className="text-center space-y-4">
-                    <h2 className="text-7xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
-                    <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em]">Atelier di Bellezza Luxury</p>
+                // GUEST / CLIENT VIEW
+                <div className="space-y-20 pb-20">
+                  <header className="text-center space-y-6">
+                    <div>
+                      <h2 className="text-8xl font-luxury font-bold text-gray-900 tracking-tighter">Kristal</h2>
+                      <p className="text-amber-600 text-[11px] font-bold uppercase tracking-[0.5em] mt-2">Atelier di Bellezza Luxury</p>
+                    </div>
+                    {isGuest && (
+                      <button onClick={() => setIsAuthOpen(true)} className="px-10 py-4 bg-black text-white rounded-[2rem] text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-amber-600 transition-all hover:scale-105">
+                        Accedi all'Esperienza
+                      </button>
+                    )}
                   </header>
-                  <div className="grid md:grid-cols-2 gap-12">
+                  
+                  <div className="grid md:grid-cols-2 gap-16">
                     {categories.map(cat => (
                       <div key={cat} className="space-y-8">
-                        <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-gray-300 border-b border-gray-100 pb-4">{cat}</h4>
-                        <div className="space-y-4">
+                        <h4 className="text-[12px] font-bold uppercase tracking-[0.3em] text-gray-900 border-b-2 border-gray-100 pb-4 flex items-center justify-between">
+                          {cat}
+                          <i className="fas fa-sparkles text-amber-200"></i>
+                        </h4>
+                        <div className="space-y-6">
                           {services.filter(s => s.category === cat).map(s => (
-                            <div key={s.id} onClick={() => { if (isGuest) setIsAuthOpen(true); else { setFormInitialData({ service_id: s.id }); setIsFormOpen(true); } }} className="group p-8 bg-white rounded-[3rem] border border-gray-50 hover:shadow-2xl transition-all flex justify-between items-center cursor-pointer">
-                              <div className="flex-1">
-                                <h5 className="font-bold text-xl text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{s.duration} minuti</p>
+                            <div key={s.id} onClick={() => { if (isGuest) setIsAuthOpen(true); else { setFormInitialData({ service_id: s.id }); setIsFormOpen(true); } }} className="group p-8 bg-white rounded-[3rem] border border-gray-50 hover:shadow-2xl transition-all flex justify-between items-center cursor-pointer relative overflow-hidden">
+                              <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-10 transition-opacity transform group-hover:scale-125">
+                                <i className="fas fa-gem text-6xl text-amber-900"></i>
                               </div>
-                              <div className="text-right">
+                              <div className="flex-1 relative z-10">
+                                <h5 className="font-bold text-xl text-gray-900 group-hover:text-amber-600 transition-colors">{s.name}</h5>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">{s.duration} min • {s.description}</p>
+                              </div>
+                              <div className="text-right relative z-10 pl-6">
                                 <p className="text-2xl font-luxury font-bold text-gray-900">CHF {s.price}</p>
-                                <p className="text-[8px] font-bold text-amber-600 uppercase tracking-widest mt-1">Prenota</p>
+                                <button className="mt-3 px-6 py-2 bg-black text-white text-[8px] font-bold uppercase tracking-widest rounded-full group-hover:bg-amber-600 transition-colors">
+                                  {isGuest ? 'Prenota' : 'Scegli'}
+                                </button>
                               </div>
                             </div>
                           ))}
@@ -605,7 +634,6 @@ const App: React.FC = () => {
            />
         )}
 
-        {/* ... Tab About Us e Services Management invariati ... */}
         {activeTab === 'about_us' && (
           <div className="space-y-24 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
              {aboutUs ? (
@@ -667,6 +695,113 @@ const App: React.FC = () => {
              ) : (
                <div className="py-24 text-center">
                   <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">In attesa dei contenuti della Maison...</p>
+               </div>
+             )}
+          </div>
+        )}
+
+        {activeTab === 'about_management' && isAdmin && (
+          <div className="animate-in fade-in h-full flex flex-col">
+             <header className="mb-10">
+                <h2 className="text-5xl font-luxury font-bold text-gray-900">Editor Atelier</h2>
+                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Personalizzazione Brand Experience</p>
+             </header>
+             
+             <div className="flex-1 grid lg:grid-cols-2 gap-12 overflow-hidden">
+                {/* Editor Column */}
+                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm overflow-y-auto scrollbar-hide space-y-8">
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Hero Image</label>
+                      <div className="relative aspect-[21/9] bg-gray-50 rounded-[2rem] overflow-hidden border-2 border-dashed border-gray-200 group cursor-pointer hover:border-amber-400 transition-colors">
+                         {aboutUs?.imageUrl ? (
+                           <img src={aboutUs.imageUrl} className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
+                         ) : (
+                           <div className="w-full h-full flex items-center justify-center text-gray-300"><i className="fas fa-image text-3xl"></i></div>
+                         )}
+                         <label className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 cursor-pointer">
+                            <span className="bg-white px-6 py-3 rounded-full text-[10px] font-bold uppercase shadow-lg text-black">Cambia Foto</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleAtelierImageUpload} />
+                         </label>
+                      </div>
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale</label>
+                      <input type="text" value={aboutUs?.title || ''} onChange={e => setAboutUs(prev => prev ? {...prev, title: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-luxury font-bold text-2xl focus:ring-2 focus:ring-amber-500 transition-all outline-none" />
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sottotitolo / Tagline</label>
+                      <input type="text" value={aboutUs?.subtitle || ''} onChange={e => setAboutUs(prev => prev ? {...prev, subtitle: e.target.value} : null)} className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs uppercase tracking-widest text-amber-600 focus:ring-2 focus:ring-amber-500 transition-all outline-none" />
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Storytelling</label>
+                      <textarea rows={10} value={aboutUs?.description || ''} onChange={e => setAboutUs(prev => prev ? {...prev, description: e.target.value} : null)} className="w-full p-6 rounded-3xl bg-gray-50 border-none font-serif text-lg leading-relaxed text-gray-600 resize-none focus:ring-2 focus:ring-amber-500 transition-all outline-none" />
+                   </div>
+
+                   <button onClick={() => aboutUs && handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-3">
+                      <i className="fas fa-save"></i> Pubblica Modifiche
+                   </button>
+                </div>
+
+                {/* Preview Column */}
+                <div className="bg-gray-100 rounded-[3rem] p-8 overflow-y-auto scrollbar-hide border border-gray-200 relative">
+                   <span className="absolute top-6 right-6 bg-black text-white px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest z-10 opacity-50">Live Preview</span>
+                   <div className="bg-white rounded-[2rem] p-8 shadow-xl min-h-full pointer-events-none select-none origin-top scale-95">
+                      {aboutUs && (
+                        <div className="space-y-8">
+                           <div className="text-center space-y-2">
+                              <h2 className="text-4xl font-luxury font-bold text-gray-900">{aboutUs.title}</h2>
+                              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.4em]">{aboutUs.subtitle}</p>
+                           </div>
+                           <div className="aspect-[21/9] rounded-[2rem] overflow-hidden bg-gray-100">
+                              <img src={aboutUs.imageUrl} className="w-full h-full object-cover" />
+                           </div>
+                           <p className="text-sm font-light leading-relaxed text-gray-600 text-center italic max-w-lg mx-auto">
+                              {aboutUs.description}
+                           </p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'services_management' && isAdmin && (
+          <div className="space-y-12 animate-in fade-in pb-20">
+             <header className="flex items-center justify-between">
+                <div>
+                   <h2 className="text-5xl font-luxury font-bold text-gray-900">Gestione Ritual</h2>
+                   <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Catalogo Servizi</p>
+                </div>
+                <button onClick={() => { setSelectedServiceToEdit(undefined); setIsServiceFormOpen(true); }} className="w-16 h-16 bg-black text-white rounded-[2rem] flex items-center justify-center shadow-2xl hover:bg-amber-600 transition-all active:scale-95"><i className="fas fa-plus"></i></button>
+             </header>
+             
+             {services.length === 0 ? (
+                <div className="p-20 text-center bg-white rounded-[4rem] border border-dashed border-gray-200">
+                   <p className="text-gray-300 font-bold uppercase text-xs tracking-widest">Nessun servizio in catalogo</p>
+                   <button onClick={() => setIsServiceFormOpen(true)} className="mt-4 text-amber-600 font-bold uppercase text-[10px] hover:underline">Aggiungi il primo</button>
+                </div>
+             ) : (
+               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 min-h-[50vh]">
+                  {services.map(s => (
+                    <div key={s.id} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all group h-full flex flex-col justify-between">
+                       <div className="space-y-6">
+                          <div className="flex justify-between items-start">
+                             <span className="px-4 py-1.5 bg-gray-50 text-[8px] font-bold uppercase tracking-widest rounded-full">{s.category}</span>
+                             <button onClick={() => { setSelectedServiceToEdit(s); setIsServiceFormOpen(true); }} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl hover:text-black hover:bg-gray-200 transition-all flex items-center justify-center"><i className="fas fa-edit text-xs"></i></button>
+                          </div>
+                          <div>
+                             <h4 className="text-xl font-luxury font-bold text-gray-900 mb-1 leading-tight">{s.name}</h4>
+                             <p className="text-[10px] text-gray-400 font-bold uppercase mt-2">{s.duration} min</p>
+                          </div>
+                          <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">{s.description}</p>
+                       </div>
+                       <p className="text-2xl font-luxury font-bold pt-6 border-t border-gray-50 mt-6">CHF {s.price}</p>
+                    </div>
+                  ))}
                </div>
              )}
           </div>
@@ -964,7 +1099,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[2000] flex items-center justify-center p-6">
           <div className="w-full max-w-xl relative animate-in zoom-in-95">
             <button onClick={() => setIsAuthOpen(false)} className="absolute -top-16 right-0 text-white/40 hover:text-white transition-all"><i className="fas fa-times text-4xl"></i></button>
-            <Auth onLogin={(u) => { setUser(u); setIsAuthOpen(false); refreshData(true); }} />
+            <Auth onLogin={handleLoginSuccess} />
           </div>
         </div>
       )}
