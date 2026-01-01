@@ -30,7 +30,7 @@ const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 const isValidConfig = 
   supabaseUrl && 
   supabaseAnonKey && 
-  supabaseUrl.startsWith('https://') &&
+  supabaseUrl.startsWith('https://') && 
   supabaseUrl !== 'YOUR_SUPABASE_URL' &&
   supabaseUrl !== 'undefined';
 
@@ -124,7 +124,6 @@ let supabaseExport: any;
 
 if (client) {
   // Real Supabase - Override sicuro del metodo signInWithPassword SULL'ISTANZA esistente.
-  // NON usare spread operator (...) sull'oggetto client, altrimenti si perdono i metodi della classe (come onAuthStateChange).
   const originalSignIn = client.auth.signInWithPassword.bind(client.auth);
   client.auth.signInWithPassword = async (credentials: any) => {
      const { email } = credentials;
@@ -173,7 +172,6 @@ export const db = {
             return { error: null };
         }
         
-        // Tenta di usare la funzione RPC per eliminare l'utente anche da auth.users
         try {
            const { error } = await client.rpc('delete_user_account', { user_id: id });
            if (!error) return { error: null };
@@ -182,7 +180,6 @@ export const db = {
            console.warn("RPC non disponibile o errore:", e);
         }
 
-        // Fallback: elimina solo dal db pubblico se la RPC non esiste/fallisce
         return await client.from('profiles').delete().eq('id', id);
     }
   },
@@ -263,10 +260,21 @@ export const db = {
     }
   },
   aboutUs: {
-    get: async () => useMock ? supabaseMock.aboutUs.get() : (await client.from('settings').select('*').eq('key', 'about_us').single()).data?.value,
+    get: async () => {
+        if (useMock) return supabaseMock.aboutUs.get();
+        // Use maybeSingle to prevent error if no row exists
+        const { data } = await client.from('settings').select('*').eq('key', 'about_us').maybeSingle();
+        return data?.value;
+    },
     save: async (content: AboutUsContent) => {
       if (useMock) return supabaseMock.aboutUs.save(content);
-      return (await client.from('settings').upsert({ key: 'about_us', value: content })).data;
+      // Ensure we select the data back to confirm persistence
+      const { data, error } = await client.from('settings').upsert({ key: 'about_us', value: content }, { onConflict: 'key' }).select();
+      if (error) {
+          console.error("Supabase Save Error:", error);
+          throw error;
+      }
+      return data?.[0]?.value;
     }
   }
 };
