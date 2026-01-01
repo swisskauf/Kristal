@@ -58,6 +58,7 @@ const App: React.FC = () => {
   const [isNewStaffModalOpen, setIsNewStaffModalOpen] = useState(false);
   const [isGuestEditorOpen, setIsGuestEditorOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [formInitialData, setFormInitialData] = useState<any>(null);
   const [selectedServiceToEdit, setSelectedServiceToEdit] = useState<Service | undefined>(undefined);
@@ -331,17 +332,23 @@ const App: React.FC = () => {
   };
 
   const handleSaveAboutUs = async (content: AboutUsContent) => {
+    if (!content) return;
+    
+    setIsSaving(true);
     try {
-      // 1. Salvataggio immediato sul DB
+      // 1. Salvataggio su DB
       await db.aboutUs.save(content);
       
-      // 2. Aggiornamento Stato Locale IMMEDIATO (Senza aspettare refresh)
+      // 2. Aggiornamento Stato Locale IMMEDIATO
       setAboutUs(content); 
       
-      showToast("Contenuti Maison pubblicati con successo.");
+      // Feedback UI
+      showToast("Modifiche pubblicate online con successo!", "success");
     } catch (e) {
       console.error("Errore salvataggio About Us", e);
       showToast("Errore durante la pubblicazione.", "error");
+    } finally {
+      setTimeout(() => setIsSaving(false), 1000);
     }
   };
 
@@ -642,24 +649,36 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Team Section */}
-                  <div className="bg-black text-white py-32 rounded-[4rem] px-6 md:px-20">
-                     <div className="text-center space-y-4 mb-24">
+                  {/* Team Section Redesigned */}
+                  <div className="bg-[#0f0f0f] text-white py-32 rounded-[4rem] px-6 md:px-20 relative overflow-hidden">
+                     <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+                     
+                     <div className="text-center space-y-4 mb-24 relative z-10">
                         <p className="text-amber-500 text-[10px] font-bold uppercase tracking-[0.6em]">I Maestri</p>
                         <h3 className="text-6xl font-luxury font-bold">Talento & Passione</h3>
                      </div>
-                     <div className="grid md:grid-cols-3 gap-12 max-w-7xl mx-auto">
+                     
+                     <div className="grid md:grid-cols-3 gap-12 max-w-7xl mx-auto relative z-10">
                         {team.map((member) => (
                            <div key={member.name} className="group relative">
-                              <div className="aspect-[3/4] rounded-[3rem] overflow-hidden mb-8 relative">
-                                 <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 filter grayscale group-hover:grayscale-0" alt={member.name} />
-                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-10">
-                                    <p className="text-amber-400 font-serif italic text-lg">"{member.bio || 'La bellezza è un\'arte.'}"</p>
+                              <div className="aspect-[4/5] rounded-[2rem] overflow-hidden mb-8 relative shadow-2xl bg-gray-800">
+                                 <img 
+                                    src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} 
+                                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 filter grayscale group-hover:grayscale-0" 
+                                    alt={member.name} 
+                                 />
+                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-60 group-hover:opacity-40 transition-all duration-500"></div>
+                                 
+                                 {/* Signature Icon */}
+                                 <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-2 group-hover:translate-y-0">
+                                    <i className="fas fa-signature text-2xl text-amber-500"></i>
                                  </div>
                               </div>
-                              <div className="text-center space-y-2">
-                                 <h5 className="text-2xl font-luxury font-bold">{member.name}</h5>
-                                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-[0.3em]">{member.role}</p>
+                              
+                              <div className="text-center space-y-2 group-hover:-translate-y-2 transition-transform duration-500">
+                                 <h5 className="text-3xl font-luxury font-bold text-white group-hover:text-amber-500 transition-colors">{member.name}</h5>
+                                 <div className="h-px w-12 bg-gray-700 mx-auto my-3 group-hover:w-24 group-hover:bg-amber-600 transition-all duration-500"></div>
+                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.3em] group-hover:text-white transition-colors">{member.role}</p>
                               </div>
                            </div>
                         ))}
@@ -713,7 +732,7 @@ const App: React.FC = () => {
                       <input 
                         type="text" 
                         value={aboutUs?.title || ''} 
-                        onChange={e => setAboutUs(prev => ({ ...prev, title: e.target.value }))} 
+                        onChange={e => setAboutUs(prev => ({ ...prev, title: e.target.value, subtitle: prev.subtitle, description: prev.description, imageUrl: prev.imageUrl }))} 
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-luxury font-bold text-2xl focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
                         placeholder="Titolo d'effetto"
                       />
@@ -724,7 +743,7 @@ const App: React.FC = () => {
                       <input 
                         type="text" 
                         value={aboutUs?.subtitle || ''} 
-                        onChange={e => setAboutUs(prev => ({ ...prev, subtitle: e.target.value }))} 
+                        onChange={e => setAboutUs(prev => ({ ...prev, subtitle: e.target.value, title: prev.title, description: prev.description, imageUrl: prev.imageUrl }))} 
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs uppercase tracking-widest text-amber-600 focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
                         placeholder="Slogan breve e incisivo"
                       />
@@ -735,15 +754,27 @@ const App: React.FC = () => {
                       <textarea 
                         rows={12} 
                         value={aboutUs?.description || ''} 
-                        onChange={e => setAboutUs(prev => ({ ...prev, description: e.target.value }))} 
+                        onChange={e => setAboutUs(prev => ({ ...prev, description: e.target.value, title: prev.title, subtitle: prev.subtitle, imageUrl: prev.imageUrl }))} 
                         className="w-full p-6 rounded-3xl bg-gray-50 border-none font-serif text-lg leading-relaxed text-gray-600 resize-none focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
                         placeholder="Racconta la storia del brand..."
                       />
                    </div>
 
                    <div className="pt-4 border-t border-gray-50">
-                      <button onClick={() => handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-3">
-                          <i className="fas fa-save"></i> Pubblica Modifiche
+                      <button 
+                        onClick={() => handleSaveAboutUs(aboutUs)} 
+                        disabled={isSaving || !aboutUs}
+                        className={`w-full py-6 rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3 ${isSaving ? 'bg-amber-500 text-white cursor-wait' : 'bg-black text-white hover:bg-amber-600'}`}
+                      >
+                          {isSaving ? (
+                            <>
+                              <i className="fas fa-spinner animate-spin"></i> Pubblicazione in corso...
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-save"></i> Pubblica Modifiche
+                            </>
+                          )}
                       </button>
                    </div>
                 </div>
