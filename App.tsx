@@ -101,6 +101,14 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper per aggiornare campi AboutUs
+  const updateAboutUs = (field: keyof AboutUsContent, value: string) => {
+    setAboutUs(prev => ({
+        ...prev,
+        [field]: value
+    }));
+  };
+
   const ensureDataSeeding = useCallback(async () => {
     try {
       const existingServices = await db.services.getAll();
@@ -145,8 +153,13 @@ const App: React.FC = () => {
       setProfiles(profs || []);
       setSalonClosures(closures || []);
       
-      // FIX CRITICO: Se il DB ritorna null, usa i default, altrimenti usa i dati DB
-      setAboutUs(about && about.title ? about : DEFAULT_CONTENT);
+      // FIX CRITICO: Usa i dati dal DB se esistono, altrimenti default.
+      // Se about è nullo (es. errore fetch), mantieni lo stato corrente se già popolato, o usa default.
+      if (about && about.title) {
+          setAboutUs(about);
+      } else if (!aboutUs.title) { // Solo se lo stato corrente è vuoto
+          setAboutUs(DEFAULT_CONTENT);
+      }
       
     } catch (e) {
       console.error("Data Refresh Error", e);
@@ -331,24 +344,22 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveAboutUs = async (content: AboutUsContent) => {
-    if (!content) return;
-    
+  const handleSaveAboutUs = async () => {
+    if (!aboutUs) return;
     setIsSaving(true);
     try {
-      // 1. Salvataggio su DB
-      await db.aboutUs.save(content);
+      // 1. Salvataggio su DB con risposta
+      const savedData = await db.aboutUs.save(aboutUs);
       
-      // 2. Aggiornamento Stato Locale IMMEDIATO
-      setAboutUs(content); 
+      // 2. Aggiornamento Stato Locale IMMEDIATO con i dati ritornati dal DB
+      if (savedData) setAboutUs(savedData); 
       
-      // Feedback UI
       showToast("Modifiche pubblicate online con successo!", "success");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Errore salvataggio About Us", e);
-      showToast("Errore durante la pubblicazione.", "error");
+      showToast(e.message || "Errore durante la pubblicazione.", "error");
     } finally {
-      setTimeout(() => setIsSaving(false), 1000);
+      setIsSaving(false);
     }
   };
 
@@ -527,6 +538,7 @@ const App: React.FC = () => {
         onClearNotifications={() => setNotifications([])}
       >
         
+        {/* ... Altri Tab (dashboard, etc.) rimangono uguali ... */}
         {activeTab === 'dashboard' && (
           <div className="space-y-16 animate-in fade-in duration-1000">
             {isAdmin ? (
@@ -587,7 +599,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Altri tab invariati ... */}
+        {/* ... Team Management Tab ... */}
         {activeTab === 'team_management' && isAdmin && (
            <HRManagement 
              team={team} 
@@ -603,82 +615,76 @@ const App: React.FC = () => {
              {aboutUs ? (
                <div className="space-y-32">
                   {/* Hero Section */}
-                  <div className="relative h-[70vh] rounded-[4rem] overflow-hidden group shadow-2xl mx-auto w-full">
+                  <div className="relative h-[80vh] rounded-[4rem] overflow-hidden group shadow-2xl mx-auto w-full">
                     <img 
                       src={aboutUs.imageUrl} 
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-105" 
                       alt="Kristal Atelier" 
                     />
-                    <div className="absolute inset-0 bg-black/30 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-0 left-0 p-16 md:p-24 text-white max-w-4xl">
+                    <div className="absolute inset-0 bg-black/40 bg-gradient-to-t from-black/90 via-transparent to-transparent"></div>
+                    <div className="absolute bottom-0 left-0 p-16 md:p-24 text-white max-w-5xl">
                        <p className="text-amber-400 font-bold uppercase tracking-[0.6em] text-xs mb-6 animate-in slide-in-from-left-4 duration-700">Maison Kristal</p>
-                       <h1 className="text-7xl md:text-9xl font-luxury font-bold leading-none tracking-tighter mb-8 animate-in slide-in-from-bottom-4 duration-1000">{aboutUs.title}</h1>
-                       <p className="text-lg md:text-xl font-light text-white/90 max-w-2xl leading-relaxed italic border-l-2 border-amber-500 pl-6 animate-in fade-in duration-1000 delay-300">
+                       <h1 className="text-7xl md:text-9xl font-luxury font-bold leading-none tracking-tighter mb-8 animate-in slide-in-from-bottom-4 duration-1000 drop-shadow-2xl">{aboutUs.title}</h1>
+                       <p className="text-xl md:text-2xl font-light text-white/90 max-w-2xl leading-relaxed italic border-l-4 border-amber-500 pl-8 animate-in fade-in duration-1000 delay-300">
                          {aboutUs.subtitle}
                        </p>
                     </div>
                   </div>
 
                   {/* Philosophy Section */}
-                  <div className="grid md:grid-cols-2 gap-20 items-center max-w-7xl mx-auto px-6">
-                    <div className="prose prose-lg max-w-none space-y-8">
-                       <h3 className="text-5xl font-luxury font-bold text-gray-900 tracking-tight leading-tight">L'Arte della Bellezza <br/> <span className="text-gray-300">Senza Tempo</span></h3>
-                       <div className="w-24 h-1 bg-black"></div>
-                       <p className="text-xl font-light leading-loose text-gray-600">
+                  <div className="grid md:grid-cols-2 gap-24 items-center max-w-7xl mx-auto px-6">
+                    <div className="prose prose-xl max-w-none space-y-10">
+                       <h3 className="text-6xl font-luxury font-bold text-gray-900 tracking-tight leading-tight">L'Arte della Bellezza <br/> <span className="text-gray-300">Senza Tempo</span></h3>
+                       <div className="w-32 h-1.5 bg-black"></div>
+                       <p className="text-2xl font-light leading-relaxed text-gray-600 font-serif">
                          {aboutUs.description}
                        </p>
-                       <div className="pt-8 grid grid-cols-2 gap-12">
+                       <div className="pt-8 grid grid-cols-2 gap-16 border-t border-gray-100">
                           <div>
-                             <h4 className="text-3xl font-bold text-gray-900 mb-2">12+</h4>
-                             <p className="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Anni di Eccellenza</p>
+                             <h4 className="text-5xl font-bold text-gray-900 mb-2">12+</h4>
+                             <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Anni di Eccellenza</p>
                           </div>
                           <div>
-                             <h4 className="text-3xl font-bold text-gray-900 mb-2">5k+</h4>
-                             <p className="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Ospiti Felici</p>
+                             <h4 className="text-5xl font-bold text-gray-900 mb-2">5k+</h4>
+                             <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Ospiti Felici</p>
                           </div>
                        </div>
                     </div>
-                    <div className="relative">
-                       <div className="aspect-[4/5] rounded-[3rem] overflow-hidden shadow-2xl relative z-10 bg-gray-100">
+                    <div className="relative pt-12">
+                       <div className="aspect-[3/4] rounded-[4rem] overflow-hidden shadow-2xl relative z-10 bg-gray-100">
                           <img src="https://images.unsplash.com/photo-1633681926022-84c23e8cb2d6?q=80&w=800&auto=format&fit=crop" className="w-full h-full object-cover" />
                        </div>
-                       <div className="absolute -bottom-12 -right-12 w-2/3 aspect-square rounded-[3rem] overflow-hidden shadow-xl border-[8px] border-white z-20 bg-gray-200">
-                          <img src="https://images.unsplash.com/photo-1562322140-8baeececf3df?q=80&w=800&auto=format&fit=crop" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" />
+                       <div className="absolute -bottom-16 -right-16 w-3/4 aspect-square rounded-[3rem] overflow-hidden shadow-xl border-[12px] border-white z-20 bg-gray-200 grayscale hover:grayscale-0 transition-all duration-1000">
+                          <img src="https://images.unsplash.com/photo-1562322140-8baeececf3df?q=80&w=800&auto=format&fit=crop" className="w-full h-full object-cover" />
                        </div>
-                       <div className="absolute -top-10 -left-10 text-[200px] font-luxury font-bold text-gray-50 -z-10 leading-none">K</div>
+                       <div className="absolute -top-20 -left-20 text-[250px] font-luxury font-bold text-gray-100 -z-10 leading-none select-none">K</div>
                     </div>
                   </div>
 
-                  {/* Team Section Redesigned */}
-                  <div className="bg-[#0f0f0f] text-white py-32 rounded-[4rem] px-6 md:px-20 relative overflow-hidden">
-                     <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
-                     
-                     <div className="text-center space-y-4 mb-24 relative z-10">
-                        <p className="text-amber-500 text-[10px] font-bold uppercase tracking-[0.6em]">I Maestri</p>
-                        <h3 className="text-6xl font-luxury font-bold">Talento & Passione</h3>
+                  {/* High Fashion Team Section */}
+                  <div className="py-32 relative">
+                     <div className="max-w-7xl mx-auto px-6 mb-24 text-center">
+                        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.6em] mb-4">I Maestri</p>
+                        <h3 className="text-7xl font-luxury font-bold text-gray-900">Talento & Passione</h3>
                      </div>
                      
-                     <div className="grid md:grid-cols-3 gap-12 max-w-7xl mx-auto relative z-10">
-                        {team.map((member) => (
-                           <div key={member.name} className="group relative">
-                              <div className="aspect-[4/5] rounded-[2rem] overflow-hidden mb-8 relative shadow-2xl bg-gray-800">
+                     <div className="grid md:grid-cols-3 gap-8 px-4">
+                        {team.map((member, i) => (
+                           <div key={member.name} className="group relative h-[700px] w-full overflow-hidden cursor-pointer">
+                              <div className="absolute inset-0 bg-gray-200">
                                  <img 
                                     src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} 
-                                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 filter grayscale group-hover:grayscale-0" 
+                                    className="w-full h-full object-cover filter grayscale contrast-125 transition-all duration-1000 group-hover:grayscale-0 group-hover:scale-105" 
                                     alt={member.name} 
                                  />
-                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-60 group-hover:opacity-40 transition-all duration-500"></div>
-                                 
-                                 {/* Signature Icon */}
-                                 <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-2 group-hover:translate-y-0">
-                                    <i className="fas fa-signature text-2xl text-amber-500"></i>
-                                 </div>
                               </div>
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity duration-500"></div>
                               
-                              <div className="text-center space-y-2 group-hover:-translate-y-2 transition-transform duration-500">
-                                 <h5 className="text-3xl font-luxury font-bold text-white group-hover:text-amber-500 transition-colors">{member.name}</h5>
-                                 <div className="h-px w-12 bg-gray-700 mx-auto my-3 group-hover:w-24 group-hover:bg-amber-600 transition-all duration-500"></div>
-                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.3em] group-hover:text-white transition-colors">{member.role}</p>
+                              <div className="absolute bottom-0 left-0 p-12 text-white transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                                 <p className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">{member.role}</p>
+                                 <h5 className="text-5xl font-luxury font-bold mb-4">{member.name}</h5>
+                                 <div className="w-12 h-0.5 bg-white mb-6 group-hover:w-24 transition-all duration-500"></div>
+                                 <p className="font-serif italic text-white/80 text-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-200 max-w-xs">"{member.bio || 'La bellezza è un\'arte.'}"</p>
                               </div>
                            </div>
                         ))}
@@ -694,6 +700,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... About Editor Tab ... */}
         {activeTab === 'about_management' && isAdmin && (
           <div className="animate-in fade-in h-full flex flex-col">
              <header className="mb-10 flex justify-between items-end">
@@ -732,7 +739,7 @@ const App: React.FC = () => {
                       <input 
                         type="text" 
                         value={aboutUs?.title || ''} 
-                        onChange={e => setAboutUs(prev => ({ ...prev, title: e.target.value, subtitle: prev.subtitle, description: prev.description, imageUrl: prev.imageUrl }))} 
+                        onChange={e => updateAboutUs('title', e.target.value)} 
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-luxury font-bold text-2xl focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
                         placeholder="Titolo d'effetto"
                       />
@@ -743,7 +750,7 @@ const App: React.FC = () => {
                       <input 
                         type="text" 
                         value={aboutUs?.subtitle || ''} 
-                        onChange={e => setAboutUs(prev => ({ ...prev, subtitle: e.target.value, title: prev.title, description: prev.description, imageUrl: prev.imageUrl }))} 
+                        onChange={e => updateAboutUs('subtitle', e.target.value)} 
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs uppercase tracking-widest text-amber-600 focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
                         placeholder="Slogan breve e incisivo"
                       />
@@ -754,7 +761,7 @@ const App: React.FC = () => {
                       <textarea 
                         rows={12} 
                         value={aboutUs?.description || ''} 
-                        onChange={e => setAboutUs(prev => ({ ...prev, description: e.target.value, title: prev.title, subtitle: prev.subtitle, imageUrl: prev.imageUrl }))} 
+                        onChange={e => updateAboutUs('description', e.target.value)} 
                         className="w-full p-6 rounded-3xl bg-gray-50 border-none font-serif text-lg leading-relaxed text-gray-600 resize-none focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
                         placeholder="Racconta la storia del brand..."
                       />
@@ -762,7 +769,7 @@ const App: React.FC = () => {
 
                    <div className="pt-4 border-t border-gray-50">
                       <button 
-                        onClick={() => handleSaveAboutUs(aboutUs)} 
+                        onClick={handleSaveAboutUs} 
                         disabled={isSaving || !aboutUs}
                         className={`w-full py-6 rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3 ${isSaving ? 'bg-amber-500 text-white cursor-wait' : 'bg-black text-white hover:bg-amber-600'}`}
                       >
@@ -824,7 +831,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Altri tab invariati ... */}
+        {/* ... Altri Tabs (services, etc.) rimangono invariati ma inclusi per completezza se necessario ... */}
+        {/* Poiché il file è lungo, ho incluso solo le parti modificate rilevanti (About Us, Editor, Init) e mantenuto la struttura. */}
+        {/* Tutte le altre parti non modificate sono implicite nel contesto dell'app esistente. */}
+        
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in pb-20">
              <header className="flex items-center justify-between">
@@ -863,6 +873,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Resto dei tab invariato ... */}
         {activeTab === 'vacation_planning' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
              <header><h2 className="text-5xl font-luxury font-bold text-gray-900">Centro Congedi</h2></header>
@@ -912,7 +923,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Gestione Ospiti con refresh automatico */}
         {activeTab === 'clients' && (isAdmin || isCollaborator) && (
           <div className="animate-in fade-in">
              <GuestManagement 
@@ -929,7 +939,6 @@ const App: React.FC = () => {
 
         {activeTab === 'my_rituals' && user && (
           <div className="space-y-20 animate-in fade-in">
-             {/* ... contenuto My Rituals invariato ... */}
              <header className="flex items-center justify-between">
                <div>
                   <h2 className="text-5xl font-luxury font-bold text-gray-900">I Miei Ritual</h2>
@@ -1010,7 +1019,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Tab Impostazioni invariato ... */}
+        {/* ... Configurazione Tab ... */}
         {activeTab === 'impostazioni' && isAdmin && (
           <div className="space-y-16 animate-in fade-in">
              <h2 className="text-5xl font-luxury font-bold text-gray-900">Configurazione</h2>
@@ -1037,7 +1046,7 @@ const App: React.FC = () => {
         )}
       </Layout>
 
-      {/* Modals */}
+      {/* Modals e Componenti Ausiliari */}
       {settings.aiAssistantEnabled && <AIAssistant />}
 
       {confirmedBooking && (
