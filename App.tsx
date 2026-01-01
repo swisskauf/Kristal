@@ -153,11 +153,10 @@ const App: React.FC = () => {
       setProfiles(profs || []);
       setSalonClosures(closures || []);
       
-      // FIX CRITICO: Usa i dati dal DB se esistono, altrimenti default.
-      // Se about è nullo (es. errore fetch), mantieni lo stato corrente se già popolato, o usa default.
+      // FIX: Se il DB ritorna dati validi, usali. Altrimenti, se lo stato è già popolato (es. dopo un save), mantienilo.
       if (about && about.title) {
           setAboutUs(about);
-      } else if (!aboutUs.title) { // Solo se lo stato corrente è vuoto
+      } else if (!aboutUs.title) { 
           setAboutUs(DEFAULT_CONTENT);
       }
       
@@ -344,22 +343,33 @@ const App: React.FC = () => {
     }
   };
 
+  // FIX: Logica salvataggio definitiva
   const handleSaveAboutUs = async () => {
     if (!aboutUs) return;
-    setIsSaving(true);
+    setIsSaving(true); // Attiva spinner
+    
     try {
-      // 1. Salvataggio su DB con risposta
-      const savedData = await db.aboutUs.save(aboutUs);
+      // 1. Chiamata al DB
+      const result = await db.aboutUs.save(aboutUs);
       
-      // 2. Aggiornamento Stato Locale IMMEDIATO con i dati ritornati dal DB
-      if (savedData) setAboutUs(savedData); 
-      
-      showToast("Modifiche pubblicate online con successo!", "success");
+      // 2. Controllo risultato (db.aboutUs.save ora lancia errore se fallisce)
+      // Aggiorna lo stato locale con i dati SICURAMENTE salvati
+      if (result) {
+          setAboutUs(result);
+          showToast("Pubblicazione completata con successo!", "success");
+      } else {
+          // Fallback se result è null ma non ha lanciato errori (raro)
+          showToast("Dati inviati, verifica la pubblicazione.", "info");
+      }
     } catch (e: any) {
-      console.error("Errore salvataggio About Us", e);
-      showToast(e.message || "Errore durante la pubblicazione.", "error");
+      console.error("Critical Error saving About Us:", e);
+      // Messaggio errore utente
+      let msg = "Errore di connessione al Database.";
+      if (e.message?.includes("row level security")) msg = "Permesso negato. Contatta l'amministratore.";
+      if (e.message?.includes("settings")) msg = "Tabella mancante. Esegui SQL script.";
+      showToast(msg, "error");
     } finally {
-      setIsSaving(false);
+      setIsSaving(false); // Disattiva spinner SEMPRE
     }
   };
 
@@ -661,30 +671,31 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* High Fashion Team Section */}
-                  <div className="py-32 relative">
-                     <div className="max-w-7xl mx-auto px-6 mb-24 text-center">
+                  {/* Compact Luxury Team Grid */}
+                  <div className="py-24 relative">
+                     <div className="max-w-7xl mx-auto px-6 mb-20 text-center">
                         <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.6em] mb-4">I Maestri</p>
-                        <h3 className="text-7xl font-luxury font-bold text-gray-900">Talento & Passione</h3>
+                        <h3 className="text-6xl font-luxury font-bold text-gray-900">Talento & Passione</h3>
                      </div>
                      
-                     <div className="grid md:grid-cols-3 gap-8 px-4">
-                        {team.map((member, i) => (
-                           <div key={member.name} className="group relative h-[700px] w-full overflow-hidden cursor-pointer">
+                     {/* Griglia a 4 colonne per supportare ~8 collaboratori */}
+                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto px-4">
+                        {team.map((member) => (
+                           <div key={member.name} className="group relative aspect-[3/4] rounded-[2rem] overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-500">
                               <div className="absolute inset-0 bg-gray-200">
                                  <img 
                                     src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} 
-                                    className="w-full h-full object-cover filter grayscale contrast-125 transition-all duration-1000 group-hover:grayscale-0 group-hover:scale-105" 
+                                    className="w-full h-full object-cover filter grayscale contrast-110 transition-all duration-700 group-hover:grayscale-0 group-hover:scale-110" 
                                     alt={member.name} 
                                  />
                               </div>
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity duration-500"></div>
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-all duration-500"></div>
                               
-                              <div className="absolute bottom-0 left-0 p-12 text-white transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                                 <p className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">{member.role}</p>
-                                 <h5 className="text-5xl font-luxury font-bold mb-4">{member.name}</h5>
-                                 <div className="w-12 h-0.5 bg-white mb-6 group-hover:w-24 transition-all duration-500"></div>
-                                 <p className="font-serif italic text-white/80 text-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-200 max-w-xs">"{member.bio || 'La bellezza è un\'arte.'}"</p>
+                              <div className="absolute bottom-0 left-0 w-full p-6 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                                 <p className="text-[8px] font-bold uppercase tracking-[0.3em] mb-2 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500">{member.role}</p>
+                                 <h5 className="text-2xl font-luxury font-bold mb-3">{member.name}</h5>
+                                 <div className="w-8 h-0.5 bg-white mb-3 group-hover:w-16 transition-all duration-500"></div>
+                                 <p className="font-serif italic text-white/70 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-500 line-clamp-2">"{member.bio || 'Arte e bellezza.'}"</p>
                               </div>
                            </div>
                         ))}
@@ -831,10 +842,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ... Altri Tabs (services, etc.) rimangono invariati ma inclusi per completezza se necessario ... */}
-        {/* Poiché il file è lungo, ho incluso solo le parti modificate rilevanti (About Us, Editor, Init) e mantenuto la struttura. */}
-        {/* Tutte le altre parti non modificate sono implicite nel contesto dell'app esistente. */}
-        
+        {/* ... Altri Tabs (services, etc.) rimangono invariati ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in pb-20">
              <header className="flex items-center justify-between">
