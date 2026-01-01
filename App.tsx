@@ -20,6 +20,13 @@ import { Service, User, TeamMember, Appointment, LeaveRequest, SalonClosure, Abo
 import { SERVICES as DEFAULT_SERVICES, TEAM as DEFAULT_TEAM } from './constants';
 import { sendLuxuryEmailNotification } from './services/emailService';
 
+const DEFAULT_CONTENT: AboutUsContent = {
+  title: "Kristal Atelier",
+  subtitle: "L'Essenza della Bellezza a Lugano",
+  description: "Da oltre un decennio, Kristal rappresenta il punto d'incontro tra l'artigianalità svizzera e l'avanguardia stilistica internazionale. Nel nostro atelier, ogni rituale è studiato per esaltare l'unicità di ogni ospite.",
+  imageUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=1200&h=600&auto=format&fit=crop"
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +45,7 @@ const App: React.FC = () => {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [salonClosures, setSalonClosures] = useState<SalonClosure[]>([]);
-  const [aboutUs, setAboutUs] = useState<AboutUsContent | null>(null);
+  const [aboutUs, setAboutUs] = useState<AboutUsContent>(DEFAULT_CONTENT);
   
   // Notifications State
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -84,11 +91,8 @@ const App: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        // BUG FIX: Gestione robusta stato nullo
         setAboutUs(prev => ({
-          title: prev?.title || 'Titolo Atelier',
-          subtitle: prev?.subtitle || 'Sottotitolo',
-          description: prev?.description || '',
+          ...prev,
           imageUrl: reader.result as string
         }));
       };
@@ -139,8 +143,10 @@ const App: React.FC = () => {
       setRequests(reqs || []);
       setProfiles(profs || []);
       setSalonClosures(closures || []);
-      // Se aboutUs è null dal DB, forniamo un oggetto vuoto per evitare crash dell'editor
-      setAboutUs(about || { title: '', subtitle: '', description: '', imageUrl: '' });
+      
+      // FIX CRITICO: Se il DB ritorna null, usa i default, altrimenti usa i dati DB
+      setAboutUs(about && about.title ? about : DEFAULT_CONTENT);
+      
     } catch (e) {
       console.error("Data Refresh Error", e);
     } finally {
@@ -172,10 +178,6 @@ const App: React.FC = () => {
           role, 
           avatar: profile?.avatar 
         });
-        
-        if (activeTab === 'dashboard') {
-           // Remain on dashboard
-        }
       }
       refreshData(true);
     });
@@ -330,11 +332,16 @@ const App: React.FC = () => {
 
   const handleSaveAboutUs = async (content: AboutUsContent) => {
     try {
+      // 1. Salvataggio immediato sul DB
       await db.aboutUs.save(content);
-      setAboutUs(content);
-      showToast("Contenuti Atelier aggiornati.");
+      
+      // 2. Aggiornamento Stato Locale IMMEDIATO (Senza aspettare refresh)
+      setAboutUs(content); 
+      
+      showToast("Contenuti Maison pubblicati con successo.");
     } catch (e) {
-      showToast("Errore salvataggio.", "error");
+      console.error("Errore salvataggio About Us", e);
+      showToast("Errore durante la pubblicazione.", "error");
     }
   };
 
@@ -483,7 +490,7 @@ const App: React.FC = () => {
     refreshData(true);
   };
 
-  if (loading && !aboutUs && !services.length) {
+  if (loading && services.length === 0) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white space-y-6">
         <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -573,6 +580,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Altri tab invariati ... */}
         {activeTab === 'team_management' && isAdmin && (
            <HRManagement 
              team={team} 
@@ -584,57 +592,74 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'about_us' && (
-          <div className="space-y-24 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
+          <div className="animate-in fade-in duration-1000 pb-20">
              {aboutUs ? (
                <div className="space-y-32">
-                  <div className="space-y-12">
-                    <header className="text-center space-y-4">
-                       <h2 className="text-7xl font-luxury font-bold text-gray-900 leading-tight tracking-tighter">{aboutUs.title}</h2>
-                       <p className="text-amber-600 text-[14px] font-bold uppercase tracking-[0.6em]">{aboutUs.subtitle}</p>
-                    </header>
-                    <div className="relative aspect-[21/9] rounded-[5rem] overflow-hidden shadow-2xl border-[12px] border-white group">
-                      <img src={aboutUs.imageUrl} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Kristal Atelier" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-20 items-center">
-                    <div className="prose prose-stone max-w-none">
-                       <p className="text-3xl font-luxury font-bold text-gray-900 mb-8 leading-tight">La Filosofia Kristal</p>
-                       <p className="text-xl font-light leading-relaxed text-gray-600 italic border-l-4 border-amber-600 pl-8">
-                         {aboutUs.description}
+                  {/* Hero Section */}
+                  <div className="relative h-[70vh] rounded-[4rem] overflow-hidden group shadow-2xl mx-auto w-full">
+                    <img 
+                      src={aboutUs.imageUrl} 
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-105" 
+                      alt="Kristal Atelier" 
+                    />
+                    <div className="absolute inset-0 bg-black/30 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                    <div className="absolute bottom-0 left-0 p-16 md:p-24 text-white max-w-4xl">
+                       <p className="text-amber-400 font-bold uppercase tracking-[0.6em] text-xs mb-6 animate-in slide-in-from-left-4 duration-700">Maison Kristal</p>
+                       <h1 className="text-7xl md:text-9xl font-luxury font-bold leading-none tracking-tighter mb-8 animate-in slide-in-from-bottom-4 duration-1000">{aboutUs.title}</h1>
+                       <p className="text-lg md:text-xl font-light text-white/90 max-w-2xl leading-relaxed italic border-l-2 border-amber-500 pl-6 animate-in fade-in duration-1000 delay-300">
+                         {aboutUs.subtitle}
                        </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
-                       <div className="aspect-square bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center p-8 text-center space-y-4 hover:shadow-xl transition-all">
-                          <i className="fas fa-history text-amber-600 text-3xl"></i>
-                          <h4 className="font-bold uppercase text-[10px] tracking-widest">Heritage</h4>
+                  </div>
+
+                  {/* Philosophy Section */}
+                  <div className="grid md:grid-cols-2 gap-20 items-center max-w-7xl mx-auto px-6">
+                    <div className="prose prose-lg max-w-none space-y-8">
+                       <h3 className="text-5xl font-luxury font-bold text-gray-900 tracking-tight leading-tight">L'Arte della Bellezza <br/> <span className="text-gray-300">Senza Tempo</span></h3>
+                       <div className="w-24 h-1 bg-black"></div>
+                       <p className="text-xl font-light leading-loose text-gray-600">
+                         {aboutUs.description}
+                       </p>
+                       <div className="pt-8 grid grid-cols-2 gap-12">
+                          <div>
+                             <h4 className="text-3xl font-bold text-gray-900 mb-2">12+</h4>
+                             <p className="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Anni di Eccellenza</p>
+                          </div>
+                          <div>
+                             <h4 className="text-3xl font-bold text-gray-900 mb-2">5k+</h4>
+                             <p className="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Ospiti Felici</p>
+                          </div>
                        </div>
-                       <div className="aspect-square bg-black text-white rounded-[3rem] flex flex-col items-center justify-center p-8 text-center space-y-4 shadow-2xl">
-                          <i className="fas fa-medal text-amber-600 text-3xl"></i>
-                          <h4 className="font-bold uppercase text-[10px] tracking-widest text-amber-500">Eccellenza</h4>
+                    </div>
+                    <div className="relative">
+                       <div className="aspect-[4/5] rounded-[3rem] overflow-hidden shadow-2xl relative z-10 bg-gray-100">
+                          <img src="https://images.unsplash.com/photo-1633681926022-84c23e8cb2d6?q=80&w=800&auto=format&fit=crop" className="w-full h-full object-cover" />
                        </div>
+                       <div className="absolute -bottom-12 -right-12 w-2/3 aspect-square rounded-[3rem] overflow-hidden shadow-xl border-[8px] border-white z-20 bg-gray-200">
+                          <img src="https://images.unsplash.com/photo-1562322140-8baeececf3df?q=80&w=800&auto=format&fit=crop" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" />
+                       </div>
+                       <div className="absolute -top-10 -left-10 text-[200px] font-luxury font-bold text-gray-50 -z-10 leading-none">K</div>
                     </div>
                   </div>
 
-                  <div className="space-y-16">
-                     <div className="text-center space-y-2">
-                        <h3 className="text-5xl font-luxury font-bold text-gray-900">Gli Artisti</h3>
-                        <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.4em]">Il talento dietro ogni rituale</p>
+                  {/* Team Section */}
+                  <div className="bg-black text-white py-32 rounded-[4rem] px-6 md:px-20">
+                     <div className="text-center space-y-4 mb-24">
+                        <p className="text-amber-500 text-[10px] font-bold uppercase tracking-[0.6em]">I Maestri</p>
+                        <h3 className="text-6xl font-luxury font-bold">Talento & Passione</h3>
                      </div>
-                     <div className="grid md:grid-cols-3 gap-12">
+                     <div className="grid md:grid-cols-3 gap-12 max-w-7xl mx-auto">
                         {team.map((member) => (
-                           <div key={member.name} className="group space-y-6">
-                              <div className="relative aspect-[3/4] rounded-[4rem] overflow-hidden shadow-xl border-4 border-white transition-all group-hover:shadow-2xl">
-                                 <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={member.name} />
-                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-10">
-                                    <p className="text-white text-xl font-bold uppercase tracking-tighter">{member.name}</p>
+                           <div key={member.name} className="group relative">
+                              <div className="aspect-[3/4] rounded-[3rem] overflow-hidden mb-8 relative">
+                                 <img src={member.avatar || `https://ui-avatars.com/api/?name=${member.name}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 filter grayscale group-hover:grayscale-0" alt={member.name} />
+                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-10">
+                                    <p className="text-amber-400 font-serif italic text-lg">"{member.bio || 'La bellezza è un\'arte.'}"</p>
                                  </div>
                               </div>
-                              <div className="text-center space-y-2 px-6">
-                                 <h5 className="text-xl font-luxury font-bold">{member.name}</h5>
-                                 <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{member.role}</p>
-                                 <p className="text-xs text-gray-500 leading-relaxed italic">{member.bio || 'Esperto rituali Kristal'}</p>
+                              <div className="text-center space-y-2">
+                                 <h5 className="text-2xl font-luxury font-bold">{member.name}</h5>
+                                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-[0.3em]">{member.role}</p>
                               </div>
                            </div>
                         ))}
@@ -642,7 +667,8 @@ const App: React.FC = () => {
                   </div>
                </div>
              ) : (
-               <div className="py-24 text-center">
+               <div className="h-screen flex flex-col items-center justify-center">
+                  <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mb-8"></div>
                   <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.4em]">In attesa dei contenuti della Maison...</p>
                </div>
              )}
@@ -651,42 +677,45 @@ const App: React.FC = () => {
 
         {activeTab === 'about_management' && isAdmin && (
           <div className="animate-in fade-in h-full flex flex-col">
-             <header className="mb-10">
-                <h2 className="text-5xl font-luxury font-bold text-gray-900">Editor Atelier</h2>
-                <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Personalizzazione Brand Experience</p>
+             <header className="mb-10 flex justify-between items-end">
+                <div>
+                  <h2 className="text-5xl font-luxury font-bold text-gray-900">Editor Atelier</h2>
+                  <p className="text-amber-600 text-[10px] font-bold uppercase tracking-[0.5em] mt-2">Personalizzazione Brand Experience</p>
+                </div>
+                <div className="bg-gray-100 px-4 py-2 rounded-xl text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                   Modo Editor
+                </div>
              </header>
              
-             <div className="flex-1 grid lg:grid-cols-2 gap-12 overflow-hidden">
+             <div className="flex-1 grid lg:grid-cols-2 gap-12 overflow-hidden h-full pb-10">
                 {/* Editor Column */}
-                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm overflow-y-auto scrollbar-hide space-y-8">
+                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm overflow-y-auto scrollbar-hide space-y-8 h-full">
                    <div className="space-y-4">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Hero Image</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Hero Image (Cover)</label>
                       <div className="relative aspect-[21/9] bg-gray-50 rounded-[2rem] overflow-hidden border-2 border-dashed border-gray-200 group cursor-pointer hover:border-amber-400 transition-colors">
                          {aboutUs?.imageUrl ? (
                            <img src={aboutUs.imageUrl} className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
                          ) : (
-                           <div className="w-full h-full flex items-center justify-center text-gray-300"><i className="fas fa-image text-3xl"></i></div>
+                           <div className="w-full h-full flex items-center justify-center text-gray-300 flex-col gap-2">
+                              <i className="fas fa-image text-3xl"></i>
+                              <span className="text-[8px] font-bold uppercase tracking-widest">Nessuna immagine</span>
+                           </div>
                          )}
                          <label className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 cursor-pointer">
-                            <span className="bg-white px-6 py-3 rounded-full text-[10px] font-bold uppercase shadow-lg text-black">Cambia Foto</span>
+                            <span className="bg-white px-6 py-3 rounded-full text-[10px] font-bold uppercase shadow-lg text-black hover:bg-amber-500 hover:text-white transition-colors">Carica Nuova Foto</span>
                             <input type="file" accept="image/*" className="hidden" onChange={handleAtelierImageUpload} />
                          </label>
                       </div>
                    </div>
 
-                   {/* BUG FIX: Utilizzo spread con fallback per evitare crash su stato nullo durante la digitazione */}
                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Titolo Principale (H1)</label>
                       <input 
                         type="text" 
                         value={aboutUs?.title || ''} 
-                        onChange={e => setAboutUs(prev => ({ 
-                            title: e.target.value, 
-                            subtitle: prev?.subtitle || '', 
-                            description: prev?.description || '', 
-                            imageUrl: prev?.imageUrl || '' 
-                        }))} 
+                        onChange={e => setAboutUs(prev => ({ ...prev, title: e.target.value }))} 
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-luxury font-bold text-2xl focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
+                        placeholder="Titolo d'effetto"
                       />
                    </div>
 
@@ -695,54 +724,67 @@ const App: React.FC = () => {
                       <input 
                         type="text" 
                         value={aboutUs?.subtitle || ''} 
-                        onChange={e => setAboutUs(prev => ({ 
-                            title: prev?.title || '', 
-                            subtitle: e.target.value, 
-                            description: prev?.description || '', 
-                            imageUrl: prev?.imageUrl || '' 
-                        }))} 
+                        onChange={e => setAboutUs(prev => ({ ...prev, subtitle: e.target.value }))} 
                         className="w-full p-5 rounded-3xl bg-gray-50 border-none font-bold text-xs uppercase tracking-widest text-amber-600 focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
+                        placeholder="Slogan breve e incisivo"
                       />
                    </div>
 
                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Storytelling</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Storytelling (Descrizione)</label>
                       <textarea 
-                        rows={10} 
+                        rows={12} 
                         value={aboutUs?.description || ''} 
-                        onChange={e => setAboutUs(prev => ({ 
-                            title: prev?.title || '', 
-                            subtitle: prev?.subtitle || '', 
-                            description: e.target.value, 
-                            imageUrl: prev?.imageUrl || '' 
-                        }))} 
+                        onChange={e => setAboutUs(prev => ({ ...prev, description: e.target.value }))} 
                         className="w-full p-6 rounded-3xl bg-gray-50 border-none font-serif text-lg leading-relaxed text-gray-600 resize-none focus:ring-2 focus:ring-amber-500 transition-all outline-none" 
+                        placeholder="Racconta la storia del brand..."
                       />
                    </div>
 
-                   <button onClick={() => aboutUs && handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-3">
-                      <i className="fas fa-save"></i> Pubblica Modifiche
-                   </button>
+                   <div className="pt-4 border-t border-gray-50">
+                      <button onClick={() => handleSaveAboutUs(aboutUs)} className="w-full py-6 bg-black text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.4em] shadow-2xl hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-3">
+                          <i className="fas fa-save"></i> Pubblica Modifiche
+                      </button>
+                   </div>
                 </div>
 
-                {/* Preview Column */}
-                <div className="bg-gray-100 rounded-[3rem] p-8 overflow-y-auto scrollbar-hide border border-gray-200 relative">
-                   <span className="absolute top-6 right-6 bg-black text-white px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest z-10 opacity-50">Anteprima Live</span>
-                   <div className="bg-white rounded-[2rem] p-8 shadow-xl min-h-full pointer-events-none select-none origin-top scale-95">
+                {/* Live Preview Column */}
+                <div className="bg-gray-900 rounded-[3rem] p-8 overflow-y-auto scrollbar-hide border border-gray-800 relative shadow-inner">
+                   <div className="absolute top-6 left-6 right-6 flex justify-between items-center z-20 pointer-events-none">
+                      <span className="bg-white/10 backdrop-blur-md text-white px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest border border-white/10">Live Preview Mobile</span>
+                      <div className="flex gap-1.5">
+                         <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                         <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      </div>
+                   </div>
+                   
+                   {/* Mobile Viewport Simulation */}
+                   <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl min-h-full mx-auto max-w-sm mt-12 origin-top transform scale-95 border-4 border-gray-800 relative">
+                      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent z-10 pointer-events-none"></div>
                       {aboutUs && (
-                        <div className="space-y-8">
-                           <div className="text-center space-y-2">
-                              <h2 className="text-4xl font-luxury font-bold text-gray-900">{aboutUs.title || 'Titolo'}</h2>
-                              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.4em]">{aboutUs.subtitle || 'Sottotitolo'}</p>
+                        <div className="pb-10">
+                           <div className="h-64 relative">
+                              {aboutUs.imageUrl ? (
+                                <img src={aboutUs.imageUrl} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs font-bold uppercase">No Image</div>
+                              )}
+                              <div className="absolute bottom-6 left-6 text-white">
+                                 <p className="text-[8px] font-bold uppercase tracking-widest text-amber-400 mb-2">Maison</p>
+                                 <h2 className="text-3xl font-luxury font-bold leading-none">{aboutUs.title || 'Titolo'}</h2>
+                              </div>
                            </div>
-                           {aboutUs.imageUrl && (
-                               <div className="aspect-[21/9] rounded-[2rem] overflow-hidden bg-gray-100">
-                                  <img src={aboutUs.imageUrl} className="w-full h-full object-cover" />
-                               </div>
-                           )}
-                           <p className="text-sm font-light leading-relaxed text-gray-600 text-center italic max-w-lg mx-auto">
-                              {aboutUs.description || 'Descrizione...'}
-                           </p>
+                           <div className="p-6 space-y-6">
+                              <p className="text-sm font-serif italic text-gray-500 border-l-2 border-amber-500 pl-4">{aboutUs.subtitle}</p>
+                              <p className="text-xs leading-relaxed text-gray-600 font-light text-justify">
+                                 {aboutUs.description || 'Descrizione...'}
+                              </p>
+                              <div className="flex gap-2">
+                                 <div className="h-20 w-1/2 bg-gray-100 rounded-2xl"></div>
+                                 <div className="h-20 w-1/2 bg-gray-100 rounded-2xl"></div>
+                              </div>
+                           </div>
                         </div>
                       )}
                    </div>
@@ -751,6 +793,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... Altri tab invariati ... */}
         {activeTab === 'services_management' && isAdmin && (
           <div className="space-y-12 animate-in fade-in pb-20">
              <header className="flex items-center justify-between">
